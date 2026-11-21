@@ -1,0 +1,9 @@
+/target
+.DS_Store
+/node_modules
+/.direnv
+/.vite-hooks/_
+/result
+/result-*
+.agents/
+.claude/

@@ -1,0 +1,74 @@
+# cargo-deny policy; `cargo deny check` runs in `pnpm check` and the pre-push hook.
+#
+# Advisories: a vulnerability fails the build; an unmaintained crate fails only
+# when we depend on it directly. Every ignore names why the risk is accepted and
+# goes when a fix ships or the reason stops holding.
+#
+# Licenses: Autumn is GPL-3.0-only, so every dependency must be under a license
+# that can be combined with GPL-3.0. Anything else (GPL-2.0-only, AGPL,
+# proprietary, unlicensed) fails until someone makes a documented decision.
+# Our own workspace crates are `publish = false` and skipped via
+# `private.ignore`.
+
+[graph]
+all-features = true
+
+[advisories]
+# Each entry: { id = "RUSTSEC-YYYY-NNNN", reason = "why the risk is accepted" }.
+ignore       = [  ]
+unmaintained = "workspace"
+
+[bans]
+# Duplicates are common in large trees (GPUI, reqwest) and do not affect correctness;
+# keep them visible rather than blocking a dependency upgrade on them.
+multiple-versions = "warn"
+wildcards         = "deny"
+# Workspace crates are wired together with path dependencies without versions.
+allow-wildcard-paths = true
+
+[sources]
+# crates.io is the only registry in Cargo.lock. There are no git dependencies;
+# add the exact URL here (keeping unknown-git = "deny") if one is introduced.
+allow-git        = [  ]
+allow-registry   = [ "https://github.com/rust-lang/crates.io-index" ]
+unknown-git      = "deny"
+unknown-registry = "deny"
+
+[licenses]
+# GPL-3.0-compatible licenses only. An `A OR B` expression passes when any one
+# term is allowed (e.g. r-efi's MIT OR Apache-2.0 OR LGPL-2.1-or-later).
+allow = [
+  # Permissive.
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-1-Clause",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "Unlicense",
+  "Zlib",
+  # Permissive data licenses: Unicode/ICU tables, bundled CA certificates.
+  "CDLA-Permissive-2.0",
+  "Unicode-3.0",
+  # Weak and strong copyleft that GPL-3.0 can absorb.
+  "GPL-3.0-only",
+  "GPL-3.0-or-later",
+  "LGPL-2.1-or-later",
+  "LGPL-3.0-only",
+  "LGPL-3.0-or-later",
+  "MPL-2.0",
+]
+# The list is policy, not an inventory: entries no current crate uses stay.
+unused-allowed-license = "allow"
+# High confidence when inferring a license from LICENSE file contents; crates
+# whose text does not match closely are reported as unlicensed instead of being
+# silently classified.
+confidence-threshold = 0.93
+# Our own crates are private and unpublishable; skip their license check rather
+# than allowing unlicensed crates generally.
+private = { ignore = true }

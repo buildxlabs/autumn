@@ -1,0 +1,29 @@
+permissions:
+  "@multica-ai/andrej-karpathy-skills@https://codeload.github.com/multica-ai/andrej-karpathy-skills/tar.gz/2c606141936f1eeef17fa3043a72095b4765b9c2":
+    skills: true
+  beautiful-rust-skills@https://codeload.github.com/morganlinton/BeautifulRust/tar.gz/b9718436d77ee7bcf17cdcb6aa27628feb95d97a:
+    skills: [rust-best-practices, rust-port, rust-review]
+  mattpocock-skills@https://codeload.github.com/mattpocock/skills/tar.gz/abeeaf95660ba9e8b7c753eb38f441ca707a8823:
+    skills:
+      [
+        code-review,
+        domain-modeling,
+        grill-with-docs,
+        implement,
+        pr,
+        research,
+        setup-matt-pocock-skills,
+        tdd,
+        to-spec,
+        to-tickets,
+        triage,
+        wayfinder,
+        grill-me,
+        grilling,
+        handoff,
+        writing-for-agents,
+      ]
+skills:
+  dirs:
+    - .agents/skills
+    - .claude/skills

@@ -1,0 +1,45 @@
+#!/bin/sh
+# Pre-commit checks. The generated dispatcher under `_` invokes this script;
+# commit it — never commit the generated files.
+#
+# JS/TS/JSON: staged files go through the vite.config.ts `staged` block
+# (`vp check --fix`): oxfmt + oxlint type-aware + tsgolint type-check.
+vp staged
+
+# Rust formatting, only when .rs files are staged.
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '\.rs$'; then
+  if command -v cargo >/dev/null 2>&1; then
+    cargo fmt --all -- --check
+  else
+    echo "note: cargo not on PATH; skipping the Rust format check" >&2
+  fi
+fi
+
+# TOML formatting, only for staged .toml files. Passing the file list
+# explicitly matters: a bare `taplo format --check` scans node_modules too,
+# where vendored fixtures are not taplo-clean.
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR -- '*.toml')" ]; then
+  if command -v taplo >/dev/null 2>&1; then
+    git diff --cached --name-only --diff-filter=ACMR -z -- '*.toml' | xargs -0 taplo format --check
+  else
+    echo "note: taplo not on PATH; skipping the TOML format check" >&2
+  fi
+fi
+
+# Markdown is formatted by Oxfmt through `vp staged` above; there is no
+# separate Markdown formatter to run here.
+
+# Hygiene: private key material anywhere in a staged file.
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -n "$staged" ]; then
+  if printf '%s\0' "$staged" | xargs -0 grep -lE 'BEGIN [A-Z ]*PRIVATE KEY' >/dev/null 2>&1; then
+    echo "error: private key material detected in staged files" >&2
+    exit 1
+  fi
+fi
+
+# Hygiene: merge conflict markers in added lines.
+if git diff --cached -U0 | grep -qE '^\+(<{7}|={7}$|>{7})'; then
+  echo "error: merge conflict markers in staged changes" >&2
+  exit 1
+fi

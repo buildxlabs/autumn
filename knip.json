@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "tags": ["-lintignore"],
+  "include": [
+    "files",
+    "dependencies",
+    "devDependencies",
+    "unlisted",
+    "unresolved",
+    "binaries",
+    "catalog",
+    "catalogReferences",
+    "subpaths"
+  ],
+  "ignoreBinaries": ["taplo", "typos"],
+  "ignoreDependencies": ["@multica-ai/andrej-karpathy-skills", "beautiful-rust-skills", "mattpocock-skills"],
+  "workspaces": {
+    ".": {}
+  }
+}

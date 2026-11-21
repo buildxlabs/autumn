@@ -1,0 +1,12 @@
+# typos: prose spell-checking for the docs and source comments.
+[files]
+extend-exclude = [
+  ".agents",
+  ".claude",
+  ".direnv",
+  ".git",
+  ".vite-hooks/_",
+  "node_modules",
+  "reference",
+  "target",
+]

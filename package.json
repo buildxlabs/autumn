@@ -1,0 +1,30 @@
+{
+  "name": "autumn",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "vp run check:all",
+    "lint": "vp lint --fix",
+    "lint:rust": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+    "lint:typos": "typos",
+    "fmt": "vp fmt",
+    "fmt:rust": "cargo fmt --all",
+    "fmt:toml": "taplo fmt",
+    "fmts": "pnpm fmt:rust && pnpm fmt:toml && pnpm fmt",
+    "test": "vp test run --passWithNoTests",
+    "test:rust": "cargo nextest run --no-tests pass",
+    "deny": "cargo deny check",
+    "knip": "knip"
+  },
+  "devDependencies": {
+    "@multica-ai/andrej-karpathy-skills": "github:multica-ai/andrej-karpathy-skills",
+    "beautiful-rust-skills": "github:morganlinton/BeautifulRust",
+    "knip": "^6.45.1",
+    "mattpocock-skills": "github:mattpocock/skills",
+    "vite-plus": "^1.7.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.21.0"
+}
