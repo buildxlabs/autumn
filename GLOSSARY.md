@@ -38,12 +38,24 @@ A user's tracking record for one media on one platform: status, progress, score 
 _Avoid_: entry (on its own), list item
 
 **Platform**:
-Where a user's list entries live and sync: AniList, MyAnimeList, or the local platform. One platform is active at a time.
-_Avoid_: tracker (for the destination), service, backend
+Where a user's list entries live: the account-free local platform, or a tracking service account such as AniList or MyAnimeList.
+_Avoid_: tracker, provider (a provider supplies external ids), service, backend
+
+**Active platform**:
+The one platform whose list entries are shown, edited and updated by playback right now. The other platforms' entries are dormant: kept, but untouched.
+_Avoid_: current account, primary platform
 
 **Local platform**:
 The account-free platform. The user's list entries live only in Autumn.
 _Avoid_: offline mode, guest account
+
+**List transfer**:
+A one-shot, user-reviewed copy of list entries from one platform to another. It creates or updates entries and never deletes.
+_Avoid_: sync, merge, mirror, import, upload
+
+**Custom list**:
+A user-named list on a platform that a list entry can belong to besides its status. An entry can be in several.
+_Avoid_: collection, folder, category
 
 ### Accounts
 
