@@ -77,7 +77,7 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 - [ ] `net` (shared client, up to 3 retries, one rate limiter shared by every AniList request at its current degraded 30 req/min plus an unpublished burst limit, poster disk cache), `db` (migrations, settings rows imported once from the Phase 0 `settings.json`, media ids with cross-references to the AniList id and `idMal` only), `metadata` (AniList catalog/search/schedule/user collection; at most 50 items per page, and `MediaListCollection` stops at 11k entries and needs its custom lists read too), `tracker` (AniList + Local platforms).
 - [ ] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator (countdown). Token in keychain; login refused without one (ADR 0002). Re-login prompt before the one-year token expires.
 - [ ] Components: media card (badges, hover popup, context menu, skeleton), carousel (drag, arrows, Alt+wheel), hero banner, virtualized poster grid.
-- [ ] Screens: Home (fixed default widgets), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
+- [ ] Screens: Home (fixed default widgets: continue-watching header, discover header, my lists, missed sequels, aired recently, anime carousel, centered title), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
 - [ ] Command palette: open/close, `/search`, `/anime`, `/manga`.
 - [ ] Top indefinite loader during background fetches.
 - [ ] Settings screen with a Storage tab holding a "Clear poster cache" button.
@@ -158,62 +158,62 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 
 Every feature from the research documents and the reference code is listed here with a phase, or marked out of scope with a reason. When a feature is added or dropped, update this table.
 
-| Area                | Feature                                                                                                   | Phase                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Library             | Multi-directory library, fuzzy scanner without naming rules                                               | 2                                                  |
-|                     | Release filename parser; configurable matching threshold, legacy fallback                                 | 2                                                  |
-|                     | File watcher + auto-scan; shelving on drive disconnect                                                    | 2                                                  |
-|                     | Library explorer (tree, lock/unlock, re-match, rename, delete); bulk file actions                         | 2                                                  |
-|                     | Scan summaries with confidence + unmatched list                                                           | 2                                                  |
-|                     | Specials / OVA / NCOP / NCED separation; filler marking                                                   | 2                                                  |
-|                     | Local subtitle file discovery next to videos                                                              | 2                                                  |
-| Playback sources    | Local direct play                                                                                         | 2                                                  |
-|                     | Torrent streaming: head+tail priority, batch file pick, preload next, disk handoff, cleanup, live overlay | 3                                                  |
-|                     | Debrid streaming: 4 providers, cached detection, download to library, dashboard                           | 5                                                  |
-|                     | Online streaming via extensions: sub/dub, servers, stale-URL refresh, manual mapping, merge into library  | 5                                                  |
-|                     | Loopback relay: header injection, HLS/DASH rewrite, prefetch, ranged sub-requests                         | 5                                                  |
-| Players             | External mpv, IINA, VLC, MPC-HC; detection per OS; fresh IPC per launch; detached + supervised            | 2                                                  |
-|                     | Continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next countdown       | 2                                                  |
-|                     | Chapter OP/ED skip with custom patterns                                                                   | 2                                                  |
-|                     | Embedded libmpv player + full control chrome, mini-player, stats, screenshots, Anime4K                    | 9                                                  |
-|                     | Online skip-time database (intro/outro)                                                                   | 9                                                  |
-|                     | Subtitle translation of embedded tracks                                                                   | Backlog                                            |
-| Torrents            | Search drawer: indexers, resolution/codec/group/seeders/size/date, batch badge, availability              | 3                                                  |
-|                     | Auto-select scoring profiles                                                                              | 3                                                  |
-|                     | qBittorrent (re-auth), Transmission, rqbit, built-in client, torrent list with live badges                | 3                                                  |
-|                     | Mirror base URL + proxy per indexer; infohash-only magnet copy                                            | 3                                                  |
-|                     | Auto-downloader: rules, profiles, delay timers, multi-indexer, queue approve/reject, history              | 6                                                  |
-| Metadata & tracking | AniList: login, avatar, collection sync, full list editor, manual refresh                                 | 1                                                  |
-|                     | Local account-free tracking                                                                               | 1                                                  |
-|                     | AniZip / animap episode metadata; anime-offline-database for matching                                     | 1–2                                                |
-|                     | MyAnimeList platform                                                                                      | 8                                                  |
-|                     | Tracker extensions (sync to other services)                                                               | 4                                                  |
-|                     | Custom sources (non-AniList entries)                                                                      | 8                                                  |
-| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, manga, by country)     | 1                                                  |
-|                     | Advanced search with all filters + scroll restore                                                         | 1                                                  |
-|                     | My Lists with status tabs, custom lists, quick edit                                                       | 1                                                  |
-|                     | Schedule calendar + missing episodes                                                                      | 6                                                  |
-|                     | Playlists (cross-series queues)                                                                           | 6                                                  |
-| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync        | 7                                                  |
-| Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                          | 4                                                  |
-|                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                               | Backlog (after 4; needs a stable UI-injection API) |
-| Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                   | 0                                                  |
-|                     | Command palette + slash commands + magnet paste interception                                              | 1, 3                                               |
-|                     | Media cards (badges, hover popup, context menu, skeleton); episode cards; carousels (drag, Alt+wheel)     | 1–2                                                |
-|                     | Entry page: 7 banner modes, 2 sizes, 2 info-box layouts, blurred background, source tabs                  | 1, 8                                               |
-|                     | Modular home: 15 widget types + settings dialog                                                           | 8                                                  |
-|                     | Spoiler protection suite (5 toggles)                                                                      | 8                                                  |
-|                     | Theme & UI studio (colors, presets, sidebar, backgrounds, banners, cards, sorting)                        | 8                                                  |
-|                     | Route cross-fade; reduced-motion respect                                                                  | 8                                                  |
-|                     | Onboarding wizard                                                                                         | 2                                                  |
-|                     | Feature tour; announcements banner                                                                        | 8                                                  |
-| System              | Settings with live reload (all tabs)                                                                      | 8                                                  |
-|                     | Offline mode + snapshot sync                                                                              | 8                                                  |
-|                     | Discord Rich Presence; OS notifications; cron jobs                                                        | 6                                                  |
-|                     | DNS-over-HTTPS; outbound request guard; user-agent pool                                                   | 1, 4, 8                                            |
-|                     | Log viewer, error explainer, anonymized issue report, crash log, file-cache screen                        | 8                                                  |
-|                     | Auto-updater with channels + signature verification                                                       | 8                                                  |
-| Social              | Watch party with chat; library sharing                                                                    | 10                                                 |
+| Area                | Feature                                                                                                                                               | Phase                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Library             | Multi-directory library, fuzzy scanner without naming rules                                                                                           | 2                                                  |
+|                     | Release filename parser; configurable matching threshold, legacy fallback                                                                             | 2                                                  |
+|                     | File watcher + auto-scan; shelving on drive disconnect                                                                                                | 2                                                  |
+|                     | Library explorer (tree, lock/unlock, re-match, rename, delete); bulk file actions                                                                     | 2                                                  |
+|                     | Scan summaries with confidence + unmatched list                                                                                                       | 2                                                  |
+|                     | Specials / OVA / NCOP / NCED separation; filler marking                                                                                               | 2                                                  |
+|                     | Local subtitle file discovery next to videos                                                                                                          | 2                                                  |
+| Playback sources    | Local direct play                                                                                                                                     | 2                                                  |
+|                     | Torrent streaming: head+tail priority, batch file pick, preload next, disk handoff, cleanup, live overlay                                             | 3                                                  |
+|                     | Debrid streaming: 4 providers, cached detection, download to library, dashboard                                                                       | 5                                                  |
+|                     | Online streaming via extensions: sub/dub, servers, stale-URL refresh, manual mapping, merge into library                                              | 5                                                  |
+|                     | Loopback relay: header injection, HLS/DASH rewrite, prefetch, ranged sub-requests                                                                     | 5                                                  |
+| Players             | External mpv, IINA, VLC, MPC-HC; detection per OS; fresh IPC per launch; detached + supervised                                                        | 2                                                  |
+|                     | Continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next countdown                                                   | 2                                                  |
+|                     | Chapter OP/ED skip with custom patterns                                                                                                               | 2                                                  |
+|                     | Embedded libmpv player + full control chrome, mini-player, stats, screenshots, Anime4K                                                                | 9                                                  |
+|                     | Online skip-time database (intro/outro)                                                                                                               | 9                                                  |
+|                     | Subtitle translation of embedded tracks                                                                                                               | Backlog                                            |
+| Torrents            | Search drawer: indexers, resolution/codec/group/seeders/size/date, batch badge, availability                                                          | 3                                                  |
+|                     | Auto-select scoring profiles                                                                                                                          | 3                                                  |
+|                     | qBittorrent (re-auth), Transmission, rqbit, built-in client, torrent list with live badges                                                            | 3                                                  |
+|                     | Mirror base URL + proxy per indexer; infohash-only magnet copy                                                                                        | 3                                                  |
+|                     | Auto-downloader: rules, profiles, delay timers, multi-indexer, queue approve/reject, history                                                          | 6                                                  |
+| Metadata & tracking | AniList: login, avatar, collection sync, full list editor, manual refresh                                                                             | 1                                                  |
+|                     | Local account-free tracking                                                                                                                           | 1                                                  |
+|                     | AniZip / animap episode metadata; anime-offline-database for matching                                                                                 | 1–2                                                |
+|                     | MyAnimeList platform                                                                                                                                  | 8                                                  |
+|                     | Tracker extensions (sync to other services)                                                                                                           | 4                                                  |
+|                     | Custom sources (non-AniList entries)                                                                                                                  | 8                                                  |
+| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, manga, by country)                                                 | 1                                                  |
+|                     | Advanced search with all filters + scroll restore                                                                                                     | 1                                                  |
+|                     | My Lists with status tabs, custom lists, quick edit                                                                                                   | 1                                                  |
+|                     | Schedule calendar + missing episodes                                                                                                                  | 6                                                  |
+|                     | Playlists (cross-series queues)                                                                                                                       | 6                                                  |
+| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync                                                    | 7                                                  |
+| Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                                                                      | 4                                                  |
+|                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                                                                           | Backlog (after 4; needs a stable UI-injection API) |
+| Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                                                               | 0                                                  |
+|                     | Command palette + slash commands + magnet paste interception                                                                                          | 1, 3                                               |
+|                     | Media cards (badges, hover popup, context menu, skeleton); episode cards; carousels (drag, Alt+wheel)                                                 | 1–2                                                |
+|                     | Entry page: default banner mode (Large, Fluid) in Phase 1; 6 other banner modes, Small, Boxed, blurred background in 8; source tabs with their phases | 1, 2, 3, 5, 8                                      |
+|                     | Home: fixed set of 7 widgets in Phase 1; library/schedule/manga widgets with their phases; modular home (15 widget types) + settings dialog in 8      | 1, 8                                               |
+|                     | Spoiler protection suite (5 toggles)                                                                                                                  | 8                                                  |
+|                     | Theme & UI studio (colors, presets, sidebar, backgrounds, banners, cards, sorting)                                                                    | 8                                                  |
+|                     | Route cross-fade; reduced-motion respect                                                                                                              | 8                                                  |
+|                     | Onboarding wizard                                                                                                                                     | 2                                                  |
+|                     | Feature tour; announcements banner                                                                                                                    | 8                                                  |
+| System              | Settings with live reload (all tabs)                                                                                                                  | 8                                                  |
+|                     | Offline mode + snapshot sync                                                                                                                          | 8                                                  |
+|                     | Discord Rich Presence; OS notifications; cron jobs                                                                                                    | 6                                                  |
+|                     | DNS-over-HTTPS; outbound request guard; user-agent pool                                                                                               | 1, 4, 8                                            |
+|                     | Log viewer, error explainer, anonymized issue report, crash log, file-cache screen                                                                    | 8                                                  |
+|                     | Auto-updater with channels + signature verification                                                                                                   | 8                                                  |
+| Social              | Watch party with chat; library sharing                                                                                                                | 10                                                 |
 
 ### Out of scope (desktop-only product)
 
