@@ -6,14 +6,17 @@ mod startup;
 use std::{fmt::Display, process::ExitCode};
 
 use gpui_kit::{
-    App, AppContext, Bounds, Context, IntoElement, Render, Styled, TitlebarOptions, Window,
-    WindowBounds, WindowOptions, div, px, size,
+    App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowOptions, assets::AllAssets,
+    component::TitleBar, point, px, size,
 };
+use ui_screens::AppShell;
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
 /// Initial height of the main window in logical pixels; the user can resize it.
 const WINDOW_HEIGHT: f32 = 800.;
+/// Where the macOS traffic lights sit: centred vertically in the 40px titlebar.
+const TRAFFIC_LIGHTS: (f32, f32) = (14., 13.);
 
 fn main() -> ExitCode {
     let _started = match startup::run() {
@@ -39,17 +42,20 @@ fn main() -> ExitCode {
     // keeps the event pump alive for the whole run.
     let (_engine_events, ui_events) = ui_state::events::channel();
 
-    gpui_kit::application().run(move |cx| {
-        gpui_kit::init(cx);
-        ui_state::bridge::init(cx, handle);
-        // No store consumes an event yet; the first engine module adds one.
-        ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
-        if let Err(err) = open_main_window(cx) {
-            // Logging is up, so this also reaches stderr.
-            tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
-            cx.quit();
-        }
-    });
+    gpui_kit::application()
+        .with_assets(AllAssets)
+        .run(move |cx| {
+            gpui_kit::init(cx);
+            ui_state::bridge::init(cx, handle);
+            ui_theme::init(cx);
+            // No store consumes an event yet; the first engine module adds one.
+            ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
+            if let Err(err) = open_main_window(cx) {
+                // Logging is up, so this also reaches stderr.
+                tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
+                cx.quit();
+            }
+        });
     ExitCode::SUCCESS
 }
 
@@ -59,12 +65,14 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
     let options = WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some("Autumn".into()),
-            ..TitlebarOptions::default()
+            appears_transparent: true,
+            traffic_light_position: Some(point(px(TRAFFIC_LIGHTS.0), px(TRAFFIC_LIGHTS.1))),
         }),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        ..WindowOptions::default()
+        // Lets the titlebar drag the window and draw client-side controls.
+        ..TitleBar::window_options()
     };
-    gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| EmptyView))?;
+    gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| AppShell::new()))?;
     Ok(())
 }
 
@@ -74,15 +82,6 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
 )]
 fn report_fatal(err: &impl Display) {
     eprintln!("autumn: {err}");
-}
-
-/// Placeholder content until the app shell exists.
-struct EmptyView;
-
-impl Render for EmptyView {
-    fn render(&mut self, _: &mut Window, _: &mut Context<'_, Self>) -> impl IntoElement {
-        div().size_full()
-    }
 }
 
 #[cfg(test)]
