@@ -8264,6 +8264,7 @@ name = "ui-components"
 version = "0.1.0"
 dependencies = [
  "gpui-kit",
+ "tempfile",
 ]
 
 [[package]]
