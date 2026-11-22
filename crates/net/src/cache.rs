@@ -5,10 +5,6 @@ use std::{
     fs,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
     time::SystemTime,
 };
 
@@ -22,28 +18,16 @@ use crate::{Client, Error, HttpError, Method, Request};
 /// Shared cap for `<cache>/posters/` and `<cache>/metadata/`: about 500 MB.
 const DEFAULT_CAP_BYTES: u64 = 500 * 1024 * 1024;
 
-#[derive(Debug, Default)]
-struct Sizes {
-    posters: AtomicU64,
-    metadata: AtomicU64,
-}
-
-impl Sizes {
-    fn total(&self) -> u64 {
-        self.posters
-            .load(Ordering::SeqCst)
-            .saturating_add(self.metadata.load(Ordering::SeqCst))
-    }
-}
-
-/// A disk cache for poster images, keyed by the final image URL.
+/// A disk cache for poster images, keyed by the requested image URL.
+///
+/// The key is the requested URL, not the final URL after redirects: reqwest
+/// does not expose the final URL once a response has been consumed.
 #[derive(Debug, Clone)]
 pub struct PosterCache {
     posters: PathBuf,
     metadata: PathBuf,
     tmp: PathBuf,
     cap: u64,
-    sizes: Arc<Sizes>,
 }
 
 #[derive(Debug)]
@@ -75,23 +59,14 @@ impl PosterCache {
             metadata: root.join("metadata"),
             tmp: root.join("tmp"),
             cap,
-            sizes: Arc::new(Sizes::default()),
         };
         for dir in [&cache.posters, &cache.metadata, &cache.tmp] {
             fs::create_dir_all(dir).map_err(|source| cache_error(dir, source))?;
         }
-        // Clear leftovers from interrupted writes, then measure both caches once.
+        // Clear leftovers from interrupted writes.
         for entry in entries(&cache.tmp)? {
             remove_file(&entry.path)?;
         }
-        let posters = entries(&cache.posters)?
-            .iter()
-            .fold(0u64, |total, entry| total.saturating_add(entry.len));
-        let metadata = entries(&cache.metadata)?
-            .iter()
-            .fold(0u64, |total, entry| total.saturating_add(entry.len));
-        cache.sizes.posters.store(posters, Ordering::SeqCst);
-        cache.sizes.metadata.store(metadata, Ordering::SeqCst);
         Ok(cache)
     }
 
@@ -138,12 +113,9 @@ impl PosterCache {
     pub async fn clear(&self) -> Result<(), Error> {
         let cache = self.clone();
         spawn_blocking(move || {
-            let mut removed = 0u64;
             for entry in entries(&cache.posters)? {
                 remove_file(&entry.path)?;
-                removed = removed.saturating_add(entry.len);
             }
-            cache.sizes.posters.fetch_sub(removed, Ordering::SeqCst);
             Ok(())
         })
         .await
@@ -161,20 +133,18 @@ impl PosterCache {
         let target = self.posters.join(name);
         temp.persist(&target)
             .map_err(|source| cache_error(&target, source.error))?;
-        self.sizes.posters.fetch_add(
-            u64::try_from(bytes.len()).unwrap_or(u64::MAX),
-            Ordering::SeqCst,
-        );
         Ok(())
     }
 
     fn evict(&self) -> Result<(), Error> {
-        let mut total = self.sizes.total();
+        let mut files = entries(&self.posters)?;
+        files.extend(entries(&self.metadata)?);
+        let mut total = files
+            .iter()
+            .fold(0u64, |sum, entry| sum.saturating_add(entry.len));
         if total <= self.cap {
             return Ok(());
         }
-        let mut files = entries(&self.posters)?;
-        files.extend(entries(&self.metadata)?);
         files.sort_by_key(|entry| entry.modified);
         for entry in files {
             if total <= self.cap {
@@ -182,11 +152,6 @@ impl PosterCache {
             }
             remove_file(&entry.path)?;
             total = total.saturating_sub(entry.len);
-            if entry.path.starts_with(&self.posters) {
-                self.sizes.posters.fetch_sub(entry.len, Ordering::SeqCst);
-            } else {
-                self.sizes.metadata.fetch_sub(entry.len, Ordering::SeqCst);
-            }
         }
         Ok(())
     }

@@ -27,7 +27,6 @@ sqlx = { default-features = false, version = "0.9" }
 tempfile = "3.27"
 thiserror = "2"
 tokio = { default-features = false, features = [
-  "io-util",
   "macros",
   "net",
   "rt",

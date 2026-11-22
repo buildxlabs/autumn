@@ -1,8 +1,10 @@
-//! Shared HTTP client for Autumn: per-host rate limiting and retries.
+//! Shared HTTP client and disk poster cache for Autumn.
 //!
 //! Every outbound request goes through one [`Client`], which applies a
 //! per-host token bucket and retries reads with backoff. Mutations are sent
-//! once. See ARCHITECTURE §2 and §6. This is a back-end crate: no GPUI.
+//! once. [`PosterCache`] stores image downloads under the app cache dir with
+//! a size cap shared with metadata blobs. See ARCHITECTURE §2 and §6. This is
+//! a back-end crate: no GPUI.
 
 mod cache;
 mod client;

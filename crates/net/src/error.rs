@@ -1,4 +1,4 @@
-//! Errors returned by the shared HTTP client.
+//! Errors returned by the shared HTTP client and the disk poster cache.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -31,7 +31,7 @@ impl From<HttpError> for Error {
     }
 }
 
-/// A failure from a request made through [`Client`](crate::Client).
+/// A failure from an HTTP request or a disk-cache operation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {

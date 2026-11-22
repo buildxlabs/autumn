@@ -207,6 +207,76 @@ async fn a_failed_write_leaves_no_partial_file() {
     server.abort();
 }
 
+#[test]
+fn opening_the_cache_sweeps_leftover_temp_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmp = dir.path().join("tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    let stray = tmp.join("leftover.tmp");
+    fs::write(&stray, b"partial").unwrap();
+
+    let _cache = PosterCache::new(dir.path()).unwrap();
+
+    assert!(!stray.exists(), "a leftover temp file is swept on open");
+}
+
+#[tokio::test]
+async fn metadata_written_after_open_is_counted_in_eviction() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PosterCache::with_cap(dir.path(), 20).unwrap();
+    let (base, _hits, server) = serve().await;
+    let client = Client::builder().build().unwrap();
+
+    let first = format!("{base}/one");
+    cache.get(&client, &first).await.unwrap();
+    let poster = poster_path(dir.path(), &first);
+    set_mtime(&poster, 200);
+
+    // This blob appears after the cache was opened and must still be counted.
+    let blob = dir.path().join("metadata").join("late-blob");
+    fs::write(&blob, vec![0u8; 30]).unwrap();
+    set_mtime(&blob, 50);
+
+    let second = format!("{base}/two");
+    cache.get(&client, &second).await.unwrap();
+
+    assert!(!blob.exists(), "the late blob is evicted first");
+    assert!(poster.exists(), "posters survive");
+    assert!(poster_path(dir.path(), &second).exists());
+    server.abort();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_partial_write_is_not_published() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PosterCache::new(dir.path()).unwrap();
+    let (base, _hits, server) = serve().await;
+    let client = Client::builder().build().unwrap();
+    let url = format!("{base}/poster");
+
+    // The temp file is created and written, but the rename cannot succeed.
+    let posters = dir.path().join("posters");
+    fs::set_permissions(&posters, fs::Permissions::from_mode(0o500)).unwrap();
+    let result = cache.get(&client, &url).await;
+    fs::set_permissions(&posters, fs::Permissions::from_mode(0o700)).unwrap();
+
+    assert!(result.is_err(), "a failed persist must surface the error");
+    assert_eq!(
+        fs::read_dir(&posters).unwrap().count(),
+        0,
+        "nothing published"
+    );
+    assert_eq!(
+        fs::read_dir(dir.path().join("tmp")).unwrap().count(),
+        0,
+        "the staged temp file was removed"
+    );
+    server.abort();
+}
+
 #[tokio::test]
 async fn concurrent_gets_of_the_same_url_are_safe() {
     let dir = tempfile::tempdir().unwrap();
