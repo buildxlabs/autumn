@@ -71,6 +71,8 @@ Every crate lives at `crates/<crate-name>/` and is picked up by the `crates/*` m
 
 The existing `crates/autumn` crate becomes the binary in Phase 0.
 
+Until `engine` exists, the startup work it will own lives in the `autumn` binary: building the Tokio runtime, opening `db`, and the one-time `settings.json` import (`settings_store`). It moves into `engine` when that crate lands.
+
 ## 3. Dependency rules
 
 These are what keep compile times and coupling down. Each rule is checkable.
@@ -78,7 +80,7 @@ These are what keep compile times and coupling down. Each rule is checkable.
 1. **Only `ui-*` and `autumn` depend on `gpui-kit`.** Back-end crates never import GPUI. Check with `cargo tree -i gpui-pre`: no back-end crate appears.
 2. **Only `engine` knows every module.** Integration crates depend on `domain` plus the foundation crates. They depend on another integration crate only along the edges below.
 3. **`ui-components` does not depend on `engine`.** Widgets take plain view-model structs, so a widget change never recompiles the back end and widgets can be tested in isolation.
-4. **No cycles, no `pub use` re-export chains across layers.** A crate's public API is its own types plus `domain` types.
+4. **No cycles, no `pub use` re-export chains across layers.** A crate's public API is its own types plus `domain` types. One exception: `ui_state::events` (`channel()`, `start_pump`) exposes `flume`'s `Sender` and `Receiver`, because that channel is the engine → UI boundary (§4).
 
 Allowed integration edges:
 
@@ -94,7 +96,18 @@ tracker        → metadata
 relay          → torrent
 ```
 
-Adding an edge means changing this list in the same commit, with the reason in the commit body.
+Foundation, UI and binary edges in use (rules 1–3 already allow them; they're listed so a new one shows up in review):
+
+```text
+db            → domain
+tracker       → domain, db
+ui-state      → domain
+ui-components → (gpui-kit only)
+ui-screens    → ui-components, ui-state (ui-theme as a dev-dependency only)
+autumn        → settings, db, ui-state, ui-screens, ui-theme
+```
+
+Adding an edge means changing these lists in the same commit, with the reason in the commit body.
 
 ## 4. Runtime model: GPUI ↔ Tokio
 
@@ -157,4 +170,4 @@ macOS (Apple silicon), Linux (x86_64, aarch64) and Windows. The Nix dev shell co
 | Linux   | `~/.config/autumn`                                    | `~/.local/share/autumn`                               | `~/.cache/autumn`                        |
 | Windows | `<Roaming>\buildxlabs\Autumn\config`                  | `<Roaming>\buildxlabs\Autumn\data`                    | `<Local>\buildxlabs\Autumn\cache`        |
 
-Config holds `settings.json` only. Data holds `autumn.db` (with its WAL sidecars) and `logs/`.
+Settings are rows in `autumn.db`. The Phase 0 `settings.json` in Config is imported once at startup and renamed to `settings.json.imported` (or `settings.json.corrupt` if it can't be parsed); nothing writes it afterwards. Data holds `autumn.db` (with its WAL sidecars) and `logs/`.
