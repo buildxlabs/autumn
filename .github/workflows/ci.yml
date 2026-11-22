@@ -2,16 +2,24 @@ name: CI
 
 on:
   pull_request:
+    # Only PRs into main run CI; PRs between other branches don't.
+    branches: [main]
+    # `labeled` lets adding ci:macos / ci:windows start those jobs at once.
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Label events get their own group, so adding a label never cancels the
+  # Linux run already in progress for the latest push.
+  group: ci-${{ github.ref }}-${{ github.event.label.name || 'push' }}
   cancel-in-progress: true
 
 jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
+    # A label event doesn't change the code, so Linux doesn't run again.
+    if: ${{ github.event.action != 'labeled' }}
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v32
@@ -22,7 +30,7 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-26
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci:macos') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && (github.event.action != 'labeled' || github.event.label.name == 'ci:macos')) }}
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v32
@@ -33,7 +41,7 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2025
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci:windows') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (contains(github.event.pull_request.labels.*.name, 'ci:windows') && (github.event.action != 'labeled' || github.event.label.name == 'ci:windows')) }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@v1
