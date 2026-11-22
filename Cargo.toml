@@ -16,6 +16,7 @@ flume              = { default-features = false, features = [ "async" ], version
 gpui-kit           = "=0.10.0"
 serde              = { features = [ "derive" ], version = "1.0" }
 serde_json         = "1.0"
+sqlx               = { default-features = false, version = "0.9" }
 tempfile           = "3.27"
 thiserror          = "2.0"
 tokio              = { default-features = false, version = "1.54" }
