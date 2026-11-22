@@ -578,4 +578,28 @@ mod tests {
         assert_eq!(shell.mode(cx), Mode::Manga, "in manga mode");
         assert_eq!(shell.route(cx), Route::Home, "no navigation");
     }
+
+    // Must match the `any(target_os = "windows", target_os = "linux")` arm in
+    // ui-state's actions.rs.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    const ALT_BACK_KEY: &str = "alt-left";
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    const ALT_FORWARD_KEY: &str = "alt-right";
+
+    /// Alt+left/right walk the same history as the main keys on Windows and
+    /// Linux.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[gpui_kit::test]
+    fn alt_arrows_walk_the_history(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-discover");
+        shell.click(cx, "rail-schedule");
+        shell.click(cx, "rail-home");
+
+        shell.press(cx, ALT_BACK_KEY);
+        assert_eq!(shell.route(cx), Route::Schedule, "alt+left goes back");
+
+        shell.press(cx, ALT_FORWARD_KEY);
+        assert_eq!(shell.route(cx), Route::Home, "alt+right goes forward");
+    }
 }
