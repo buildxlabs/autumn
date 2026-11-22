@@ -1,0 +1,1258 @@
+{
+  "data": {
+    "Page": {
+      "media": [
+        {
+          "id": 177704,
+          "idMal": 58934,
+          "type": "ANIME",
+          "title": {
+            "romaji": "MASHLE: Sanma Taisou Shinkakusha Saishuu Shiken-hen",
+            "english": "MASHLE: MAGIC AND MUSCLES The Tri-Magicathlon Divine Visionary Final Exam Arc",
+            "native": "マッシュル-MASHLE- 三魔対争神覚者最終試験編"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx177704-f2TBC7j9d7ug.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx177704-f2TBC7j9d7ug.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx177704-f2TBC7j9d7ug.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 189323,
+          "idMal": 61338,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Shangri-La Frontier 3rd Season",
+            "english": "Shangri-La Frontier Season 3",
+            "native": "シャングリラ・フロンティア 3rd season"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx189323-gHXhqIOBUY8F.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189323-gHXhqIOBUY8F.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx189323-gHXhqIOBUY8F.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Sci-Fi"],
+          "isAdult": false
+        },
+        {
+          "id": 186822,
+          "idMal": 61035,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Ki ni Natteru Hito ga Otoko ja Nakatta",
+            "english": "The Guy She Was Interested In Wasn't a Guy At All",
+            "native": "気になってる人が男じゃなかった"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx186822-9zsR5NtOP0yJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx186822-9zsR5NtOP0yJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx186822-9zsR5NtOP0yJ.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Music", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 169579,
+          "idMal": 56732,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sekai Saikou no Ansatsusha, Isekai Kizoku ni Tensei suru 2nd Season",
+            "english": null,
+            "native": "世界最高の暗殺者、異世界貴族に転生する 2ndシーズン"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx169579-KxMH0iq7jlPr.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx169579-KxMH0iq7jlPr.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx169579-KxMH0iq7jlPr.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Drama", "Fantasy", "Mystery", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 171630,
+          "idMal": 57557,
+          "type": "ANIME",
+          "title": {
+            "romaji": "THE ONE PIECE",
+            "english": "THE ONE PIECE",
+            "native": "THE ONE PIECE"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx171630-2U7Y5OIWwXJJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx171630-2U7Y5OIWwXJJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx171630-2U7Y5OIWwXJJ.jpg"
+          },
+          "bannerImage": null,
+          "format": null,
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 7,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure"],
+          "isAdult": false
+        },
+        {
+          "id": 204363,
+          "idMal": 63139,
+          "type": "ANIME",
+          "title": {
+            "romaji": "SAKAMOTO DAYS 2nd Season",
+            "english": "SAKAMOTO DAYS Season 2",
+            "native": "SAKAMOTO DAYS 第2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx204363-MtBgHE8uhEpJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204363-MtBgHE8uhEpJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx204363-MtBgHE8uhEpJ.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy"],
+          "isAdult": false
+        },
+        {
+          "id": 197620,
+          "idMal": 62312,
+          "type": "ANIME",
+          "title": {
+            "romaji": "SEKIRO: NO DEFEAT",
+            "english": "Sekiro: No Defeat",
+            "native": "SEKIRO: NO DEFEAT"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx197620-COEsbB1otIdR.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx197620-COEsbB1otIdR.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx197620-COEsbB1otIdR.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/197620-G1ENu89amdst.jpg",
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 8,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy", "Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 204747,
+          "idMal": 63193,
+          "type": "ANIME",
+          "title": {
+            "romaji": "One Punch Man 3 Part 2",
+            "english": "One Punch Man Season 3 Part 2",
+            "native": "ワンパンマン 第3期第2クール"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx204747-INMrngH10Kwq.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204747-INMrngH10Kwq.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx204747-INMrngH10Kwq.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Sci-Fi", "Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 181951,
+          "idMal": 59928,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Ookami to Koushinryou: MERCHANT MEETS THE WISE WOLF 2nd Season",
+            "english": null,
+            "native": "狼と香辛料 MERCHANT MEETS THE WISE WOLF 2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx181951-jTcWy5CUkS7L.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx181951-jTcWy5CUkS7L.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx181951-jTcWy5CUkS7L.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 213752,
+          "idMal": 64524,
+          "type": "ANIME",
+          "title": {
+            "romaji": "MARRIAGETOXIN 2nd Season",
+            "english": null,
+            "native": "マリッジトキシン 第2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213752-UNsERPORVGfJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213752-UNsERPORVGfJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213752-UNsERPORVGfJ.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Drama", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 202564,
+          "idMal": 62989,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Kakunaru Ue wa",
+            "english": null,
+            "native": "描くなるうえは"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202564-gLnCiyS8vHsB.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202564-gLnCiyS8vHsB.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202564-gLnCiyS8vHsB.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Ecchi", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 204579,
+          "idMal": 63174,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Jirai nan desu ka? Chihara-san",
+            "english": null,
+            "native": "地雷なんですか？地原さん"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx204579-2MZs9F70Fp2M.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204579-2MZs9F70Fp2M.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx204579-2MZs9F70Fp2M.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Romance", "Slice of Life"],
+          "isAdult": false
+        },
+        {
+          "id": 209980,
+          "idMal": 63822,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Isekai de Cheat Skill wo Te ni Shita Ore wa, Genjitsu Sekai wo mo Musou Suru: Level Up wa Jinsei wo Kaeta 2nd Season",
+            "english": null,
+            "native": "異世界でチート能力を手にした俺は、現実世界をも無双する ～レベルアップは人生を変えた～ 2nd Season"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209980-CTTwiweBKBS2.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209980-CTTwiweBKBS2.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209980-CTTwiweBKBS2.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 217070,
+          "idMal": 65032,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Futsutsuka na Akujo de wa Gozaimasu ga: Suuguu Chouso Torikae Den Part 2",
+            "english": null,
+            "native": "ふつつかな悪女ではございますが ～雛宮蝶鼠とりかえ伝～ 第二幕"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx217070-Muh7Kjw4RQsi.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx217070-Muh7Kjw4RQsi.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx217070-Muh7Kjw4RQsi.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Drama", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 188892,
+          "idMal": 61304,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Kuroiwa Medaka ni Watashi no Kawaii ga Tsuujinai 2nd Season",
+            "english": null,
+            "native": "黒岩メダカに私の可愛いが通じない 第2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx188892-KpzXYChwPxyT.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx188892-KpzXYChwPxyT.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx188892-KpzXYChwPxyT.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 216624,
+          "idMal": 64950,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Shishite Ikiru SSS-kyuu Hunter",
+            "english": "SSS-Class Revival Hunter",
+            "native": "死して生きるSSS級ハンター"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx216624-ZgSowlLTtu3G.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx216624-ZgSowlLTtu3G.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx216624-ZgSowlLTtu3G.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 190244,
+          "idMal": 63934,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Date A Live F Last Date",
+            "english": null,
+            "native": "デート・ア・ライブF Last Date"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx190244-u2yo4hPmVp6Z.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx190244-u2yo4hPmVp6Z.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx190244-u2yo4hPmVp6Z.png"
+          },
+          "bannerImage": null,
+          "format": "MOVIE",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 1,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Ecchi", "Fantasy", "Mecha", "Romance", "Sci-Fi"],
+          "isAdult": false
+        },
+        {
+          "id": 196333,
+          "idMal": 62100,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Hirayasumi",
+            "english": "Hirayasumi",
+            "native": "ひらやすみ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx196333-HRmwgn8j8tvi.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx196333-HRmwgn8j8tvi.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx196333-HRmwgn8j8tvi.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/196333-EmXZBmnr8clg.jpg",
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Drama", "Slice of Life"],
+          "isAdult": false
+        },
+        {
+          "id": 186741,
+          "idMal": 61015,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Himekishi-sama no Himo",
+            "english": null,
+            "native": "姫騎士様のヒモ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx186741-jfAFI71jie1x.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx186741-jfAFI71jie1x.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx186741-jfAFI71jie1x.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Comedy", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 194213,
+          "idMal": 61813,
+          "type": "ANIME",
+          "title": {
+            "romaji": "ghost／yoru no hate",
+            "english": "ghost – end of night",
+            "native": "ghost／夜の果て"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx194213-MZDr0UcflB0Y.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx194213-MZDr0UcflB0Y.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx194213-MZDr0UcflB0Y.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/194213-IZb2of7CgJnp.jpg",
+          "format": "MOVIE",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 1,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 213360,
+          "idMal": 64439,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Akane-banashi 2nd Season",
+            "english": null,
+            "native": "あかね噺 第2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213360-xNEWCLeQkXkI.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213360-xNEWCLeQkXkI.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213360-xNEWCLeQkXkI.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Drama"],
+          "isAdult": false
+        },
+        {
+          "id": 183960,
+          "idMal": 60253,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Isekai Munchkin: HP 1 no Mama de Saikyou Saisoku Dungeon Kouryaku",
+            "english": "Otherworldly Munchkin: Let's Speedrun the Dungeon with Only 1 HP!",
+            "native": "異世界マンチキン ―HP1のままで最強最速ダンジョン攻略―"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx183960-Hgd9AMxsOyPa.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx183960-Hgd9AMxsOyPa.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx183960-Hgd9AMxsOyPa.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 208766,
+          "idMal": 63640,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Bless",
+            "english": null,
+            "native": "ブレス"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx208766-FIvJRb63ztBJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx208766-FIvJRb63ztBJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx208766-FIvJRb63ztBJ.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Slice of Life"],
+          "isAdult": false
+        },
+        {
+          "id": 205130,
+          "idMal": 63215,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Historié",
+            "english": null,
+            "native": "ヒストリエ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx205130-dC5WuIvGMMgr.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx205130-dC5WuIvGMMgr.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx205130-dC5WuIvGMMgr.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/205130-BDtd2yGv1a7O.jpg",
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure", "Drama", "Psychological"],
+          "isAdult": false
+        },
+        {
+          "id": 206298,
+          "idMal": 63326,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Medalist Movie",
+            "english": null,
+            "native": "劇場版 メダリスト"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx206298-q8wPQWpcT4WV.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx206298-q8wPQWpcT4WV.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx206298-q8wPQWpcT4WV.png"
+          },
+          "bannerImage": null,
+          "format": "MOVIE",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 1,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Drama", "Psychological", "Sports"],
+          "isAdult": false
+        },
+        {
+          "id": 197619,
+          "idMal": 62311,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Kekkaishi no Ichirinka",
+            "english": "Bride of the Barrier Master",
+            "native": "結界師の一輪華"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx197619-EZYu0cg8NADa.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx197619-EZYu0cg8NADa.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx197619-EZYu0cg8NADa.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Drama", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 207251,
+          "idMal": 63419,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Mairimashita! Iruma-kun: If Episode of Mafia",
+            "english": null,
+            "native": "魔入りました！入間くん if Episode of 魔フィア"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx207251-1opGPW7xVHQ8.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx207251-1opGPW7xVHQ8.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx207251-1opGPW7xVHQ8.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 12,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy"],
+          "isAdult": false
+        },
+        {
+          "id": 200578,
+          "idMal": 62808,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Isshiki-san wa Koi wo Shiritai.",
+            "english": null,
+            "native": "一式さんは恋を知りたい。"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx200578-F1U6GNXA0p3l.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx200578-F1U6GNXA0p3l.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx200578-F1U6GNXA0p3l.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Ecchi", "Mystery", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 210073,
+          "idMal": 63850,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Golden Kamuy: Saishuushou - Bousou Ressha-hen",
+            "english": null,
+            "native": "ゴールデンカムイ 最終章 暴走列車編"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx210073-ZyVP60Cn7pLJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx210073-ZyVP60Cn7pLJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx210073-ZyVP60Cn7pLJ.jpg"
+          },
+          "bannerImage": null,
+          "format": null,
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Comedy"],
+          "isAdult": false
+        },
+        {
+          "id": 189121,
+          "idMal": 61324,
+          "type": "ANIME",
+          "title": {
+            "romaji": "BanG Dream! MyGO!!!!! // Ave Mujica",
+            "english": null,
+            "native": "BanG Dream! MyGO!!!!! // Ave Mujica"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx189121-m3EHJ33Y8jgT.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189121-m3EHJ33Y8jgT.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx189121-m3EHJ33Y8jgT.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Music"],
+          "isAdult": false
+        },
+        {
+          "id": 219548,
+          "idMal": 65323,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Spirit Circle",
+            "english": "Spirit Circle",
+            "native": "スピリットサークル"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx219548-TJDkwN6I2ahO.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx219548-TJDkwN6I2ahO.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx219548-TJDkwN6I2ahO.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 18,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Romance", "Sci-Fi", "Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 210199,
+          "idMal": 63885,
+          "type": "ANIME",
+          "title": {
+            "romaji": "The Fable 2nd Season",
+            "english": null,
+            "native": "ザ・ファブル 第2期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx210199-THddm86dG5PI.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx210199-THddm86dG5PI.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx210199-THddm86dG5PI.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Drama", "Romance", "Thriller"],
+          "isAdult": false
+        },
+        {
+          "id": 213877,
+          "idMal": 64555,
+          "type": "ANIME",
+          "title": {
+            "romaji": "MURCIÉLAGO",
+            "english": null,
+            "native": "ムルシエラゴ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213877-NK48aPaVO29y.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213877-NK48aPaVO29y.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213877-NK48aPaVO29y.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 209661,
+          "idMal": 63763,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Zatsuyou Fuyojutsu-shi ga Jibun no Saikyou ni Kizuku Made",
+            "english": "Magical Buffs: The Support Caster is Stronger Than He Realized!",
+            "native": "雑用付与術師が自分の最強に気付くまで"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209661-RHN7Jp3VPdFV.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209661-RHN7Jp3VPdFV.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209661-RHN7Jp3VPdFV.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 213052,
+          "idMal": 64374,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Dengeki Daisy",
+            "english": null,
+            "native": "電撃デイジー"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213052-RzCXgG576ilW.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213052-RzCXgG576ilW.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213052-RzCXgG576ilW.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Drama", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 202503,
+          "idMal": 62978,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Majutsu wo Kiwamete Tabi ni Deta Tensei Elf, Moteamashita Jumyou de Ikeru Densetsu to Naru",
+            "english": null,
+            "native": "魔術を極めて旅に出た転生エルフ、持て余した寿命で生ける伝説となる"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202503-JaapiDgTKFy8.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202503-JaapiDgTKFy8.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202503-JaapiDgTKFy8.png"
+          },
+          "bannerImage": null,
+          "format": "ONA",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 174427,
+          "idMal": 57990,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Zombie no Afureta Sekai de Ore dake ga Osowarenai",
+            "english": null,
+            "native": "ゾンビのあふれた世界で俺だけが襲われない"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx174427-ozv3bFtwB08m.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx174427-ozv3bFtwB08m.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx174427-ozv3bFtwB08m.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Ecchi", "Supernatural", "Thriller"],
+          "isAdult": false
+        },
+        {
+          "id": 213497,
+          "idMal": 64467,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sudachi no Maoujou",
+            "english": null,
+            "native": "すだちの魔王城"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213497-bi5uWSWWtGmH.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213497-bi5uWSWWtGmH.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213497-bi5uWSWWtGmH.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 207782,
+          "idMal": 63476,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Odebu Akujo ni Tensei Shitara, Naze ka Last Boss Ouji-sama ni Shuuchaku Sareteimasu",
+            "english": null,
+            "native": "おデブ悪女に転生したら、なぜかラスボス王子様に執着されています"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx207782-wKac51K7adn3.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx207782-wKac51K7adn3.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx207782-wKac51K7adn3.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 202282,
+          "idMal": 60348,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Disney Twisted-Wonderland: THE ANIMATION - Season 2: EPISODE of SAVANACLAW",
+            "english": null,
+            "native": "ディズニー ツイステッドワンダーランド ザ アニメーション シーズン2「エピソード オブ サバナクロー」"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202282-WOXxDA9Wwey5.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202282-WOXxDA9Wwey5.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202282-WOXxDA9Wwey5.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/202282-LY333a7emvcx.jpg",
+          "format": "ONA",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 8,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 187303,
+          "idMal": 61135,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Giant Ojou-sama",
+            "english": "Giant Ojosama",
+            "native": "ジャイアントお嬢様"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx187303-ZY8i5D8JA5cB.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx187303-ZY8i5D8JA5cB.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx187303-ZY8i5D8JA5cB.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Comedy", "Ecchi", "Fantasy", "Sci-Fi"],
+          "isAdult": false
+        },
+        {
+          "id": 194030,
+          "idMal": 61756,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Gacha wo Mawashite Nakama wo Fuyasu: Saikyou no Bishoujo Gundan wo Tsukuriagero",
+            "english": null,
+            "native": "ガチャを回して仲間を増やす 最強の美少女軍団を作り上げろ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx194030-vUznQtK7kodY.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx194030-vUznQtK7kodY.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx194030-vUznQtK7kodY.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Comedy", "Ecchi", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 197095,
+          "idMal": 62188,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Kaketa Tsuki no Mercedes",
+            "english": null,
+            "native": "欠けた月のメルセデス"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx197095-DkwWaBqiNTlY.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx197095-DkwWaBqiNTlY.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx197095-DkwWaBqiNTlY.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 198728,
+          "idMal": 62483,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Kaze wo Tsugumono",
+            "english": null,
+            "native": "風を継ぐもの"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx198728-vuqIf9HHt6s7.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx198728-vuqIf9HHt6s7.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx198728-vuqIf9HHt6s7.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/198728-1l9S59E7b5QI.jpg",
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": 13,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action"],
+          "isAdult": false
+        },
+        {
+          "id": 199590,
+          "idMal": 62605,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Matsurika Kanriden",
+            "english": null,
+            "native": "茉莉花官吏伝"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx199590-gMBbisGLCZxa.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx199590-gMBbisGLCZxa.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx199590-gMBbisGLCZxa.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Drama", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 206798,
+          "idMal": 63350,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Doukyo Shiteiru Kensei no Onna Shishou ga Kawaisugite Mainichi Shiawase desu",
+            "english": null,
+            "native": "同居している剣聖の女師匠が可愛すぎて毎日幸せです"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx206798-WBoAkt6k7sx9.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx206798-WBoAkt6k7sx9.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx206798-WBoAkt6k7sx9.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Comedy", "Ecchi", "Fantasy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 199337,
+          "idMal": 62580,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Shin Samurai-den YAIBA 2",
+            "english": null,
+            "native": "真•侍伝 YAIBA 第二期"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx199337-ZGs9fsoxYT6N.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx199337-ZGs9fsoxYT6N.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx199337-ZGs9fsoxYT6N.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/199337-YqUdWf4XUYyg.jpg",
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure"],
+          "isAdult": false
+        },
+        {
+          "id": 209221,
+          "idMal": 63730,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Isekai Tensei Soudouki",
+            "english": null,
+            "native": "異世界転生騒動記"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209221-QBpwh553rVNr.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209221-QBpwh553rVNr.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209221-QBpwh553rVNr.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 205430,
+          "idMal": 63256,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Boukensha License wo Hakudatsu Sareta Ossan Dakedo, Manamusume ga Dekita no de Nonbiri Jinsei wo Ouka Suru",
+            "english": null,
+            "native": "冒険者ライセンスを剥奪されたおっさんだけど、愛娘ができたのでのんびり人生を謳歌する"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx205430-IHRAUif90fki.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx205430-IHRAUif90fki.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx205430-IHRAUif90fki.png"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 188546,
+          "idMal": 61282,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Ore to Yuu-nii!",
+            "english": null,
+            "native": "俺と悠兄！"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx188546-unC9pna5yjl7.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx188546-unC9pna5yjl7.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx188546-unC9pna5yjl7.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "WINTER",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Romance", "Slice of Life"],
+          "isAdult": false
+        }
+      ]
+    }
+  }
+}

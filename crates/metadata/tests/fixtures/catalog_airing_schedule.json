@@ -1,0 +1,1808 @@
+{
+  "data": {
+    "Page": {
+      "airingSchedules": [
+        {
+          "id": 395112,
+          "episode": 2972,
+          "airingAt": 1863682200,
+          "timeUntilAiring": 68325852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395111,
+          "episode": 2971,
+          "airingAt": 1863077400,
+          "timeUntilAiring": 67721052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395110,
+          "episode": 2970,
+          "airingAt": 1862472600,
+          "timeUntilAiring": 67116252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395109,
+          "episode": 2969,
+          "airingAt": 1861867800,
+          "timeUntilAiring": 66511452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395108,
+          "episode": 2968,
+          "airingAt": 1861263000,
+          "timeUntilAiring": 65906652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395107,
+          "episode": 2967,
+          "airingAt": 1860658200,
+          "timeUntilAiring": 65301852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395106,
+          "episode": 2966,
+          "airingAt": 1860053400,
+          "timeUntilAiring": 64697052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395105,
+          "episode": 2965,
+          "airingAt": 1859448600,
+          "timeUntilAiring": 64092252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395104,
+          "episode": 2964,
+          "airingAt": 1858843800,
+          "timeUntilAiring": 63487452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395103,
+          "episode": 2963,
+          "airingAt": 1858239000,
+          "timeUntilAiring": 62882652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395102,
+          "episode": 2962,
+          "airingAt": 1857634200,
+          "timeUntilAiring": 62277852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395101,
+          "episode": 2961,
+          "airingAt": 1857029400,
+          "timeUntilAiring": 61673052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395100,
+          "episode": 2960,
+          "airingAt": 1856424600,
+          "timeUntilAiring": 61068252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395099,
+          "episode": 2959,
+          "airingAt": 1855819800,
+          "timeUntilAiring": 60463452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395098,
+          "episode": 2958,
+          "airingAt": 1855215000,
+          "timeUntilAiring": 59858652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395097,
+          "episode": 2957,
+          "airingAt": 1854610200,
+          "timeUntilAiring": 59253852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395096,
+          "episode": 2956,
+          "airingAt": 1854005400,
+          "timeUntilAiring": 58649052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395095,
+          "episode": 2955,
+          "airingAt": 1853400600,
+          "timeUntilAiring": 58044252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395094,
+          "episode": 2954,
+          "airingAt": 1852795800,
+          "timeUntilAiring": 57439452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395093,
+          "episode": 2953,
+          "airingAt": 1852191000,
+          "timeUntilAiring": 56834652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395092,
+          "episode": 2952,
+          "airingAt": 1851586200,
+          "timeUntilAiring": 56229852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395091,
+          "episode": 2951,
+          "airingAt": 1850981400,
+          "timeUntilAiring": 55625052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395090,
+          "episode": 2950,
+          "airingAt": 1850376600,
+          "timeUntilAiring": 55020252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395089,
+          "episode": 2949,
+          "airingAt": 1849771800,
+          "timeUntilAiring": 54415452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395088,
+          "episode": 2948,
+          "airingAt": 1849167000,
+          "timeUntilAiring": 53810652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395087,
+          "episode": 2947,
+          "airingAt": 1848562200,
+          "timeUntilAiring": 53205852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395086,
+          "episode": 2946,
+          "airingAt": 1847957400,
+          "timeUntilAiring": 52601052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395085,
+          "episode": 2945,
+          "airingAt": 1847352600,
+          "timeUntilAiring": 51996252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395084,
+          "episode": 2944,
+          "airingAt": 1846747800,
+          "timeUntilAiring": 51391452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395083,
+          "episode": 2943,
+          "airingAt": 1846143000,
+          "timeUntilAiring": 50786652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395082,
+          "episode": 2942,
+          "airingAt": 1845538200,
+          "timeUntilAiring": 50181852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395081,
+          "episode": 2941,
+          "airingAt": 1844933400,
+          "timeUntilAiring": 49577052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395080,
+          "episode": 2940,
+          "airingAt": 1844328600,
+          "timeUntilAiring": 48972252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395079,
+          "episode": 2939,
+          "airingAt": 1843723800,
+          "timeUntilAiring": 48367452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395078,
+          "episode": 2938,
+          "airingAt": 1843119000,
+          "timeUntilAiring": 47762652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395077,
+          "episode": 2937,
+          "airingAt": 1842514200,
+          "timeUntilAiring": 47157852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395076,
+          "episode": 2936,
+          "airingAt": 1841909400,
+          "timeUntilAiring": 46553052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 395075,
+          "episode": 2935,
+          "airingAt": 1841304600,
+          "timeUntilAiring": 45948252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 415323,
+          "episode": 100,
+          "airingAt": 1840845600,
+          "timeUntilAiring": 45489252,
+          "media": {
+            "id": 213188,
+            "idMal": 64388,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Jueshi Zhan Hun 2",
+              "english": null,
+              "native": "绝世战魂 第2季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 100,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 25,
+              "airingAt": 1795485600,
+              "timeUntilAiring": 129252
+            }
+          }
+        },
+        {
+          "id": 395074,
+          "episode": 2934,
+          "airingAt": 1840699800,
+          "timeUntilAiring": 45343452,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 415322,
+          "episode": 99,
+          "airingAt": 1840240800,
+          "timeUntilAiring": 44884452,
+          "media": {
+            "id": 213188,
+            "idMal": 64388,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Jueshi Zhan Hun 2",
+              "english": null,
+              "native": "绝世战魂 第2季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 100,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 25,
+              "airingAt": 1795485600,
+              "timeUntilAiring": 129252
+            }
+          }
+        },
+        {
+          "id": 395073,
+          "episode": 2933,
+          "airingAt": 1840095000,
+          "timeUntilAiring": 44738652,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 415321,
+          "episode": 98,
+          "airingAt": 1839636000,
+          "timeUntilAiring": 44279652,
+          "media": {
+            "id": 213188,
+            "idMal": 64388,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Jueshi Zhan Hun 2",
+              "english": null,
+              "native": "绝世战魂 第2季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 100,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 25,
+              "airingAt": 1795485600,
+              "timeUntilAiring": 129252
+            }
+          }
+        },
+        {
+          "id": 395072,
+          "episode": 2932,
+          "airingAt": 1839490200,
+          "timeUntilAiring": 44133852,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 380143,
+          "episode": 1015,
+          "airingAt": 1839398400,
+          "timeUntilAiring": 44042052,
+          "media": {
+            "id": 8687,
+            "idMal": 8687,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Doraemon (2005)",
+              "english": null,
+              "native": "ドラえもん (2005)"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b8687-bBnJMGnih4PT.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/8687-aa3QbJjGfy3B.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2005,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Adventure", "Comedy", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 943,
+              "airingAt": 1795852800,
+              "timeUntilAiring": 496452
+            }
+          }
+        },
+        {
+          "id": 415320,
+          "episode": 97,
+          "airingAt": 1839031200,
+          "timeUntilAiring": 43674852,
+          "media": {
+            "id": 213188,
+            "idMal": 64388,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Jueshi Zhan Hun 2",
+              "english": null,
+              "native": "绝世战魂 第2季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 100,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 25,
+              "airingAt": 1795485600,
+              "timeUntilAiring": 129252
+            }
+          }
+        },
+        {
+          "id": 395071,
+          "episode": 2931,
+          "airingAt": 1838885400,
+          "timeUntilAiring": 43529052,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        },
+        {
+          "id": 380142,
+          "episode": 1014,
+          "airingAt": 1838793600,
+          "timeUntilAiring": 43437252,
+          "media": {
+            "id": 8687,
+            "idMal": 8687,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Doraemon (2005)",
+              "english": null,
+              "native": "ドラえもん (2005)"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b8687-bBnJMGnih4PT.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/8687-aa3QbJjGfy3B.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2005,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Adventure", "Comedy", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 943,
+              "airingAt": 1795852800,
+              "timeUntilAiring": 496452
+            }
+          }
+        },
+        {
+          "id": 415319,
+          "episode": 96,
+          "airingAt": 1838426400,
+          "timeUntilAiring": 43070052,
+          "media": {
+            "id": 213188,
+            "idMal": 64388,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Jueshi Zhan Hun 2",
+              "english": null,
+              "native": "绝世战魂 第2季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 100,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 25,
+              "airingAt": 1795485600,
+              "timeUntilAiring": 129252
+            }
+          }
+        },
+        {
+          "id": 395070,
+          "episode": 2930,
+          "airingAt": 1838280600,
+          "timeUntilAiring": 42924252,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 588252
+            }
+          }
+        }
+      ]
+    }
+  }
+}

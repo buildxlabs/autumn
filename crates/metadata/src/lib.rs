@@ -6,6 +6,7 @@
 //! [`domain::MediaId`] through `db`. See ARCHITECTURE §2. This is a back-end
 //! crate: no GPUI.
 
+mod catalog;
 mod client;
 mod detail;
 mod error;
@@ -13,6 +14,7 @@ mod fragments;
 mod model;
 mod search;
 
+pub use catalog::{AiringEpisode, CountryTrends, DiscoverLoad, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
 pub use model::{
