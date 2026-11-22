@@ -28,6 +28,7 @@ fn files_live_where_architecture_section_8_puts_them() {
         std::path::Path::new("/c/settings.json")
     );
     assert_eq!(paths.log_dir(), std::path::Path::new("/d/logs"));
+    assert_eq!(paths.database_file(), std::path::Path::new("/d/autumn.db"));
 }
 
 #[test]

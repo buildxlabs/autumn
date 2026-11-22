@@ -1,6 +1,7 @@
 //! Autumn, a desktop app for anime and manga.
 
 mod logging;
+mod settings_store;
 mod startup;
 
 use std::{fmt::Display, process::ExitCode};
@@ -16,13 +17,6 @@ const WINDOW_WIDTH: f32 = 1280.;
 const WINDOW_HEIGHT: f32 = 800.;
 
 fn main() -> ExitCode {
-    let _started = match startup::run() {
-        Ok(started) => started,
-        Err(err) => {
-            report_fatal(&format_args!("startup failed: {err:#}"));
-            return ExitCode::FAILURE;
-        }
-    };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_name("autumn-engine")
@@ -34,6 +28,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let _started = match startup::run(&runtime) {
+        Ok(started) => started,
+        Err(err) => {
+            report_fatal(&format_args!("startup failed: {err:#}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    // One runtime: startup opened the database on it, and the bridge runs
+    // UI-requested futures on it.
     let handle = runtime.handle().clone();
     // The engine takes this sender once it exists (Phase 2). Holding it here
     // keeps the event pump alive for the whole run.

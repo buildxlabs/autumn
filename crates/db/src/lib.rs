@@ -4,6 +4,7 @@
 
 mod error;
 mod media;
+mod settings;
 
 use std::{path::Path, time::Duration};
 
@@ -14,6 +15,7 @@ use sqlx::{
 
 pub use error::DbError;
 pub use media::{LinkConflict, MediaRepo, Minted};
+pub use settings::SettingsRepo;
 
 /// How long a write waits for another connection's lock before failing.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -50,6 +52,11 @@ impl Db {
     /// Media identity and cross-references.
     pub fn media(&self) -> MediaRepo<'_> {
         MediaRepo::new(&self.pool)
+    }
+
+    /// Settings rows, one per settings tab.
+    pub fn settings(&self) -> SettingsRepo<'_> {
+        SettingsRepo::new(&self.pool)
     }
 
     /// SQLite's journal mode for this database, such as `"wal"`.
