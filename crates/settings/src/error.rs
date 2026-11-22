@@ -16,11 +16,20 @@ pub enum SettingsError {
         #[source]
         source: io::Error,
     },
-    /// `settings.json` exists but is not valid settings JSON.
+    /// The Phase 0 `settings.json` exists but is not valid settings JSON.
     #[error("{} is not valid settings JSON", path.display())]
     Parse {
         /// The settings file.
         path: PathBuf,
+        /// The underlying error.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// A database settings row is not valid JSON for its tab.
+    #[error("settings row {tab:?} is not valid")]
+    Row {
+        /// The tab the row belongs to.
+        tab: String,
         /// The underlying error.
         #[source]
         source: serde_json::Error,

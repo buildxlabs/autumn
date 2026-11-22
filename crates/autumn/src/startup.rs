@@ -1,27 +1,31 @@
-//! What runs before the window opens: app dirs, logging and settings
-//! (ROADMAP Phase 0).
+//! What runs before the window opens: app dirs, logging, the database and
+//! settings (ROADMAP Phases 0 and 1).
 
 use anyhow::Context as _;
+use db::Db;
 use settings::{AppPaths, Settings};
+use tokio::runtime::Runtime;
 
 /// Everything startup produced.
 #[derive(Debug)]
 #[expect(
     dead_code,
-    reason = "the shell reads paths and settings once it exists (#39, #41)"
+    reason = "the shell and engine read these once they exist (#39, #41)"
 )]
 pub(crate) struct Started {
     /// The resolved and created app directories.
     pub(crate) paths: AppPaths,
-    /// The settings loaded from disk, or the defaults.
+    /// The open database. Its pool runs on `runtime`.
+    pub(crate) db: Db,
+    /// The settings from the database, or the defaults.
     pub(crate) settings: Settings,
 }
 
-/// Creates the app dirs, installs logging, then loads `settings.json`.
+/// Creates the app dirs, installs logging, opens the database, imports the
+/// Phase 0 `settings.json` once, then loads the settings.
 ///
-/// A corrupt settings file is logged and the defaults are used for this run;
-/// the file is left in place for the user.
-pub(crate) fn run() -> anyhow::Result<Started> {
+/// A corrupt settings file is logged and the defaults are used.
+pub(crate) fn run(runtime: &Runtime) -> anyhow::Result<Started> {
     let paths = AppPaths::resolve()?;
     paths
         .create_dirs()
@@ -35,14 +39,20 @@ pub(crate) fn run() -> anyhow::Result<Started> {
         "starting Autumn"
     );
 
-    let settings = Settings::load_or_init(&paths.settings_file()).unwrap_or_else(|err| {
-        let err = anyhow::Error::from(err);
-        tracing::error!(error = %format_args!("{err:#}"), "using default settings");
-        Settings::default()
-    });
+    let (db, settings) = runtime.block_on(async {
+        let db = Db::open(&paths.database_file())
+            .await
+            .context("could not open the database")?;
+        let settings = crate::settings_store::load(&db, &paths.settings_file()).await?;
+        anyhow::Ok((db, settings))
+    })?;
     // Settings hold no secrets (those live in the keychain), so the whole
     // struct may be logged. Revisit if a secret-adjacent field is added.
     tracing::debug!(?settings, "settings loaded");
 
-    Ok(Started { paths, settings })
+    Ok(Started {
+        paths,
+        db,
+        settings,
+    })
 }

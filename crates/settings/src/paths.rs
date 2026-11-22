@@ -60,7 +60,7 @@ impl AppPaths {
         Ok(())
     }
 
-    /// Holds `settings.json` and nothing else.
+    /// Held the Phase 0 `settings.json`, imported once into the database.
     pub fn config_dir(&self) -> &Path {
         &self.config
     }
@@ -75,9 +75,15 @@ impl AppPaths {
         &self.cache
     }
 
-    /// `<config>/settings.json`.
+    /// `<config>/settings.json`: the Phase 0 settings file, read once for the
+    /// import into the database.
     pub fn settings_file(&self) -> PathBuf {
         self.config.join("settings.json")
+    }
+
+    /// `<data>/autumn.db`, the SQLite database.
+    pub fn database_file(&self) -> PathBuf {
+        self.data.join("autumn.db")
     }
 
     /// `<data>/logs/`, where the rolling log files go.
