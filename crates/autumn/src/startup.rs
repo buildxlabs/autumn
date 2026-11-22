@@ -8,10 +8,7 @@ use tokio::runtime::Runtime;
 
 /// Everything startup produced.
 #[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "the shell and engine read these once they exist (#39, #41)"
-)]
+#[expect(dead_code, reason = "the engine reads the paths once it exists (#39)")]
 pub(crate) struct Started {
     /// The resolved and created app directories.
     pub(crate) paths: AppPaths,
