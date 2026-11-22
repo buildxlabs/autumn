@@ -32,9 +32,28 @@ impl AniList {
             characters_per_page: CHARACTERS_PER_PAGE,
             recommendations_per_page: RECOMMENDATIONS_PER_PAGE,
         });
-        let media = self.query(operation).await?.media.ok_or(Error::NotFound)?;
+        let media = match self.query(operation).await {
+            Ok(data) => data.media.ok_or(Error::NotFound)?,
+            Err(error) if is_not_found(&error) => return Err(Error::NotFound),
+            Err(error) => return Err(error),
+        };
         Ok(media.into())
     }
+}
+
+/// AniList answers a missing id with HTTP 404 and `errors[].status` 404.
+fn is_not_found(error: &Error) -> bool {
+    const NOT_FOUND: u16 = 404;
+    matches!(
+        error,
+        Error::Net(net::Error::Http {
+            status: NOT_FOUND,
+            ..
+        }) | Error::Api {
+            status: Some(NOT_FOUND),
+            ..
+        }
+    )
 }
 
 #[derive(cynic::QueryVariables, Debug)]

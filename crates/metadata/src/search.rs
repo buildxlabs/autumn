@@ -74,7 +74,7 @@ pub struct SearchFilters {
     pub is_adult: bool,
 }
 
-/// Search result order (AniList's `MediaSort`). Each sorts descending.
+/// Search result order (AniList's `MediaSort`).
 #[derive(cynic::Enum, Debug, Clone, PartialEq, Eq, Hash)]
 #[cynic(non_exhaustive)]
 #[non_exhaustive]

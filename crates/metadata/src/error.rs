@@ -12,7 +12,7 @@ pub enum Error {
     #[error(transparent)]
     Net(#[from] net::Error),
 
-    /// AniList has no media with the requested id.
+    /// AniList has no media with the requested id ([`crate::AniList::media`]).
     #[error("AniList has no such media")]
     NotFound,
 

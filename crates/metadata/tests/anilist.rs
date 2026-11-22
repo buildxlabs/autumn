@@ -74,6 +74,14 @@ impl Mock {
         assert_eq!(requests.len(), 1, "expected exactly one request");
         requests[0]["variables"].clone()
     }
+
+    /// The GraphQL document of the one request, whitespace collapsed.
+    fn query(&self) -> String {
+        let requests = self.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1, "expected exactly one request");
+        let query = requests[0]["query"].as_str().unwrap();
+        query.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
 }
 
 #[tokio::test]
@@ -182,6 +190,34 @@ async fn media_detail_asks_for_the_requested_id() {
 }
 
 #[tokio::test]
+async fn media_detail_asks_for_what_the_entry_page_shows() {
+    let mock = Mock::serve(StatusCode::OK, "media_detail_154587.json").await;
+
+    mock.client.media(154_587).await.unwrap();
+
+    let query = mock.query();
+    for expected in [
+        "Media(id: $id)",
+        "idMal",
+        "coverImage { extraLarge large medium }",
+        "bannerImage",
+        "status(version: 2)",
+        "description(asHtml: false)",
+        "studios(isMain: true)",
+        "characters(sort: [ROLE, RELEVANCE, ID], perPage: $charactersPerPage)",
+        "voiceActors(language: JAPANESE, sort: [RELEVANCE, ID])",
+        "relationType(version: 2)",
+        "recommendations(sort: [RATING_DESC, ID], perPage: $recommendationsPerPage)",
+    ] {
+        assert!(
+            query.contains(expected),
+            "query lacks `{expected}`: {query}"
+        );
+    }
+    assert_eq!(mock.variables()["charactersPerPage"], 25);
+}
+
+#[tokio::test]
 async fn a_missing_media_is_not_found() {
     // AniList answers a missing id with HTTP 404 and a GraphQL error.
     let mock = Mock::serve(StatusCode::NOT_FOUND, "media_not_found.json").await;
@@ -274,6 +310,46 @@ async fn search_caps_the_page_size_at_50() {
     let variables = mock.variables();
     assert_eq!(variables["page"], 3);
     assert_eq!(variables["perPage"], 50);
+}
+
+#[tokio::test]
+async fn search_binds_each_filter_to_its_anilist_argument() {
+    let mock = Mock::serve(StatusCode::OK, "search_frieren.json").await;
+
+    mock.client
+        .search(&SearchFilters::default(), PageRequest::default())
+        .await
+        .unwrap();
+
+    let query = mock.query();
+    for expected in [
+        "Page(page: $page, perPage: $perPage)",
+        "pageInfo { hasNextPage }",
+        "media(search: $search, type: $type, sort: $sort, format: $format, status: $status, \
+         season: $season, seasonYear: $seasonYear, genre_in: $genreIn, \
+         countryOfOrigin: $countryOfOrigin, isAdult: $isAdult)",
+    ] {
+        assert!(
+            query.contains(expected),
+            "query lacks `{expected}`: {query}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_404_from_search_is_not_reported_as_a_missing_media() {
+    let mock = Mock::serve(StatusCode::NOT_FOUND, "media_not_found.json").await;
+
+    let error = mock
+        .client
+        .search(&SearchFilters::default(), PageRequest::default())
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, Error::Net(net::Error::Http { status: 404, .. })),
+        "got {error:?}"
+    );
 }
 
 #[test]
