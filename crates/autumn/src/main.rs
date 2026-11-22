@@ -7,8 +7,8 @@ mod startup;
 use std::{fmt::Display, process::ExitCode};
 
 use gpui_kit::{
-    App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowOptions, assets::AllAssets,
-    component::TitleBar, point, px, size,
+    App, AppContext, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowDecorations,
+    WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use ui_screens::AppShell;
 
@@ -63,20 +63,36 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Opens the main window, centered on the primary display.
-fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
-    let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
-    let options = WindowOptions {
+/// The main window's options: the 40px transparent titlebar and centered
+/// bounds. On Linux the window also requests client-side decorations.
+fn main_window_options(bounds: Bounds<Pixels>) -> WindowOptions {
+    WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some("Autumn".into()),
             appears_transparent: true,
             traffic_light_position: Some(point(px(TRAFFIC_LIGHTS.0), px(TRAFFIC_LIGHTS.1))),
         }),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_decorations: main_window_decorations(),
         // Lets the titlebar drag the window and draw client-side controls.
         ..TitleBar::window_options()
-    };
-    gpui_kit::open_window(options, cx, |window, cx| {
+    }
+}
+
+/// Client-side decorations on Linux, where the compositor otherwise draws
+/// its own title bar above our 40px one; the platform default on other OSes.
+fn main_window_decorations() -> Option<WindowDecorations> {
+    if cfg!(target_os = "linux") {
+        Some(WindowDecorations::Client)
+    } else {
+        None
+    }
+}
+
+/// Opens the main window, centered on the primary display.
+fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
+    let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
+    gpui_kit::open_window(main_window_options(bounds), cx, |window, cx| {
         cx.new(|cx| AppShell::new(window, cx))
     })?;
     Ok(())
@@ -104,5 +120,21 @@ mod tests {
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");
+    }
+
+    /// On Linux the window options request client-side decorations, so only
+    /// our titlebar shows there.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn main_window_options_request_client_decorations() {
+        use gpui_kit::{Bounds, WindowDecorations, point, px, size};
+
+        use super::{WINDOW_HEIGHT, WINDOW_WIDTH, main_window_options};
+
+        let options = main_window_options(Bounds::new(
+            point(px(0.), px(0.)),
+            size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)),
+        ));
+        assert_eq!(options.window_decorations, Some(WindowDecorations::Client));
     }
 }
