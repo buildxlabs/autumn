@@ -131,7 +131,7 @@ impl AniList {
                 .into_iter()
                 .flatten()
                 .flatten()
-                .map(MediaSummary::from)
+                .filter_map(MediaSummary::from_card)
                 .collect(),
             has_next_page: page
                 .page_info

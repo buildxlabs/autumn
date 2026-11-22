@@ -37,7 +37,7 @@ impl AniList {
             Err(error) if is_not_found(&error) => return Err(Error::NotFound),
             Err(error) => return Err(error),
         };
-        Ok(media.into())
+        MediaDetail::try_from(media)
     }
 }
 
@@ -195,8 +195,10 @@ fn present<T>(list: Option<Vec<Option<T>>>) -> impl Iterator<Item = T> {
     list.into_iter().flatten().flatten()
 }
 
-impl From<DetailMedia> for MediaDetail {
-    fn from(media: DetailMedia) -> Self {
+impl TryFrom<DetailMedia> for MediaDetail {
+    type Error = Error;
+
+    fn try_from(media: DetailMedia) -> Result<Self, Error> {
         let card = MediaCard {
             id: media.id,
             id_mal: media.id_mal,
@@ -214,8 +216,8 @@ impl From<DetailMedia> for MediaDetail {
             genres: media.genres,
             is_adult: media.is_adult,
         };
-        Self {
-            summary: card.into(),
+        Ok(Self {
+            summary: MediaSummary::from_card(card).ok_or(Error::InvalidMediaId)?,
             description: media.description,
             start_date: media.start_date.map_or_default(Date::into_fuzzy),
             end_date: media.end_date.map_or_default(Date::into_fuzzy),
@@ -231,15 +233,15 @@ impl From<DetailMedia> for MediaDetail {
                 .filter_map(|edge| {
                     Some(Relation {
                         relation: edge.relation_type,
-                        media: edge.node?.into(),
+                        media: MediaSummary::from_card(edge.node?)?,
                     })
                 })
                 .collect(),
             recommendations: present(media.recommendations.and_then(|recs| recs.nodes))
                 .filter_map(|rec| rec.media_recommendation)
-                .map(MediaSummary::from)
+                .filter_map(MediaSummary::from_card)
                 .collect(),
-        }
+        })
     }
 }
 
