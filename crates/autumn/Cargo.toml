@@ -11,6 +11,8 @@ workspace = true
 
 [dependencies]
 gpui-kit.workspace = true
+tokio              = { features = [ "rt-multi-thread" ], workspace = true }
+ui-state.workspace = true
 
 [dev-dependencies]
 gpui-kit = { features = [ "test-support" ], workspace = true }

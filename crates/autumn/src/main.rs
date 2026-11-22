@@ -13,10 +13,29 @@ const WINDOW_WIDTH: f32 = 1280.;
 const WINDOW_HEIGHT: f32 = 800.;
 
 fn main() {
-    gpui_kit::application().run(|cx| {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("autumn-engine")
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            report_fatal("failed to start the Tokio runtime", &err);
+            return;
+        }
+    };
+    let handle = runtime.handle().clone();
+    // The engine takes this sender once it exists (Phase 2). Holding it here
+    // keeps the event pump alive for the whole run.
+    let (_engine_events, ui_events) = ui_state::events::channel();
+
+    gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
+        ui_state::bridge::init(cx, handle);
+        // No store consumes an event yet; the first engine module adds one.
+        ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
         if let Err(err) = open_main_window(cx) {
-            report_fatal(&err);
+            report_fatal("failed to open the main window", &err);
             cx.quit();
         }
     });
@@ -41,8 +60,8 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
     clippy::print_stderr,
     reason = "no logger exists before the Phase 0 logging work; a failed start must say why"
 )]
-fn report_fatal(err: &impl Display) {
-    eprintln!("autumn: failed to open the main window: {err:#}");
+fn report_fatal(context: &str, err: &impl Display) {
+    eprintln!("autumn: {context}: {err:#}");
 }
 
 /// Placeholder content until the app shell exists.

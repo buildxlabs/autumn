@@ -9,7 +9,12 @@ rust-version = "1.100"
 version      = "0.1.0"
 
 [workspace.dependencies]
-gpui-kit = "=0.10.0"
+domain    = { path = "crates/domain" }
+flume     = { default-features = false, features = [ "async" ], version = "0.12" }
+gpui-kit  = "=0.10.0"
+thiserror = "2"
+tokio     = { default-features = false, version = "1.54" }
+ui-state  = { path = "crates/ui-state" }
 
 [profile.dev.package."*"]
 opt-level = 2
