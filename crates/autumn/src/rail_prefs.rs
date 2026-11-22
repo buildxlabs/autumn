@@ -6,7 +6,7 @@ use anyhow::Context as _;
 use db::Db;
 use gpui_kit::{App, Task};
 use settings::Settings;
-use ui_screens::{RailMode, RailPrefs};
+use ui_screens::{RailMode, RailPrefs, SYSTEM_ROUTES};
 use ui_state::Route;
 
 /// The settings row the rail preferences live in.
@@ -20,11 +20,18 @@ pub(crate) fn from_settings(settings: &Settings) -> RailPrefs {
     } else {
         RailMode::Hover
     };
-    let unpinned = appearance
+    let mut unpinned = Vec::new();
+    for route in appearance
         .sidebar_unpinned
         .iter()
         .filter_map(|key| Route::from_key(key))
-        .collect();
+    {
+        // System items never fold, and a second copy of a route would need a
+        // second Pin click to remove it.
+        if !SYSTEM_ROUTES.contains(&route) && !unpinned.contains(&route) {
+            unpinned.push(route);
+        }
+    }
     RailPrefs::new(mode, unpinned)
 }
 
@@ -120,6 +127,24 @@ mod tests {
         assert_eq!(
             from_settings(&settings),
             RailPrefs::new(RailMode::Hover, vec![Route::Manga])
+        );
+    }
+
+    #[test]
+    fn duplicate_and_system_keys_are_dropped_on_load() {
+        let mut settings = Settings::default();
+        settings.appearance.sidebar_unpinned = vec![
+            "discover".to_owned(),
+            "discover".to_owned(),
+            "settings".to_owned(),
+            "manga".to_owned(),
+            "sync".to_owned(),
+        ];
+
+        assert_eq!(
+            from_settings(&settings),
+            RailPrefs::new(RailMode::Hover, vec![Route::Discover, Route::Manga]),
+            "duplicates and system routes must not block re-pinning"
         );
     }
 }

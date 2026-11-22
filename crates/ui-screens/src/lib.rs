@@ -6,4 +6,4 @@ mod palette;
 mod placeholder;
 mod shell;
 
-pub use shell::{AppShell, RailMode, RailPrefs};
+pub use shell::{AppShell, RailMode, RailPrefs, SYSTEM_ROUTES};

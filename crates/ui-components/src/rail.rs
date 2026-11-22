@@ -4,9 +4,9 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui_kit::{
-    Animation, AnimationExt, AnyElement, App, ElementId, Hsla, InteractiveElement, IntoElement,
-    ParentElement, Pixels, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
-    TestSupportExt, Window,
+    Animation, AnimationExt, AnyElement, App, Context, DismissEvent, ElementId, Hsla,
+    InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, TestSupportExt, Window,
     assets::IconName,
     canvas,
     component::{
@@ -82,6 +82,38 @@ type OnItem = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 type OnHover = Box<dyn Fn(&bool, &mut Window, &mut App)>;
 /// Called when a control with nothing to pass back is clicked.
 type OnAction = Rc<dyn Fn(&mut Window, &mut App)>;
+/// Called with `true` when one of the rail's menus opens, `false` when it
+/// closes.
+type OnMenu = Rc<dyn Fn(&bool, &mut App)>;
+
+/// The shell's callbacks that rows and menus share.
+#[derive(Clone)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "each field handles an on_* event, matching Rail's builder methods"
+)]
+struct Handlers {
+    on_select: OnItem,
+    on_pin_toggle: Option<OnItem>,
+    on_menu: Option<OnMenu>,
+}
+
+impl Handlers {
+    /// Reports that the menu `cx` builds opened, and that it closed once
+    /// dismissed: both menu kinds emit `DismissEvent` when they close.
+    fn track_menu(&self, cx: &mut Context<'_, PopupMenu>) {
+        let Some(on_menu) = &self.on_menu else {
+            return;
+        };
+        let opened = Rc::clone(on_menu);
+        cx.defer(move |cx| opened(&true, cx));
+        let closed = Rc::clone(on_menu);
+        // A context menu keeps its PopupMenu entity after dismissal, so
+        // on_release alone would miss the close.
+        cx.subscribe_self(move |_, _: &DismissEvent, cx| closed(&false, cx))
+            .detach();
+    }
+}
 
 /// A vertical strip of route buttons with a system group pinned to the bottom.
 ///
@@ -97,8 +129,7 @@ pub struct Rail {
     system: Vec<RailItem>,
     account: SharedString,
     expansion: RailExpansion,
-    on_select: OnItem,
-    on_pin_toggle: Option<OnItem>,
+    handlers: Handlers,
     on_hover: Option<OnHover>,
     on_toggle: Option<OnAction>,
 }
@@ -118,8 +149,11 @@ impl Rail {
             system,
             account: account.into(),
             expansion: RailExpansion::Collapsed,
-            on_select: Rc::new(on_select),
-            on_pin_toggle: None,
+            handlers: Handlers {
+                on_select: Rc::new(on_select),
+                on_pin_toggle: None,
+                on_menu: None,
+            },
             on_hover: None,
             on_toggle: None,
         }
@@ -139,7 +173,16 @@ impl Rail {
         mut self,
         on_pin_toggle: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_pin_toggle = Some(Rc::new(on_pin_toggle));
+        self.handlers.on_pin_toggle = Some(Rc::new(on_pin_toggle));
+        self
+    }
+
+    /// Runs `on_menu` with `true` when the More or Unpin menu opens and
+    /// `false` when it closes. The pointer leaves the rail for an open menu,
+    /// so a hover-opened rail should stay open meanwhile.
+    #[must_use]
+    pub fn on_menu(mut self, on_menu: impl Fn(&bool, &mut App) + 'static) -> Self {
+        self.handlers.on_menu = Some(Rc::new(on_menu));
         self
     }
 
@@ -276,20 +319,16 @@ impl RenderOnce for Rail {
                 None,
             )
         });
-        let main = main_section(
-            self.items,
-            expansion,
-            palette,
-            &self.on_select,
-            self.on_pin_toggle.as_ref(),
-            window,
-            cx,
-        );
-        let on_select = &self.on_select;
+        let main = main_section(self.items, expansion, palette, &self.handlers, window, cx);
+        // System items can't be unpinned.
+        let system_handlers = Handlers {
+            on_pin_toggle: None,
+            ..self.handlers.clone()
+        };
         let system = self
             .system
             .into_iter()
-            .map(|item| select_row(item, expansion, palette, on_select, None));
+            .map(|item| select_row(item, expansion, palette, &system_handlers));
 
         let (from, to) = if expansion.is_expanded() {
             (RAIL_WIDTH, RAIL_EXPANDED_WIDTH)
@@ -340,8 +379,7 @@ fn main_section(
     items: Vec<RailItem>,
     expansion: RailExpansion,
     palette: Palette,
-    on_select: &OnItem,
-    on_pin_toggle: Option<&OnItem>,
+    handlers: &Handlers,
     window: &mut Window,
     cx: &mut App,
 ) -> impl IntoElement {
@@ -350,16 +388,8 @@ fn main_section(
     let available = height.read(cx).unwrap_or(f32::MAX);
     let (mut shown, unpinned): (Vec<_>, Vec<_>) = items.into_iter().partition(|item| item.pinned);
     let folded = shown.split_off(shown_count(shown.len(), unpinned.len(), available));
-    let more = (!folded.is_empty() || !unpinned.is_empty()).then(|| {
-        more_button(
-            folded,
-            unpinned,
-            expansion,
-            palette,
-            on_select,
-            on_pin_toggle,
-        )
-    });
+    let more = (!folded.is_empty() || !unpinned.is_empty())
+        .then(|| more_button(folded, unpinned, expansion, palette, handlers));
 
     let measure = canvas(
         move |bounds, window, cx| {
@@ -393,7 +423,7 @@ fn main_section(
         .children(
             shown
                 .into_iter()
-                .map(|item| select_row(item, expansion, palette, on_select, on_pin_toggle)),
+                .map(|item| select_row(item, expansion, palette, handlers)),
         )
         .children(more)
 }
@@ -406,8 +436,7 @@ fn more_button(
     unpinned: Vec<RailItem>,
     expansion: RailExpansion,
     palette: Palette,
-    on_select: &OnItem,
-    on_pin_toggle: Option<&OnItem>,
+    handlers: &Handlers,
 ) -> impl IntoElement {
     let hidden = || folded.iter().chain(&unpinned);
     let active = hidden().any(|item| item.active);
@@ -415,8 +444,7 @@ fn more_button(
     let total = hidden().filter_map(|item| item.badge).sum::<u32>();
     let pill =
         (total > 0).then(|| badge_pill(format!("{MORE_ID}-badge"), total, expansion, palette));
-    let on_select = Rc::clone(on_select);
-    let on_pin_toggle = on_pin_toggle.cloned();
+    let handlers = handlers.clone();
     let (inner_pill, corner_pill) = if expansion.is_expanded() {
         (pill, None)
     } else {
@@ -446,8 +474,9 @@ fn more_button(
         .px(px((ITEM_SIZE - ICON_SIZE) / 2.))
         .child(content)
         .when(!expansion.is_expanded(), |button| button.tooltip("More"))
-        .dropdown_menu(move |menu, _, _| {
-            more_menu(menu, &folded, &unpinned, &on_select, on_pin_toggle.as_ref())
+        .dropdown_menu(move |menu, _, cx| {
+            handlers.track_menu(cx);
+            more_menu(menu, &folded, &unpinned, &handlers)
         });
     // Lined up with the rows, so a corner pill sits where theirs do.
     div()
@@ -462,11 +491,10 @@ fn more_menu(
     mut menu: PopupMenu,
     folded: &[RailItem],
     unpinned: &[RailItem],
-    on_select: &OnItem,
-    on_pin_toggle: Option<&OnItem>,
+    handlers: &Handlers,
 ) -> PopupMenu {
     for item in folded.iter().chain(unpinned) {
-        let on_select = Rc::clone(on_select);
+        let on_select = Rc::clone(&handlers.on_select);
         let id = item.id.clone();
         let text = match item.badge {
             Some(count) => format!("{} ({count})", item.label),
@@ -479,7 +507,7 @@ fn more_menu(
                 .on_click(move |_, window, cx| on_select(&id, window, cx)),
         );
     }
-    let Some(on_pin_toggle) = on_pin_toggle else {
+    let Some(on_pin_toggle) = &handlers.on_pin_toggle else {
         return menu;
     };
     if !unpinned.is_empty() {
@@ -503,18 +531,17 @@ fn select_row(
     item: RailItem,
     expansion: RailExpansion,
     palette: Palette,
-    on_select: &OnItem,
-    on_pin_toggle: Option<&OnItem>,
+    handlers: &Handlers,
 ) -> AnyElement {
     let id = item.id.clone();
-    let on_select = Rc::clone(on_select);
-    let unpin = on_pin_toggle.map(|on_pin_toggle| {
+    let on_select = Rc::clone(&handlers.on_select);
+    let unpin = handlers.on_pin_toggle.as_ref().map(|on_pin_toggle| {
         let on_pin_toggle = Rc::clone(on_pin_toggle);
         let id = id.clone();
         let unpin: OnAction = Rc::new(move |window: &mut Window, cx: &mut App| {
             on_pin_toggle(&id, window, cx);
         });
-        unpin
+        (unpin, handlers.clone())
     });
     rail_row(
         item,
@@ -533,7 +560,7 @@ fn rail_row(
     expansion: RailExpansion,
     palette: Palette,
     on_click: impl Fn(&mut Window, &mut App) + 'static,
-    unpin: Option<OnAction>,
+    unpin: Option<(OnAction, Handlers)>,
 ) -> AnyElement {
     let RailItem {
         id,
@@ -575,8 +602,9 @@ fn rail_row(
         })
         .children(pill);
     match unpin {
-        Some(unpin) => row
-            .context_menu(move |menu, _, _| {
+        Some((unpin, handlers)) => row
+            .context_menu(move |menu, _, cx| {
+                handlers.track_menu(cx);
                 let unpin = Rc::clone(&unpin);
                 menu.item(
                     PopupMenuItem::new("Unpin")

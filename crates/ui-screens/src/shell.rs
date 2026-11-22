@@ -37,7 +37,8 @@ pub(crate) const HOVER_OPEN_DELAY: Duration = Duration::from_millis(150);
 /// Rail entries from the top, top to bottom.
 const RAIL_ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
 /// The system group at the rail's bottom, top to bottom.
-const SYSTEM_ROUTES: [Route; 3] = [Route::Extensions, Route::Sync, Route::Settings];
+/// The rail's system group, which never folds into "More".
+pub const SYSTEM_ROUTES: [Route; 3] = [Route::Extensions, Route::Sync, Route::Settings];
 
 /// The rail preferences the user can change, loaded at start and saved on
 /// every change.
@@ -93,6 +94,11 @@ pub struct AppShell {
     rail_open: bool,
     /// The pending hover open; dropping it cancels the open.
     hover_open: Option<Task<()>>,
+    /// Whether the pointer is on the rail.
+    rail_hovered: bool,
+    /// How many of the rail's menus are open. The pointer leaves the rail
+    /// for them, so a hover-opened rail waits for them to close.
+    rail_menus: usize,
     /// The counts on the rail's items.
     badges: Entity<RailBadges>,
 }
@@ -142,6 +148,8 @@ impl AppShell {
             saving: None,
             rail_open: false,
             hover_open: None,
+            rail_hovered: false,
+            rail_menus: 0,
             badges,
         }
     }
@@ -210,6 +218,7 @@ impl AppShell {
     /// Hover mode: opens the rail once the pointer has rested on it for
     /// [`HOVER_OPEN_DELAY`].
     fn rail_entered(&mut self, cx: &mut Context<'_, Self>) {
+        self.rail_hovered = true;
         if self.prefs.mode != RailMode::Hover {
             return;
         }
@@ -220,9 +229,27 @@ impl AppShell {
         }));
     }
 
-    /// Hover mode: closes the rail as soon as the pointer leaves it.
+    /// Hover mode: closes the rail as soon as the pointer leaves it, unless
+    /// one of its menus is open.
     fn rail_left(&mut self, cx: &mut Context<'_, Self>) {
-        if self.prefs.mode == RailMode::Hover {
+        self.rail_hovered = false;
+        self.close_hover_rail(cx);
+    }
+
+    /// Counts a rail menu opening; the pointer leaves the rail for it.
+    fn rail_menu_opened(&mut self) {
+        self.rail_menus += 1;
+    }
+
+    /// Counts a rail menu closing. The last one closing with the pointer off
+    /// the rail closes a hover-opened rail.
+    fn rail_menu_closed(&mut self, cx: &mut Context<'_, Self>) {
+        self.rail_menus = self.rail_menus.saturating_sub(1);
+        self.close_hover_rail(cx);
+    }
+
+    fn close_hover_rail(&mut self, cx: &mut Context<'_, Self>) {
+        if self.prefs.mode == RailMode::Hover && !self.rail_hovered && self.rail_menus == 0 {
             self.close_rail(cx);
         }
     }
@@ -327,6 +354,7 @@ impl AppShell {
         let system = SYSTEM_ROUTES.map(item).into();
         let shell = cx.entity().downgrade();
         let pin_shell = shell.clone();
+        let menu_shell = shell.clone();
         let rail = Rail::new(items, system, "Guest", move |id, _, cx| {
             if let Some(route) = route_for(id) {
                 // The shell outlives its rail, so the update fails only
@@ -339,6 +367,16 @@ impl AppShell {
                 // Fails only while the window is closing.
                 let _ = pin_shell.update(cx, |shell, cx| shell.toggle_pinned(route, cx));
             }
+        })
+        .on_menu(move |open, cx| {
+            // Fails only while the window is closing.
+            let _ = menu_shell.update(cx, |shell, cx| {
+                if *open {
+                    shell.rail_menu_opened();
+                } else {
+                    shell.rail_menu_closed(cx);
+                }
+            });
         })
         .expansion(self.rail_expansion());
         match self.prefs.mode {
@@ -915,6 +953,35 @@ mod tests {
             shell.last_saved(),
             Some(RailPrefs::default()),
             "the pin is saved"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_hover_rail_stays_open_under_its_menus(cx: &mut TestAppContext) {
+        let shell = Shell::open_with(cx, RailPrefs::new(RailMode::Hover, vec![Route::Discover]));
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+
+        shell.click(cx, "rail-more");
+        shell.hover(cx, "popup-menu");
+        assert_eq!(shell.rail_width(cx), EXPANDED, "open under More's menu");
+
+        // Dismissing the menu with the pointer off the rail closes the rail.
+        shell.click(cx, "route-view");
+        assert!(!shell.shows(cx, "popup-menu"), "the menu is gone");
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "and so is the rail");
+
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+        shell.right_click(cx, "rail-home");
+        shell.hover(cx, "popup-menu");
+        assert_eq!(shell.rail_width(cx), EXPANDED, "open under the Unpin menu");
+
+        shell.click(cx, "route-view");
+        assert_eq!(
+            shell.rail_width(cx),
+            COLLAPSED,
+            "closed after the Unpin menu"
         );
     }
 
