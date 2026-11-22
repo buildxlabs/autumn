@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
+      - uses: Swatinem/rust-cache@v2
+      - run: nix develop -c pnpm check
+      - run: nix develop -c cargo nextest run --no-tests pass
+
+  macos:
+    name: macOS
+    runs-on: macos-26
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci:macos') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
+      - uses: Swatinem/rust-cache@v2
+      - run: nix develop -c pnpm check
+      - run: nix develop -c cargo nextest run --no-tests pass
+
+  windows:
+    name: Windows
+    runs-on: windows-2025
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci:windows') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Channel from rust-toolchain.toml; the action takes an explicit
+          # `toolchain` input, so the value must be kept in sync with it.
+          toolchain: "1.100"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-deny
+      - run: cargo install cargo-nextest
+      - run: cargo install typos-cli
+      - uses: pnpm/action-setup@v6
+      - run: pnpm install
+      - run: pnpm check
+      - run: cargo nextest run --no-tests pass
