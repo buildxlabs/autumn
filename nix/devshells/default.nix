@@ -22,7 +22,7 @@ let
 in
 pkgs.mkShell {
   packages = with pkgs; [
-    # Rust. The toolchain carries rustc, cargo (the fork), rustfmt, clippy,
+    # Rust. The toolchain carries rustc, cargo, rustfmt, clippy,
     # rust-src and rust-analyzer, and its setup hook exports RUST_SRC_PATH.
     rustToolchain
     openssl

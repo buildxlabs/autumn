@@ -63,7 +63,11 @@ in
     {
       default = import ./devshells/default.nix {
         inherit pkgs nodeToolchain;
-        inherit (toolchains) rustToolchain;
+        # The channel's own cargo, not the huacnlee fork: the fork forces one
+        # build directory under ~/.cargo/targets for every worktree, and
+        # parallel builds in separate worktrees deadlocked on its locks. Stock
+        # cargo builds into each worktree's own target/.
+        rustToolchain = toolchains.rustToolchain.stock;
       };
     }
   );
