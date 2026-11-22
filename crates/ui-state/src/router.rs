@@ -1,39 +1,42 @@
 //! Browser-style navigation history with scroll restore. See ARCHITECTURE §5.
 
-use std::collections::HashMap;
-
 use gpui_kit::{Pixels, Point};
 
-use crate::Route;
+/// How many scroll offsets are kept; leaving one more route drops the
+/// least recently saved.
+const OFFSET_CAP: usize = 50;
 
 /// The route on screen, the back and forward stacks, and a scroll offset
 /// saved per route.
 ///
-/// Every move takes the scroll offset of the route being left and returns
-/// the offset to restore on the route being entered: the one saved when it
-/// was last left, or the top for a route not yet visited.
+/// Routes are compared by value, so routes of one kind with different data
+/// (two entries, two searches) keep separate offsets. Every move takes the
+/// scroll offset of the route being left and returns the offset to restore
+/// on the route being entered: the one saved when it was last left, or the
+/// top for a route not yet visited or whose offset was dropped.
 #[derive(Debug, Clone)]
-pub struct RouterState {
-    current: Route,
-    back: Vec<Route>,
-    forward: Vec<Route>,
-    offsets: HashMap<Route, Point<Pixels>>,
+pub struct RouterState<R> {
+    current: R,
+    back: Vec<R>,
+    forward: Vec<R>,
+    /// Saved offsets, least recently saved first; at most [`OFFSET_CAP`].
+    offsets: Vec<(R, Point<Pixels>)>,
 }
 
-impl RouterState {
+impl<R: Clone + Eq> RouterState<R> {
     /// History that starts at `route`, with nothing to go back or forward to.
-    pub fn new(route: Route) -> Self {
+    pub fn new(route: R) -> Self {
         Self {
             current: route,
             back: Vec::new(),
             forward: Vec::new(),
-            offsets: HashMap::new(),
+            offsets: Vec::new(),
         }
     }
 
     /// The route on screen.
-    pub fn current(&self) -> Route {
-        self.current
+    pub fn current(&self) -> &R {
+        &self.current
     }
 
     /// Whether [`Self::back`] has somewhere to go.
@@ -49,41 +52,57 @@ impl RouterState {
     /// Opens `route`, clearing the forward stack.
     ///
     /// Returns `None`, and changes nothing, when `route` is already on screen.
-    pub fn push(&mut self, route: Route, left_at: Point<Pixels>) -> Option<Point<Pixels>> {
+    pub fn push(&mut self, route: R, left_at: Point<Pixels>) -> Option<Point<Pixels>> {
         if route == self.current {
             return None;
         }
         self.forward.clear();
-        let left = self.enter(route, left_at);
+        let (left, restore) = self.enter(route, left_at);
         self.back.push(left);
-        Some(self.offset(route))
+        Some(restore)
     }
 
     /// Returns to the previous route, or `None` when there is none.
     pub fn back(&mut self, left_at: Point<Pixels>) -> Option<Point<Pixels>> {
         let route = self.back.pop()?;
-        let left = self.enter(route, left_at);
+        let (left, restore) = self.enter(route, left_at);
         self.forward.push(left);
-        Some(self.offset(route))
+        Some(restore)
     }
 
     /// Redoes the last [`Self::back`], or `None` when there is none.
     pub fn forward(&mut self, left_at: Point<Pixels>) -> Option<Point<Pixels>> {
         let route = self.forward.pop()?;
-        let left = self.enter(route, left_at);
+        let (left, restore) = self.enter(route, left_at);
         self.back.push(left);
-        Some(self.offset(route))
+        Some(restore)
     }
 
-    /// Saves the current route's offset, switches to `route`, and returns the
-    /// route that was left.
-    fn enter(&mut self, route: Route, left_at: Point<Pixels>) -> Route {
-        self.offsets.insert(self.current, left_at);
-        std::mem::replace(&mut self.current, route)
+    /// Switches to `route`, saving the current route's offset. Returns the
+    /// route that was left and the offset to restore on `route`.
+    ///
+    /// The offset is read before the save, so saving never evicts the
+    /// offset of the route being entered.
+    fn enter(&mut self, route: R, left_at: Point<Pixels>) -> (R, Point<Pixels>) {
+        let restore = self.offset(&route);
+        let left = std::mem::replace(&mut self.current, route);
+        self.save(left.clone(), left_at);
+        (left, restore)
     }
 
-    fn offset(&self, route: Route) -> Point<Pixels> {
-        self.offsets.get(&route).copied().unwrap_or_default()
+    fn save(&mut self, route: R, offset: Point<Pixels>) {
+        self.offsets.retain(|(saved, _)| *saved != route);
+        self.offsets.push((route, offset));
+        if self.offsets.len() > OFFSET_CAP {
+            self.offsets.remove(0);
+        }
+    }
+
+    fn offset(&self, route: &R) -> Point<Pixels> {
+        self.offsets
+            .iter()
+            .find(|(saved, _)| saved == route)
+            .map_or_else(Point::default, |&(_, offset)| offset)
     }
 }
 
@@ -103,7 +122,7 @@ mod tests {
     fn starts_with_empty_history() {
         let router = RouterState::new(Route::Home);
 
-        assert_eq!(router.current(), Route::Home, "starts where told");
+        assert_eq!(*router.current(), Route::Home, "starts where told");
         assert!(!router.can_go_back(), "nothing behind");
         assert!(!router.can_go_forward(), "nothing ahead");
     }
@@ -114,22 +133,22 @@ mod tests {
 
         router.push(Route::Discover, at(0.));
         router.push(Route::Schedule, at(0.));
-        assert_eq!(router.current(), Route::Schedule, "after two pushes");
+        assert_eq!(*router.current(), Route::Schedule, "after two pushes");
         assert!(router.can_go_back(), "home and discover are behind");
 
         router.back(at(0.));
-        assert_eq!(router.current(), Route::Discover, "one back");
+        assert_eq!(*router.current(), Route::Discover, "one back");
         assert!(router.can_go_forward(), "schedule is ahead");
 
         router.back(at(0.));
-        assert_eq!(router.current(), Route::Home, "two back");
+        assert_eq!(*router.current(), Route::Home, "two back");
         assert!(!router.can_go_back(), "history start");
         assert_eq!(router.back(at(0.)), None, "back at the start does nothing");
-        assert_eq!(router.current(), Route::Home, "still home");
+        assert_eq!(*router.current(), Route::Home, "still home");
 
         router.forward(at(0.));
         router.forward(at(0.));
-        assert_eq!(router.current(), Route::Schedule, "two forward");
+        assert_eq!(*router.current(), Route::Schedule, "two forward");
         assert_eq!(
             router.forward(at(0.)),
             None,
@@ -149,7 +168,7 @@ mod tests {
         assert!(!router.can_go_forward(), "a new push drops discover");
         router.back(at(0.));
         assert_eq!(
-            router.current(),
+            *router.current(),
             Route::Home,
             "back goes to home, not discover"
         );
@@ -196,6 +215,58 @@ mod tests {
             router.forward(at(0.)),
             Some(at(20.)),
             "schedule keeps its offset too"
+        );
+    }
+
+    /// Two routes of one kind with different data, like `Entry { id: 1 }`
+    /// and `Entry { id: 2 }`.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Page {
+        List,
+        Entry(u32),
+    }
+
+    #[test]
+    fn routes_with_different_data_keep_separate_offsets() {
+        let mut router = RouterState::new(Page::List);
+
+        router.push(Page::Entry(1), at(0.));
+        router.push(Page::Entry(2), at(400.));
+        assert_eq!(
+            router.back(at(250.)),
+            Some(at(400.)),
+            "entry 1 keeps its own offset"
+        );
+        assert_eq!(
+            router.forward(at(0.)),
+            Some(at(250.)),
+            "entry 2 keeps its own offset"
+        );
+    }
+
+    #[test]
+    fn only_the_most_recent_offsets_are_kept() {
+        let mut router = RouterState::new(Page::Entry(0));
+
+        // Leave entries 0..=50: 51 saves, one over the cap.
+        for id in 1..=51 {
+            router.push(Page::Entry(id), at(10.));
+        }
+
+        assert_eq!(
+            router.push(Page::Entry(0), at(10.)),
+            Some(at(0.)),
+            "the oldest offset was dropped, so entry 0 opens at the top"
+        );
+        assert_eq!(
+            router.push(Page::Entry(2), at(10.)),
+            Some(at(10.)),
+            "newer offsets are kept"
+        );
+        assert_eq!(
+            router.push(Page::Entry(1), at(10.)),
+            Some(at(0.)),
+            "saving entry 51 on the way to entry 0 dropped entry 1 in turn"
         );
     }
 }
