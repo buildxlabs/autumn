@@ -1,6 +1,6 @@
-//! Errors returned by the shared HTTP client.
+//! Errors returned by the shared HTTP client and the disk poster cache.
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use thiserror::Error;
 
@@ -31,7 +31,7 @@ impl From<HttpError> for Error {
     }
 }
 
-/// A failure from a request made through [`Client`](crate::Client).
+/// A failure from an HTTP request or a disk-cache operation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -93,6 +93,24 @@ pub enum Error {
     /// The response body could not be read.
     #[error("failed to read response: {source}")]
     Body {
+        /// The cause of the failure.
+        #[source]
+        source: HttpError,
+    },
+
+    /// A blocking cache task failed before it could finish.
+    #[error("background cache task failed: {source}")]
+    Task {
+        /// The cause of the failure.
+        #[source]
+        source: HttpError,
+    },
+
+    /// A disk-cache operation failed.
+    #[error("cache operation failed at {path:?}: {source}")]
+    Cache {
+        /// The path involved in the failure.
+        path: PathBuf,
         /// The cause of the failure.
         #[source]
         source: HttpError,

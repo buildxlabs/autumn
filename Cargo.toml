@@ -25,6 +25,7 @@ reqwest = { default-features = false, features = [ "rustls-no-provider" ], versi
 rustls = { default-features = false, features = [ "ring", "std", "tls12" ], version = "0.23" }
 serde = { features = [ "derive" ], version = "1.0" }
 serde_json = "1.0"
+sha2 = "0.10"
 sqlx = { default-features = false, version = "0.9" }
 tempfile = "3.27"
 thiserror = "2"

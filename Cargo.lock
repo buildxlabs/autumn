@@ -4794,6 +4794,8 @@ dependencies = [
  "rand 0.10.4",
  "reqwest",
  "rustls",
+ "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
