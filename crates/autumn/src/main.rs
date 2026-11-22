@@ -3,12 +3,13 @@
 use std::fmt::Display;
 
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, Bounds, Context, IntoElement, Render, Styled,
-    TitlebarOptions, Window, WindowBounds, WindowOptions, div, px, size,
+    App, AppContext, Bounds, Context, IntoElement, Render, Styled, TitlebarOptions, Window,
+    WindowBounds, WindowOptions, div, px, size,
 };
 
-/// Initial size of the main window, in logical pixels.
+/// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
+/// Initial height of the main window in logical pixels; the user can resize it.
 const WINDOW_HEIGHT: f32 = 800.;
 
 fn main() {
@@ -22,7 +23,7 @@ fn main() {
 }
 
 /// Opens the main window, centered on the primary display.
-fn open_main_window(cx: &mut App) -> gpui_kit::Result<AnyWindowHandle> {
+fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
     let options = WindowOptions {
         titlebar: Some(TitlebarOptions {
@@ -32,8 +33,8 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<AnyWindowHandle> {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         ..WindowOptions::default()
     };
-    let (window, _) = gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| EmptyView))?;
-    Ok(window)
+    gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| EmptyView))?;
+    Ok(())
 }
 
 #[expect(
@@ -63,7 +64,7 @@ mod tests {
     fn opens_one_window(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            open_main_window(cx).unwrap();
+            open_main_window(cx).expect("the test platform opens windows");
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");
