@@ -1,15 +1,14 @@
 #!/bin/sh
-# Pre-push: clippy and cargo-deny over the Rust workspace, only when pushed
-# commits touch Rust sources or manifests (mirrors the gate the nix
-# pre-commit setup used).
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "note: cargo not on PATH; skipping Rust checks" >&2
-  exit 0
-fi
-
+# Pre-push: refuse pushes to main, then run clippy and cargo-deny over the
+# Rust workspace when pushed commits touch Rust sources or manifests (mirrors
+# the gate the nix pre-commit setup used).
 zero="0000000000000000000000000000000000000000"
 ran=0
-while read -r _local_ref local_sha _remote_ref remote_sha; do
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "error: pushing to main is blocked; push a branch and open a PR instead" >&2
+    exit 1
+  fi
   [ -n "$local_sha" ] || continue
   if [ -z "$remote_sha" ] || [ "$remote_sha" = "$zero" ]; then
     # New remote branch: the push is the whole commit range.
@@ -18,6 +17,11 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     ran=1
   fi
 done
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "note: cargo not on PATH; skipping Rust checks" >&2
+  exit 0
+fi
 
 if [ "$ran" = 1 ]; then
   cargo clippy --workspace --all-targets --all-features -- -D warnings || exit 1
