@@ -272,7 +272,7 @@ fn columns(kind: MediaKind, id: &ExternalId) -> Result<(&'static str, String), D
 }
 
 /// The `media.kind` column value.
-fn kind_column(kind: MediaKind) -> Result<&'static str, DbError> {
+pub(crate) fn kind_column(kind: MediaKind) -> Result<&'static str, DbError> {
     match kind {
         MediaKind::Anime => Ok("anime"),
         MediaKind::Manga => Ok("manga"),
