@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+mod palette;
 mod placeholder;
 mod shell;
 
