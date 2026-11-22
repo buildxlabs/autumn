@@ -9,12 +9,19 @@ use thiserror::Error;
 /// Its field is private so the rest of the workspace never names a reqwest
 /// type (ARCHITECTURE §3, rule 4).
 #[derive(Debug, Error)]
-#[error("{0}")]
-pub struct HttpError(String);
+#[error("{message}")]
+pub struct HttpError {
+    message: String,
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync + 'static>,
+}
 
 impl HttpError {
-    pub(crate) fn new(source: impl std::fmt::Display) -> Self {
-        Self(source.to_string())
+    pub(crate) fn new(source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self {
+            message: source.to_string(),
+            source: Box::new(source),
+        }
     }
 }
 
@@ -34,6 +41,14 @@ pub enum Error {
         /// The host the request was addressed to.
         host: String,
         /// The underlying transport error.
+        #[source]
+        source: HttpError,
+    },
+
+    /// The HTTP client could not be constructed.
+    #[error("failed to build HTTP client: {source}")]
+    Build {
+        /// The cause of the failure.
         #[source]
         source: HttpError,
     },

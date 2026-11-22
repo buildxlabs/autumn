@@ -79,6 +79,11 @@ async fn rate_limited_with_later_reset(State(state): State<Arc<MockState>>) -> R
         .into_response()
 }
 
+async fn stall(State(state): State<Arc<MockState>>) -> Response {
+    state.record();
+    std::future::pending::<Response>().await
+}
+
 async fn rate_limited_then_ok(State(state): State<Arc<MockState>>) -> Response {
     if state.count() == 0 {
         rate_limited(State(state)).await
@@ -108,7 +113,7 @@ fn post_request(url: &str) -> Request {
     Request::new(Method::Post, url)
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn bursts_are_spaced_by_the_token_bucket() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -120,7 +125,8 @@ async fn bursts_are_spaced_by_the_token_bucket() {
     // One token per second, two in the bucket: the third and fourth calls wait.
     let client = Client::builder()
         .host("127.0.0.1", 60, 2, HostKind::Generic)
-        .build();
+        .build()
+        .unwrap();
 
     let start = Instant::now();
     for _ in 0..4 {
@@ -136,7 +142,7 @@ async fn bursts_are_spaced_by_the_token_bucket() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn reads_retry_three_times_then_fail() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -146,7 +152,8 @@ async fn reads_retry_three_times_then_fail() {
 
     let client = Client::builder()
         .base_backoff(Duration::from_millis(10))
-        .build();
+        .build()
+        .unwrap();
     let error = client
         .read(get_request(&format!("{base}/")))
         .await
@@ -160,7 +167,7 @@ async fn reads_retry_three_times_then_fail() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn mutations_are_not_retried() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -170,7 +177,8 @@ async fn mutations_are_not_retried() {
 
     let client = Client::builder()
         .base_backoff(Duration::from_millis(10))
-        .build();
+        .build()
+        .unwrap();
     let error = client
         .mutate(post_request(&format!("{base}/")))
         .await
@@ -181,7 +189,7 @@ async fn mutations_are_not_retried() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_429_pauses_the_host_queue_then_resumes() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -191,7 +199,8 @@ async fn a_429_pauses_the_host_queue_then_resumes() {
 
     let client = Client::builder()
         .host("127.0.0.1", 120, 10, HostKind::Generic)
-        .build();
+        .build()
+        .unwrap();
     let start = Instant::now();
     let response = client.read(get_request(&format!("{base}/"))).await.unwrap();
 
@@ -205,7 +214,7 @@ async fn a_429_pauses_the_host_queue_then_resumes() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn lockout_exposes_time_remaining() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -215,7 +224,8 @@ async fn lockout_exposes_time_remaining() {
 
     let client = Client::builder()
         .host("127.0.0.1", 120, 10, HostKind::Generic)
-        .build();
+        .build()
+        .unwrap();
     let error = client
         .mutate(post_request(&format!("{base}/")))
         .await
@@ -241,7 +251,7 @@ async fn lockout_exposes_time_remaining() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn an_anilist_403_maps_to_unavailable() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -251,7 +261,8 @@ async fn an_anilist_403_maps_to_unavailable() {
 
     let client = Client::builder()
         .host("127.0.0.1", 120, 10, HostKind::AniList)
-        .build();
+        .build()
+        .unwrap();
     let error = client
         .read(get_request(&format!("{base}/")))
         .await
@@ -262,7 +273,7 @@ async fn an_anilist_403_maps_to_unavailable() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn the_later_of_retry_after_and_reset_is_honored() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -270,7 +281,7 @@ async fn the_later_of_retry_after_and_reset_is_honored() {
         .with_state(Arc::clone(&state));
     let (base, server) = serve(app).await;
 
-    let client = Client::builder().build();
+    let client = Client::builder().build().unwrap();
     let error = client
         .mutate(post_request(&format!("{base}/")))
         .await
@@ -283,7 +294,7 @@ async fn the_later_of_retry_after_and_reset_is_honored() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn lockout_disappears_when_it_expires() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -293,14 +304,15 @@ async fn lockout_disappears_when_it_expires() {
 
     let client = Client::builder()
         .host("127.0.0.1", 120, 10, HostKind::Generic)
-        .build();
+        .build()
+        .unwrap();
     let error = client
         .mutate(post_request(&format!("{base}/")))
         .await
         .unwrap_err();
     assert!(matches!(error, Error::RateLimited { .. }));
 
-    tokio::time::advance(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
     assert!(
         client.lockout("127.0.0.1").await.is_none(),
         "an expired lockout must not show a frozen zero countdown"
@@ -308,7 +320,31 @@ async fn lockout_disappears_when_it_expires() {
     server.abort();
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
+async fn a_stalled_read_times_out_retries_then_fails() {
+    let state = Arc::new(MockState::default());
+    let app = Router::new()
+        .route("/", get(stall))
+        .with_state(Arc::clone(&state));
+    let (base, server) = serve(app).await;
+
+    let client = Client::builder()
+        .base_backoff(Duration::from_millis(10))
+        .connect_timeout(Duration::from_millis(200))
+        .request_timeout(Duration::from_millis(200))
+        .build()
+        .unwrap();
+    let error = client
+        .read(get_request(&format!("{base}/")))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, Error::Transport { .. }), "got {error:?}");
+    assert_eq!(state.count(), 4, "one attempt plus three retries");
+    server.abort();
+}
+
+#[tokio::test]
 async fn a_429_on_an_unregistered_host_still_delays_the_retry() {
     let state = Arc::new(MockState::default());
     let app = Router::new()
@@ -316,7 +352,7 @@ async fn a_429_on_an_unregistered_host_still_delays_the_retry() {
         .with_state(Arc::clone(&state));
     let (base, server) = serve(app).await;
 
-    let client = Client::builder().build();
+    let client = Client::builder().build().unwrap();
     let start = Instant::now();
     let response = client.read(get_request(&format!("{base}/"))).await.unwrap();
 

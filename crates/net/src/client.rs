@@ -22,6 +22,8 @@ const DEFAULT_MAX_RETRIES: u32 = 3;
 const DEFAULT_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const DEFAULT_LOCKOUT: Duration = Duration::from_secs(60);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const X_RATE_LIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 static INSTALL_TLS_PROVIDER: Once = Once::new();
 
@@ -59,6 +61,8 @@ pub struct ClientBuilder {
     hosts: Vec<(String, HostConfig)>,
     max_retries: u32,
     base_backoff: Duration,
+    connect_timeout: Duration,
+    request_timeout: Duration,
 }
 
 impl Default for ClientBuilder {
@@ -67,6 +71,8 @@ impl Default for ClientBuilder {
             hosts: Vec::new(),
             max_retries: DEFAULT_MAX_RETRIES,
             base_backoff: DEFAULT_BACKOFF,
+            connect_timeout: CONNECT_TIMEOUT,
+            request_timeout: REQUEST_TIMEOUT,
         }
     }
 }
@@ -112,9 +118,26 @@ impl ClientBuilder {
         self
     }
 
-    /// Build the client. This performs no I/O.
+    /// Set the timeout for establishing a connection. Defaults to 10 s.
     #[must_use]
-    pub fn build(self) -> Client {
+    pub fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
+        self.connect_timeout = connect_timeout;
+        self
+    }
+
+    /// Set the timeout for a whole request. Defaults to 30 s.
+    #[must_use]
+    pub fn request_timeout(mut self, request_timeout: Duration) -> Self {
+        self.request_timeout = request_timeout;
+        self
+    }
+
+    /// Build the client with connect and per-request timeouts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Build`] if the HTTP client cannot be initialized.
+    pub fn build(self) -> Result<Client, Error> {
         // reqwest is built without a default TLS provider so aws-lc's native
         // build is not needed. Install ring once for the whole process.
         INSTALL_TLS_PROVIDER.call_once(|| {
@@ -126,14 +149,19 @@ impl ClientBuilder {
         for (host, config) in self.hosts {
             limiters.insert(host, config);
         }
-        Client {
+        let http = reqwest::Client::builder()
+            .connect_timeout(self.connect_timeout)
+            .timeout(self.request_timeout)
+            .build()
+            .map_err(HttpError::new)?;
+        Ok(Client {
             inner: Arc::new(Inner {
-                http: reqwest::Client::new(),
+                http,
                 limiters,
                 max_retries: self.max_retries,
                 base_backoff: self.base_backoff,
             }),
-        }
+        })
     }
 }
 
@@ -157,16 +185,13 @@ pub struct Client {
     inner: Arc<Inner>,
 }
 
-impl Default for Client {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Client {
     /// Create a client with `AniList`'s limiter registered.
-    #[must_use]
-    pub fn new() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Build`] if the HTTP client cannot be initialized.
+    pub fn new() -> Result<Self, Error> {
         Self::builder().anilist().build()
     }
 
