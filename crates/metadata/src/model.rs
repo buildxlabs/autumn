@@ -2,12 +2,13 @@
 //! query types, so callers never depend on the query shapes.
 
 use domain::{ExternalId, FuzzyDate, MediaKind};
+use serde::{Deserialize, Serialize};
 
 use crate::schema;
 
 /// A media as a card shows it: in search results, relations and
 /// recommendations.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaSummary {
     /// AniList's media id.
     pub anilist_id: u32,
@@ -54,7 +55,7 @@ impl MediaSummary {
 }
 
 /// Everything the Anime Entry page shows about one media.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaDetail {
     /// The card fields: ids, titles, poster, banner and the metadata strip.
     pub summary: MediaSummary,
@@ -79,7 +80,7 @@ pub struct MediaDetail {
 }
 
 /// The titles of a media. Any of them may be missing.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaTitle {
     /// The romanized native title.
     pub romaji: Option<String>,
@@ -90,7 +91,7 @@ pub struct MediaTitle {
 }
 
 /// A character in a media.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Character {
     /// AniList's character id.
     pub anilist_id: u32,
@@ -105,7 +106,7 @@ pub struct Character {
 }
 
 /// A voice actor for a character.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoiceActor {
     /// AniList's staff id.
     pub anilist_id: u32,
@@ -116,7 +117,7 @@ pub struct VoiceActor {
 }
 
 /// A media related to another, and how.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Relation {
     /// How the related media relates to the one it was fetched with.
     pub relation: Option<MediaRelation>,

@@ -3,9 +3,11 @@
 //! [`AniList`] sends its queries through `net`'s shared [`net::Client`], so
 //! every call shares AniList's rate limiter and lockouts. Results are plain
 //! types that name media by AniList id; callers map them to a
-//! [`domain::MediaId`] through `db`. See ARCHITECTURE §2. This is a back-end
+//! [`domain::MediaId`] through `db`. [`CatalogCache`] serves them from
+//! disk first, refreshing stale ones. See ARCHITECTURE §2. This is a back-end
 //! crate: no GPUI.
 
+mod cache;
 mod catalog;
 mod client;
 mod detail;
@@ -14,6 +16,7 @@ mod fragments;
 mod model;
 mod search;
 
+pub use cache::{Cached, CatalogCache, Load, Refresh};
 pub use catalog::{AiringEpisode, CountryTrends, DiscoverLoad, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
