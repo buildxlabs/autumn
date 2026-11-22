@@ -1,0 +1,25 @@
+[package]
+name                   = "metadata"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cynic.workspace      = true
+domain.workspace     = true
+net.workspace        = true
+serde.workspace      = true
+serde_json.workspace = true
+thiserror.workspace  = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
+
+[dev-dependencies]
+axum.workspace  = true
+tokio.workspace = true

@@ -1,0 +1,1393 @@
+{
+  "data": {
+    "Media": {
+      "id": 154587,
+      "idMal": 52991,
+      "type": "ANIME",
+      "title": {
+        "romaji": "Sousou no Frieren",
+        "english": "Frieren: Beyond Journey\u2019s End",
+        "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3"
+      },
+      "coverImage": {
+        "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx154587-qQTzQnEJJ3oB.jpg",
+        "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx154587-qQTzQnEJJ3oB.jpg",
+        "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx154587-qQTzQnEJJ3oB.jpg"
+      },
+      "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/154587-ivXNJ23SM1xB.jpg",
+      "format": "TV",
+      "status": "FINISHED",
+      "season": "FALL",
+      "seasonYear": 2023,
+      "episodes": 28,
+      "chapters": null,
+      "meanScore": 90,
+      "genres": ["Adventure", "Drama", "Fantasy"],
+      "isAdult": false,
+      "description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. But Frieren will long outlive the rest of her former party. How will she come to understand what life means to the people around her? Decades after their victory, the funeral of one her friends confronts Frieren with her own near immortality. Frieren sets out to fulfill the last wishes of her comrades and finds herself beginning a new adventure\u2026\n<br><br>\n(Source: Crunchyroll)",
+      "startDate": { "year": 2023, "month": 9, "day": 29 },
+      "endDate": { "year": 2024, "month": 3, "day": 22 },
+      "duration": 24,
+      "popularity": 501354,
+      "studios": { "nodes": [{ "name": "MADHOUSE" }] },
+      "characters": {
+        "edges": [
+          {
+            "role": "MAIN",
+            "node": {
+              "id": 176754,
+              "name": { "full": "Frieren" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b176754-PCnpqIOkjhFk.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b176754-PCnpqIOkjhFk.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 112215,
+                "name": { "full": "Atsumi Tanezaki" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n112215-kfABGD8W2YSJ.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n112215-kfABGD8W2YSJ.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "MAIN",
+            "node": {
+              "id": 183965,
+              "name": { "full": "Fern" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b183965-uGFohBjlFoTp.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b183965-uGFohBjlFoTp.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 124390,
+                "name": { "full": "Kana Ichinose" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n124390-03LHel2XSFel.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n124390-03LHel2XSFel.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "MAIN",
+            "node": {
+              "id": 184313,
+              "name": { "full": "Stark" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b184313-CQl6GSt4RSny.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b184313-CQl6GSt4RSny.jpg"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 133507,
+                "name": { "full": "Chiaki Kobayashi" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n133507-oT1bd4Gax1Qg.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n133507-oT1bd4Gax1Qg.jpg"
+                }
+              },
+              {
+                "id": 115100,
+                "name": { "full": "Arisa Kiyoto" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/20100.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/20100.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 184311,
+              "name": { "full": "Himmel" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b184311-wQFySqYXEqf1.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b184311-wQFySqYXEqf1.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95270,
+                "name": { "full": "Nobuhiko Okamoto" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95270-LqNIF238L59u.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95270-LqNIF238L59u.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 184310,
+              "name": { "full": "Heiter" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b184310-tiXvrq4FINXP.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b184310-tiXvrq4FINXP.jpg"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95236,
+                "name": { "full": "Hiroki Touchi" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95236-nlMo4dnjdT8p.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95236-nlMo4dnjdT8p.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 184312,
+              "name": { "full": "Eisen" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b184312-kxd5H6iOHIq4.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b184312-kxd5H6iOHIq4.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95926,
+                "name": { "full": "Youji Ueda" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95926-00Pd2b8WZwQS.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95926-00Pd2b8WZwQS.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 219733,
+              "name": { "full": "Flamme" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b219733-FgXseEhMdDE9.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b219733-FgXseEhMdDE9.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95100,
+                "name": { "full": "Atsuko Tanaka" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95100-v07xvA8V2Yeh.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95100-v07xvA8V2Yeh.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 315278,
+              "name": { "full": "Qual" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b315278-PKRDf4IJJ1GK.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b315278-PKRDf4IJJ1GK.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95025,
+                "name": { "full": "Hiroki Yasumoto" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95025-LGHr4VufmfCc.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95025-LGHr4VufmfCc.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 205177,
+              "name": { "full": "Sein" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b205177-hLV4nVQjoBIC.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b205177-hLV4nVQjoBIC.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95513,
+                "name": { "full": "Yuuichi Nakamura" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95513-up9ZDuocHgRs.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95513-up9ZDuocHgRs.png"
+                }
+              },
+              {
+                "id": 151445,
+                "name": { "full": "Natsumi Kawaida" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n151445-3qF3EB619d74.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n151445-3qF3EB619d74.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 219110,
+              "name": { "full": "Aura" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b219110-LEB5T4oG0gel.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b219110-LEB5T4oG0gel.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 101996,
+                "name": { "full": "Ayana Taketatsu" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n101996-7GM2C37RembP.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n101996-7GM2C37RembP.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 219732,
+              "name": { "full": "Kraft" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b219732-GKmSY9oTm6cR.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b219732-GKmSY9oTm6cR.jpg"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95160,
+                "name": { "full": "Takehito Koyasu" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95160-jWevcH7BmfE1.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95160-jWevcH7BmfE1.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 219734,
+              "name": { "full": "Serie" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b219734-aS4UMAb16DGd.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b219734-aS4UMAb16DGd.jpg"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95655,
+                "name": { "full": "Mariya Ise" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95655-cR519BXmteKA.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95655-cR519BXmteKA.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 246055,
+              "name": { "full": "Genau" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b246055-3eoVNiZu3bTy.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b246055-3eoVNiZu3bTy.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 102242,
+                "name": { "full": "Tarusuke Shingaki" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n102242-bx8hrisiHiSK.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n102242-bx8hrisiHiSK.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 246056,
+              "name": { "full": "Laufen" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b246056-erQexxLtGHVU.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b246056-erQexxLtGHVU.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 118738,
+                "name": { "full": "Shizuka Ishigami" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n118738-60gKflxjl80c.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n118738-60gKflxjl80c.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 246057,
+              "name": { "full": "\u00dcbel" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b246057-ixvDfpng6I1S.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b246057-ixvDfpng6I1S.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 132768,
+                "name": { "full": "Ikumi Hasegawa" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n132768-r4FwpBpHnRtZ.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n132768-r4FwpBpHnRtZ.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 246058,
+              "name": { "full": "Denken" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b246058-FOtuSIUBQ4WJ.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b246058-FOtuSIUBQ4WJ.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 102914,
+                "name": { "full": "Jirou Saitou" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n102914-7ygW5ZSwODbF.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n102914-7ygW5ZSwODbF.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 293727,
+              "name": { "full": "Lawine" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b293727-Jaf2eiNfINWx.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b293727-Jaf2eiNfINWx.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 126963,
+                "name": { "full": "Sayumi Suzushiro" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n126963-GnhNcLWFeKmy.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n126963-GnhNcLWFeKmy.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 293728,
+              "name": { "full": "Kanne" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b293728-0ylNRoIOORcD.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b293728-0ylNRoIOORcD.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 119517,
+                "name": { "full": "Azumi Waki" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n119517-ggxWaTnTOrxW.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n119517-ggxWaTnTOrxW.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 315929,
+              "name": { "full": "Edel" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b315929-mJfCA4CLVxJZ.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b315929-mJfCA4CLVxJZ.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 106661,
+                "name": { "full": "Tomoyo Kurosawa" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n106661-xn3K6nAx2ijO.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n106661-xn3K6nAx2ijO.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 316985,
+              "name": { "full": "L\u00fcgner" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b316985-YkCeSIfDF7U1.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b316985-YkCeSIfDF7U1.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 95095,
+                "name": { "full": "Junichi Suwabe" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n95095-DvSjTQnqcgXP.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n95095-DvSjTQnqcgXP.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 316986,
+              "name": { "full": "Linie" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b316986-spmwGktNwX3W.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b316986-spmwGktNwX3W.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 121821,
+                "name": { "full": "Manaka Iwami" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n121821-tQSkHZEuB3XH.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n121821-tQSkHZEuB3XH.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 316987,
+              "name": { "full": "Draht" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b316987-QDp2A6SoHsee.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b316987-QDp2A6SoHsee.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 253951,
+                "name": { "full": "Kouki Oosuzu" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n253951-umoJLgzeroK2.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n253951-umoJLgzeroK2.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 318147,
+              "name": { "full": "Granat Hakushaku" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b318147-BcJTRcTqSIYy.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b318147-BcJTRcTqSIYy.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 102492,
+                "name": { "full": "Shunsuke Sakuya" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n102492-pQ40ldxp1aXB.png",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n102492-pQ40ldxp1aXB.png"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 318148,
+              "name": { "full": "Akuma no Ko" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b318148-u49X2U8E5jS6.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b318148-u49X2U8E5jS6.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 161267,
+                "name": { "full": "Ami Naitou" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n161267-BowvmvYRyhLy.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n161267-BowvmvYRyhLy.jpg"
+                }
+              }
+            ]
+          },
+          {
+            "role": "SUPPORTING",
+            "node": {
+              "id": 319598,
+              "name": { "full": "Stoltz" },
+              "image": {
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/large\/b319598-R0kVKvFug65D.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/character\/medium\/b319598-R0kVKvFug65D.png"
+              }
+            },
+            "voiceActors": [
+              {
+                "id": 102695,
+                "name": { "full": "Takuya Eguchi" },
+                "image": {
+                  "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/large\/n102695-dGzsJkor0KMj.jpg",
+                  "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/staff\/medium\/n102695-dGzsJkor0KMj.jpg"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "relations": {
+        "edges": [
+          {
+            "relationType": "SOURCE",
+            "node": {
+              "id": 118586,
+              "idMal": 126287,
+              "type": "MANGA",
+              "title": {
+                "romaji": "Sousou no Frieren",
+                "english": "Frieren: Beyond Journey\u2019s End",
+                "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/manga\/cover\/large\/bx118586-CXKgWikBFQgS.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/manga\/cover\/medium\/bx118586-CXKgWikBFQgS.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/manga\/cover\/small\/bx118586-CXKgWikBFQgS.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/manga\/banner\/118586-R1c7mc72oPvS.jpg",
+              "format": "MANGA",
+              "status": "HIATUS",
+              "season": null,
+              "seasonYear": null,
+              "episodes": null,
+              "chapters": null,
+              "meanScore": 87,
+              "genres": ["Adventure", "Drama", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "relationType": "CHARACTER",
+            "node": {
+              "id": 169811,
+              "idMal": 56805,
+              "type": "ANIME",
+              "title": { "romaji": "Yuusha", "english": "The Brave", "native": "\u52c7\u8005" },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx169811-tsuH0SJVJy40.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx169811-tsuH0SJVJy40.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx169811-tsuH0SJVJy40.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/169811-jgMVZlIdH19a.jpg",
+              "format": "MUSIC",
+              "status": "FINISHED",
+              "season": null,
+              "seasonYear": null,
+              "episodes": 1,
+              "chapters": null,
+              "meanScore": 80,
+              "genres": ["Adventure", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "relationType": "SIDE_STORY",
+            "node": {
+              "id": 170068,
+              "idMal": 56885,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Sousou no Frieren: \u25cf\u25cf no Mahou",
+                "english": null,
+                "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \uff5e\u25cf\u25cf\u306e\u9b54\u6cd5\uff5e"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx170068-ijY3tCP8KoWP.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx170068-ijY3tCP8KoWP.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx170068-ijY3tCP8KoWP.jpg"
+              },
+              "bannerImage": null,
+              "format": "ONA",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2023,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 74,
+              "genres": ["Comedy", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "relationType": "OTHER",
+            "node": {
+              "id": 175691,
+              "idMal": 58313,
+              "type": "ANIME",
+              "title": { "romaji": "Haru", "english": "Sunny", "native": "\u6674\u308b" },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx175691-lTfPc3P63Uyx.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx175691-lTfPc3P63Uyx.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx175691-lTfPc3P63Uyx.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/175691-iu677BWqMrP2.jpg",
+              "format": "MUSIC",
+              "status": "FINISHED",
+              "season": null,
+              "seasonYear": null,
+              "episodes": 1,
+              "chapters": null,
+              "meanScore": 72,
+              "genres": ["Drama"],
+              "isAdult": false
+            }
+          },
+          {
+            "relationType": "SEQUEL",
+            "node": {
+              "id": 182255,
+              "idMal": 59978,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Sousou no Frieren 2nd Season",
+                "english": "Frieren: Beyond Journey\u2019s End Season 2",
+                "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \u7b2c2\u671f"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx182255-butzrqd4I0aC.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx182255-butzrqd4I0aC.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx182255-butzrqd4I0aC.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/182255-wyHvp6zJbWsO.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2026,
+              "episodes": 10,
+              "chapters": null,
+              "meanScore": 87,
+              "genres": ["Adventure", "Drama", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "relationType": "SIDE_STORY",
+            "node": {
+              "id": 189513,
+              "idMal": null,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Sousou no Frieren: \u25cf\u25cf no Mahou Part 2",
+                "english": null,
+                "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \uff5e\u25cf\u25cf\u306e\u9b54\u6cd5\uff5e 2\u30af\u30fc\u30eb"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx189513-1R9Sryve0K53.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx189513-1R9Sryve0K53.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx189513-1R9Sryve0K53.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/189513-HjE2qNupgfEe.jpg",
+              "format": "ONA",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2025,
+              "episodes": 6,
+              "chapters": null,
+              "meanScore": 72,
+              "genres": ["Comedy", "Fantasy"],
+              "isAdult": false
+            }
+          }
+        ]
+      },
+      "recommendations": {
+        "nodes": [
+          {
+            "mediaRecommendation": {
+              "id": 21827,
+              "idMal": 33352,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Violet Evergarden",
+                "english": "Violet Evergarden",
+                "native": "\u30f4\u30a1\u30a4\u30aa\u30ec\u30c3\u30c8\u30fb\u30a8\u30f4\u30a1\u30fc\u30ac\u30fc\u30c7\u30f3"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx21827-ubzq619ZA2E9.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx21827-ubzq619ZA2E9.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx21827-ubzq619ZA2E9.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/21827-ROucgYiiiSpR.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2018,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 85,
+              "genres": ["Drama", "Fantasy", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 153518,
+              "idMal": 52701,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Dungeon Meshi",
+                "english": "Delicious in Dungeon",
+                "native": "\u30c0\u30f3\u30b8\u30e7\u30f3\u98ef"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx153518-IVXPDY5ph3kO.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx153518-IVXPDY5ph3kO.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx153518-IVXPDY5ph3kO.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/153518-7uRvV7SLqmHV.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2024,
+              "episodes": 24,
+              "chapters": null,
+              "meanScore": 85,
+              "genres": ["Adventure", "Comedy", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 112609,
+              "idMal": 40571,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Majo no Tabitabi",
+                "english": "Wandering Witch: The Journey of Elaina",
+                "native": "\u9b54\u5973\u306e\u65c5\u3005"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx112609-hBCbnYlEHluz.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx112609-hBCbnYlEHluz.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx112609-hBCbnYlEHluz.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/112609-P969sQ0jIU6S.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2020,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 74,
+              "genres": ["Adventure", "Fantasy", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 114535,
+              "idMal": 41025,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fumetsu no Anata e",
+                "english": "To Your Eternity",
+                "native": "\u4e0d\u6ec5\u306e\u3042\u306a\u305f\u3078"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx114535-y3NnjexcqKG1.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx114535-y3NnjexcqKG1.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx114535-y3NnjexcqKG1.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/114535-ASUprf4AsNwC.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2021,
+              "episodes": 20,
+              "chapters": null,
+              "meanScore": 81,
+              "genres": ["Adventure", "Drama", "Fantasy", "Psychological", "Supernatural"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 147105,
+              "idMal": 51553,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Tongari Boushi no Atelier",
+                "english": "Witch Hat Atelier",
+                "native": "\u3068\u3093\u304c\u308a\u5e3d\u5b50\u306e\u30a2\u30c8\u30ea\u30a8"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx147105-rwOX8qyUy8gV.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx147105-rwOX8qyUy8gV.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx147105-rwOX8qyUy8gV.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/147105-fTjmRrILFixZ.jpg",
+              "format": "ONA",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2026,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 85,
+              "genres": ["Adventure", "Drama", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 457,
+              "idMal": 457,
+              "type": "ANIME",
+              "title": { "romaji": "Mushishi", "english": "MUSHI-SHI", "native": "\u87f2\u5e2b" },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx457-l6cTtNgI9Bi6.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx457-l6cTtNgI9Bi6.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx457-l6cTtNgI9Bi6.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/n457-sWOJfqYC7s2I.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2005,
+              "episodes": 26,
+              "chapters": null,
+              "meanScore": 85,
+              "genres": ["Adventure", "Fantasy", "Mystery", "Psychological", "Slice of Life", "Supernatural"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 161645,
+              "idMal": 54492,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Kusuriya no Hitorigoto",
+                "english": "The Apothecary Diaries",
+                "native": "\u85ac\u5c4b\u306e\u3072\u3068\u308a\u3054\u3068"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx161645-QLbzHXiYRgV2.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx161645-QLbzHXiYRgV2.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx161645-QLbzHXiYRgV2.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/161645-oqzTZYIvviWI.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2023,
+              "episodes": 24,
+              "chapters": null,
+              "meanScore": 88,
+              "genres": ["Drama", "Mystery"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 99420,
+              "idMal": 35838,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Shoujo Shuumatsu Ryokou",
+                "english": "Girls' Last Tour",
+                "native": "\u5c11\u5973\u7d42\u672b\u65c5\u884c"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx99420-k5Tel6yRMwA8.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx99420-k5Tel6yRMwA8.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx99420-k5Tel6yRMwA8.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/99420-wwjSxDuLveEu.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2017,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 82,
+              "genres": ["Adventure", "Sci-Fi", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 486,
+              "idMal": 486,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Kino no Tabi: the Beautiful World",
+                "english": "Kino's Journey",
+                "native": "\u30ad\u30ce\u306e\u65c5 -the Beautiful World-"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx486-xXUgNOEBuxGs.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx486-xXUgNOEBuxGs.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx486-xXUgNOEBuxGs.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/486-cDPgzYdzHNEq.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2003,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 82,
+              "genres": ["Adventure", "Drama", "Fantasy", "Psychological", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 99457,
+              "idMal": 35851,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Sayonara no Asa ni Yakusoku no Hana wo Kazarou",
+                "english": "Maquia: When the Promised Flower Blooms",
+                "native": "\u3055\u3088\u306a\u3089\u306e\u671d\u306b\u7d04\u675f\u306e\u82b1\u3092\u304b\u3056\u308d\u3046"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx99457-OD0xtM8NlHNQ.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx99457-OD0xtM8NlHNQ.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx99457-OD0xtM8NlHNQ.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/99457-OvX44AF17mEL.jpg",
+              "format": "MOVIE",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2018,
+              "episodes": 1,
+              "chapters": null,
+              "meanScore": 82,
+              "genres": ["Drama", "Fantasy", "Psychological"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 145728,
+              "idMal": 51122,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Ookami to Koushinryou: MERCHANT MEETS THE WISE WOLF",
+                "english": "Spice and Wolf: MERCHANT MEETS THE WISE WOLF",
+                "native": "\u72fc\u3068\u9999\u8f9b\u6599 MERCHANT MEETS THE WISE WOLF"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx145728-YUKXjN2E81Pq.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx145728-YUKXjN2E81Pq.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx145728-YUKXjN2E81Pq.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/145728-v6NGBJOQs8Kh.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2024,
+              "episodes": 25,
+              "chapters": null,
+              "meanScore": 79,
+              "genres": ["Adventure", "Fantasy", "Romance", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 179966,
+              "idMal": 59459,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Silent Witch: Chinmoku no Majo no Kakushigoto",
+                "english": "Secrets of the Silent Witch",
+                "native": "\u30b5\u30a4\u30ec\u30f3\u30c8\u30fb\u30a6\u30a3\u30c3\u30c1 \u6c88\u9ed9\u306e\u9b54\u5973\u306e\u96a0\u3057\u3054\u3068"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx179966-g0EU7rVe2Og7.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx179966-g0EU7rVe2Og7.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx179966-g0EU7rVe2Og7.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/179966-hf71VrF1zhPM.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SUMMER",
+              "seasonYear": 2025,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 81,
+              "genres": ["Drama", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 2966,
+              "idMal": 2966,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Ookami to Koushinryou",
+                "english": "Spice and Wolf",
+                "native": "\u72fc\u3068\u9999\u8f9b\u6599"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx2966-AEULMyYA9WKb.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx2966-AEULMyYA9WKb.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx2966-AEULMyYA9WKb.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/2966-h1ZiL7o7oYPs.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2008,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 80,
+              "genres": ["Adventure", "Fantasy", "Romance", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 166873,
+              "idMal": 55888,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Mushoku Tensei II: Isekai Ittara Honki Dasu Part 2",
+                "english": "Mushoku Tensei: Jobless Reincarnation Season 2 Part 2",
+                "native": "\u7121\u8077\u8ee2\u751f\u2161 \uff5e\u7570\u4e16\u754c\u884c\u3063\u305f\u3089\u672c\u6c17\u3060\u3059\uff5e \u7b2c2\u30af\u30fc\u30eb"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx166873-xO0BRPkmwFll.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx166873-xO0BRPkmwFll.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx166873-xO0BRPkmwFll.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/166873-GTi5imE5skM2.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 2024,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 83,
+              "genres": ["Adventure", "Drama", "Ecchi", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 108465,
+              "idMal": 39535,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Mushoku Tensei: Isekai Ittara Honki Dasu",
+                "english": "Mushoku Tensei: Jobless Reincarnation",
+                "native": "\u7121\u8077\u8ee2\u751f \uff5e\u7570\u4e16\u754c\u884c\u3063\u305f\u3089\u672c\u6c17\u3060\u3059\uff5e"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx108465-1ANspF1EWyFx.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx108465-1ANspF1EWyFx.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx108465-1ANspF1EWyFx.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/108465-RgsRpTMhP9Sv.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2021,
+              "episodes": 11,
+              "chapters": null,
+              "meanScore": 81,
+              "genres": ["Adventure", "Drama", "Ecchi", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 178789,
+              "idMal": 59193,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Mushoku Tensei III: Isekai Ittara Honki Dasu",
+                "english": "Mushoku Tensei: Jobless Reincarnation Season 3",
+                "native": "\u7121\u8077\u8ee2\u751f\u2162 \uff5e\u7570\u4e16\u754c\u884c\u3063\u305f\u3089\u672c\u6c17\u3060\u3059\uff5e"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx178789-hNXjKFzUq7mk.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx178789-hNXjKFzUq7mk.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx178789-hNXjKFzUq7mk.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/178789-9nHWmoRLlcLu.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SUMMER",
+              "seasonYear": 2026,
+              "episodes": 14,
+              "chapters": null,
+              "meanScore": 86,
+              "genres": ["Adventure", "Drama", "Ecchi", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 477,
+              "idMal": 477,
+              "type": "ANIME",
+              "title": {
+                "romaji": "ARIA The ANIMATION",
+                "english": "ARIA The ANIMATION",
+                "native": "ARIA The ANIMATION"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx477-CdKPHW7rGbUP.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx477-CdKPHW7rGbUP.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx477-CdKPHW7rGbUP.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/477.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2005,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 76,
+              "genres": ["Fantasy", "Sci-Fi", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          { "mediaRecommendation": null },
+          {
+            "mediaRecommendation": {
+              "id": 975,
+              "idMal": 975,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Yokohama Kaidashi Kikou",
+                "english": "Yokohama Shopping Log",
+                "native": "\u30e8\u30b3\u30cf\u30de\u8cb7\u3044\u51fa\u3057\u7d00\u884c"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/975-EDNYnBJCctSD.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/975-EDNYnBJCctSD.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/975-EDNYnBJCctSD.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/975-6Fcen4DGT5vD.jpg",
+              "format": "OVA",
+              "status": "FINISHED",
+              "season": "SPRING",
+              "seasonYear": 1998,
+              "episodes": 2,
+              "chapters": null,
+              "meanScore": 75,
+              "genres": ["Sci-Fi", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 98436,
+              "idMal": 35062,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Mahoutsukai no Yome",
+                "english": "The Ancient Magus' Bride",
+                "native": "\u9b54\u6cd5\u4f7f\u3044\u306e\u5ac1"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx98436-n7sK6POCd0XV.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx98436-n7sK6POCd0XV.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx98436-n7sK6POCd0XV.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/98436-mipAtJXRUCgx.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "FALL",
+              "seasonYear": 2017,
+              "episodes": 24,
+              "chapters": null,
+              "meanScore": 78,
+              "genres": ["Drama", "Fantasy", "Romance", "Slice of Life", "Supernatural"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 97986,
+              "idMal": 34599,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Made in Abyss",
+                "english": "Made in Abyss",
+                "native": "\u30e1\u30a4\u30c9\u30a4\u30f3\u30a2\u30d3\u30b9"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx97986-TQ7dCgbS3y5s.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx97986-TQ7dCgbS3y5s.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx97986-TQ7dCgbS3y5s.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/97986-C55UnbJKB7ZF.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SUMMER",
+              "seasonYear": 2017,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 84,
+              "genres": ["Adventure", "Drama", "Fantasy", "Horror", "Mystery", "Sci-Fi"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 156891,
+              "idMal": 53590,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Saijaku Tamer wa Gomi Hiroi no Tabi wo Hajimemashita.",
+                "english": "The Weakest Tamer Began a Journey to Pick Up Trash",
+                "native": "\u6700\u5f31\u30c6\u30a4\u30de\u30fc\u306f\u30b4\u30df\u62fe\u3044\u306e\u65c5\u3092\u59cb\u3081\u307e\u3057\u305f\u3002"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx156891-bw91QNdptQEG.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx156891-bw91QNdptQEG.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx156891-bw91QNdptQEG.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/156891-VdUOlIqn48TE.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2024,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 74,
+              "genres": ["Adventure", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 186052,
+              "idMal": 60732,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Mizu Zokusei no Mahou Tsukai",
+                "english": "The Water Magician",
+                "native": "\u6c34\u5c5e\u6027\u306e\u9b54\u6cd5\u4f7f\u3044"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx186052-zq8h0Qo0O0sP.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx186052-zq8h0Qo0O0sP.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx186052-zq8h0Qo0O0sP.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/186052-SHiNjpnalGWy.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SUMMER",
+              "seasonYear": 2025,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 70,
+              "genres": ["Action", "Adventure", "Fantasy"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 108617,
+              "idMal": 39575,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Somali to Mori no Kamisama",
+                "english": "Somali and the Forest Spirit",
+                "native": "\u30bd\u30de\u30ea\u3068\u68ee\u306e\u795e\u69d8"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx108617-PgoYLgWzzm0c.png",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx108617-PgoYLgWzzm0c.png",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx108617-PgoYLgWzzm0c.png"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/108617-K5pexm0OYdJl.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "WINTER",
+              "seasonYear": 2020,
+              "episodes": 12,
+              "chapters": null,
+              "meanScore": 76,
+              "genres": ["Adventure", "Drama", "Fantasy", "Slice of Life"],
+              "isAdult": false
+            }
+          },
+          {
+            "mediaRecommendation": {
+              "id": 4081,
+              "idMal": 4081,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Natsume Yuujinchou",
+                "english": "Natsume's Book of Friends Season 1",
+                "native": "\u590f\u76ee\u53cb\u4eba\u5e33"
+              },
+              "coverImage": {
+                "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx4081-xi08naD69tjr.jpg",
+                "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx4081-xi08naD69tjr.jpg",
+                "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx4081-xi08naD69tjr.jpg"
+              },
+              "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/4081-dbeE4uMExtgc.jpg",
+              "format": "TV",
+              "status": "FINISHED",
+              "season": "SUMMER",
+              "seasonYear": 2008,
+              "episodes": 13,
+              "chapters": null,
+              "meanScore": 80,
+              "genres": ["Drama", "Fantasy", "Slice of Life", "Supernatural"],
+              "isAdult": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}
