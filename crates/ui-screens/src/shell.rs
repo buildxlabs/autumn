@@ -1,17 +1,20 @@
 //! The window's root view: titlebar, rail and route view. See ARCHITECTURE §5.
 
+use std::{rc::Rc, time::Duration};
+
 use gpui_kit::{
-    AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
+    App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, TestSupportExt, Window,
+    StatefulInteractiveElement, Styled, Subscription, Task, TestSupportExt, Window,
     assets::IconName,
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
+        switch::Switch,
     },
     div, px,
 };
-use ui_components::{Rail, RailItem};
+use ui_components::{RAIL_WIDTH, Rail, RailExpansion, RailItem};
 use ui_state::{
     Route, RouterState, ScrollRestore,
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
@@ -19,7 +22,7 @@ use ui_state::{
 
 use crate::{
     palette::{CommandPalette, Mode, PaletteEvent},
-    placeholder::placeholder,
+    placeholder::{placeholder, poster_grid},
 };
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
@@ -28,8 +31,44 @@ const TITLEBAR_HEIGHT: f32 = 40.;
 /// Width of the command palette dialog.
 const PALETTE_WIDTH: f32 = 560.;
 
-/// Rail entries, top to bottom.
+/// How long the pointer rests on the rail before it expands (decision #19).
+pub(crate) const HOVER_OPEN_DELAY: Duration = Duration::from_millis(150);
+
+/// Rail entries from the top, top to bottom.
 const RAIL_ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
+/// The system group at the rail's bottom, top to bottom.
+const SYSTEM_ROUTES: [Route; 3] = [Route::Extensions, Route::Sync, Route::Settings];
+
+/// The rail preferences the user can change, loaded at start and saved on
+/// every change.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RailPrefs {
+    /// How the rail opens.
+    pub mode: RailMode,
+}
+
+impl RailPrefs {
+    /// Preferences with the rail opening in `mode`.
+    pub fn new(mode: RailMode) -> Self {
+        Self { mode }
+    }
+}
+
+/// How the rail opens (decision #19).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RailMode {
+    /// It opens on hover, over the content.
+    #[default]
+    Hover,
+    /// A toggle button opens it, and the open rail pushes the content aside.
+    ClickPin,
+}
+
+/// Saves changed preferences. The shell holds the returned task, so a newer
+/// save drops an older one still running.
+type SavePrefs = Rc<dyn Fn(&RailPrefs, &mut App) -> Task<()>>;
 
 /// The shell around every route: titlebar on top, rail on the left.
 ///
@@ -44,19 +83,35 @@ pub struct AppShell {
     focus: FocusHandle,
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
+    prefs: RailPrefs,
+    save_prefs: SavePrefs,
+    /// The latest save, if it is still running.
+    saving: Option<Task<()>>,
+    /// Whether the rail is expanded, by hover or by the click-pin toggle.
+    rail_open: bool,
+    /// The pending hover open; dropping it cancels the open.
+    hover_open: Option<Task<()>>,
 }
 
 impl std::fmt::Debug for AppShell {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppShell")
             .field("router", &self.router)
+            .field("prefs", &self.prefs)
+            .field("rail_open", &self.rail_open)
             .finish_non_exhaustive()
     }
 }
 
 impl AppShell {
     /// A shell showing the home route, focused so its key bindings apply.
-    pub fn new(window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+    /// `save_prefs` runs whenever the user changes `prefs`.
+    pub fn new(
+        prefs: RailPrefs,
+        save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Self {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let palette = cx.new(|cx| CommandPalette::new(window, cx));
@@ -76,6 +131,11 @@ impl AppShell {
             focus,
             palette,
             _palette_events: palette_events,
+            prefs,
+            save_prefs: Rc::new(save_prefs),
+            saving: None,
+            rail_open: false,
+            hover_open: None,
         }
     }
 
@@ -140,6 +200,62 @@ impl AppShell {
         }
     }
 
+    /// Hover mode: opens the rail once the pointer has rested on it for
+    /// [`HOVER_OPEN_DELAY`].
+    fn rail_entered(&mut self, cx: &mut Context<'_, Self>) {
+        if self.prefs.mode != RailMode::Hover {
+            return;
+        }
+        self.hover_open = Some(cx.spawn(async move |shell, cx| {
+            cx.background_executor().timer(HOVER_OPEN_DELAY).await;
+            // Fails only if the shell is gone, and then there is no rail.
+            let _ = shell.update(cx, AppShell::open_rail);
+        }));
+    }
+
+    /// Hover mode: closes the rail as soon as the pointer leaves it.
+    fn rail_left(&mut self, cx: &mut Context<'_, Self>) {
+        if self.prefs.mode == RailMode::Hover {
+            self.close_rail(cx);
+        }
+    }
+
+    fn open_rail(&mut self, cx: &mut Context<'_, Self>) {
+        self.hover_open = None;
+        if !self.rail_open {
+            self.rail_open = true;
+            cx.notify();
+        }
+    }
+
+    /// Closes the rail and drops a pending hover open.
+    fn close_rail(&mut self, cx: &mut Context<'_, Self>) {
+        self.hover_open = None;
+        if self.rail_open {
+            self.rail_open = false;
+            cx.notify();
+        }
+    }
+
+    fn set_rail_mode(&mut self, mode: RailMode, cx: &mut Context<'_, Self>) {
+        if self.prefs.mode == mode {
+            return;
+        }
+        self.prefs.mode = mode;
+        // Each mode starts collapsed.
+        self.close_rail(cx);
+        self.saving = Some((self.save_prefs)(&self.prefs, cx));
+        cx.notify();
+    }
+
+    fn rail_expansion(&self) -> RailExpansion {
+        match (self.rail_open, self.prefs.mode) {
+            (false, _) => RailExpansion::Collapsed,
+            (true, RailMode::Hover) => RailExpansion::Overlay,
+            (true, RailMode::ClickPin) => RailExpansion::Pushed,
+        }
+    }
+
     fn render_titlebar(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         TitleBar::new()
             .h(px(TITLEBAR_HEIGHT))
@@ -180,32 +296,106 @@ impl AppShell {
 
     fn render_rail(&self, cx: &mut Context<'_, Self>) -> Rail {
         let current = *self.router.current();
-        let items = RAIL_ROUTES
-            .iter()
-            .map(|&route| RailItem {
-                id: rail_id(route).into(),
-                label: title(route),
-                icon: icon(route),
-                active: route == current,
-            })
-            .collect();
+        let item = |route: Route| RailItem {
+            id: rail_id(route).into(),
+            label: title(route),
+            icon: icon(route),
+            active: route == current,
+        };
         let shell = cx.entity().downgrade();
-        Rail::new(items, move |index, _, cx| {
-            if let Some(&route) = RAIL_ROUTES.get(index) {
-                // The shell outlives its rail, so the upgrade fails only
-                // while the window is closing.
-                if let Some(shell) = shell.upgrade() {
-                    shell.update(cx, |shell, cx| shell.navigate(route, cx));
+        let rail = Rail::new(
+            RAIL_ROUTES.map(item).into(),
+            SYSTEM_ROUTES.map(item).into(),
+            "Guest",
+            move |id, _, cx| {
+                let route = RAIL_ROUTES
+                    .into_iter()
+                    .chain(SYSTEM_ROUTES)
+                    .find(|&route| rail_id(route) == id.as_ref());
+                if let Some(route) = route {
+                    // The shell outlives its rail, so the update fails only
+                    // while the window is closing.
+                    let _ = shell.update(cx, |shell, cx| shell.navigate(route, cx));
                 }
+            },
+        )
+        .expansion(self.rail_expansion());
+        match self.prefs.mode {
+            RailMode::Hover => rail.on_hover(cx.listener(|shell, hovered: &bool, _, cx| {
+                if *hovered {
+                    shell.rail_entered(cx);
+                } else {
+                    shell.rail_left(cx);
+                }
+            })),
+            RailMode::ClickPin => {
+                let shell = cx.entity().downgrade();
+                rail.on_toggle(move |_, cx| {
+                    // Fails only while the window is closing.
+                    let _ = shell.update(cx, |shell, cx| {
+                        if shell.rail_open {
+                            shell.close_rail(cx);
+                        } else {
+                            shell.open_rail(cx);
+                        }
+                    });
+                })
             }
-        })
+        }
+    }
+
+    fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let route = self.router.current();
+        let content = div()
+            .child(placeholder(
+                title(*route),
+                rows(*route),
+                colors.muted_foreground,
+            ))
+            .children((*route == Route::Home).then(|| poster_grid(colors.muted, colors.border)))
+            .children((*route == Route::Settings).then(|| {
+                div().px_8().child(
+                    Switch::new("setting-click-pin")
+                        .label("Pin the sidebar on click instead of opening it on hover")
+                        .checked(self.prefs.mode == RailMode::ClickPin)
+                        .on_click(cx.listener(|shell, checked: &bool, _, cx| {
+                            let mode = if *checked {
+                                RailMode::ClickPin
+                            } else {
+                                RailMode::Hover
+                            };
+                            shell.set_rail_mode(mode, cx);
+                        })),
+                )
+            }));
+        div()
+            .id("route-view")
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .overflow_y_scroll()
+            .track_scroll(self.scroll.handle())
+            .child(content)
+            .test_support()
     }
 }
 
 impl Render for AppShell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let route = *self.router.current();
+        let rail = self.render_rail(cx);
+        let body = div().flex_1().min_h_0().relative().flex();
+        // Pushed, the rail is in the layout. Otherwise its slot stays
+        // collapsed-width and the rail is drawn after the route view, so an
+        // expanded rail covers the content without moving it.
+        let body = if self.prefs.mode == RailMode::ClickPin {
+            body.child(rail).child(self.render_route(cx))
+        } else {
+            body.child(div().flex_none().w(px(RAIL_WIDTH)).h_full())
+                .child(self.render_route(cx))
+                .child(div().absolute().top_0().left_0().h_full().child(rail))
+        };
         div()
             .id("shell")
             .track_focus(&self.focus)
@@ -228,28 +418,7 @@ impl Render for AppShell {
             .bg(colors.background)
             .text_color(colors.foreground)
             .child(self.render_titlebar(cx))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .child(self.render_rail(cx))
-                    .child(
-                        div()
-                            .id("route-view")
-                            .flex_1()
-                            .min_w_0()
-                            .h_full()
-                            .overflow_y_scroll()
-                            .track_scroll(self.scroll.handle())
-                            .child(placeholder(
-                                title(route),
-                                rows(route),
-                                colors.muted_foreground,
-                            ))
-                            .test_support(),
-                    ),
-            )
+            .child(body)
     }
 }
 
@@ -285,6 +454,9 @@ fn rail_id(route: Route) -> &'static str {
         Route::Discover => "rail-discover",
         Route::Schedule => "rail-schedule",
         Route::Manga => "rail-manga",
+        Route::Extensions => "rail-extensions",
+        Route::Sync => "rail-sync",
+        Route::Settings => "rail-settings",
     }
 }
 
@@ -294,6 +466,9 @@ pub(crate) fn title(route: Route) -> SharedString {
         Route::Discover => "Discover",
         Route::Schedule => "Schedule",
         Route::Manga => "Manga",
+        Route::Extensions => "Extensions",
+        Route::Sync => "Offline / Sync",
+        Route::Settings => "Settings",
     }
     .into()
 }
@@ -302,7 +477,12 @@ pub(crate) fn title(route: Route) -> SharedString {
 fn rows(route: Route) -> usize {
     match route {
         Route::Discover => 100,
-        Route::Home | Route::Schedule | Route::Manga => 0,
+        Route::Home
+        | Route::Schedule
+        | Route::Manga
+        | Route::Extensions
+        | Route::Sync
+        | Route::Settings => 0,
     }
 }
 
@@ -312,22 +492,27 @@ pub(crate) fn icon(route: Route) -> IconName {
         Route::Discover => IconName::Compass,
         Route::Schedule => IconName::Calendar,
         Route::Manga => IconName::BookOpen,
+        Route::Extensions => IconName::Puzzle,
+        Route::Sync => IconName::FolderSync,
+        Route::Settings => IconName::Settings,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc, time::Duration};
+
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
-        TestAppContext, WindowBounds, WindowHandle, WindowOptions,
+        Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
         base::Root,
         component::WindowExt,
         point, px, size,
-        test::{ClickOptions, TestWindowExt},
+        test::{ClickOptions, TestEventExt, TestWindowExt},
     };
     use ui_state::{Route, actions::OpenCommandPalette};
 
-    use super::AppShell;
+    use super::{AppShell, HOVER_OPEN_DELAY, RailMode, RailPrefs};
     use crate::palette::Mode;
 
     // Must match `NAVIGATION_KEYS` in ui-state's actions.rs.
@@ -345,17 +530,31 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     const PALETTE_KEY: &str = "ctrl-j";
 
+    const COLLAPSED: Pixels = px(64.);
+    const EXPANDED: Pixels = px(260.);
+
     struct Shell {
         window: WindowHandle<Root>,
         view: Entity<AppShell>,
+        /// Every preference set the shell asked to save, oldest first.
+        saved: Rc<RefCell<Vec<RailPrefs>>>,
     }
 
     impl Shell {
         fn open(cx: &mut TestAppContext) -> Self {
+            Self::open_with(cx, RailPrefs::default())
+        }
+
+        fn open_with(cx: &mut TestAppContext, prefs: RailPrefs) -> Self {
+            let saved = Rc::new(RefCell::new(Vec::new()));
+            let log = Rc::clone(&saved);
             let (window, view) = cx.update(|cx| {
                 gpui_kit::init(cx);
                 ui_theme::init(cx);
                 ui_state::actions::bind_keys(cx);
+                // Animations end on their first frame, so sizes can be read
+                // without waiting on the real clock.
+                cx.set_reduce_motion(true);
                 let options = WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds {
                         origin: point(px(0.), px(0.)),
@@ -364,13 +563,24 @@ mod tests {
                     ..WindowOptions::default()
                 };
                 gpui_kit::open_window(options, cx, |window, cx| {
-                    cx.new(|cx| AppShell::new(window, cx))
+                    cx.new(|cx| {
+                        AppShell::new(
+                            prefs,
+                            move |prefs: &RailPrefs, _: &mut gpui_kit::App| {
+                                log.borrow_mut().push(prefs.clone());
+                                Task::ready(())
+                            },
+                            window,
+                            cx,
+                        )
+                    })
                 })
                 .unwrap()
             });
             Self {
                 window: window.downcast::<Root>().unwrap(),
                 view,
+                saved,
             }
         }
 
@@ -391,6 +601,24 @@ mod tests {
             self.act(cx, |window, cx| window.click(id, cx));
         }
 
+        fn hover(&self, cx: &mut TestAppContext, id: &'static str) {
+            self.act(cx, |window, cx| window.hover(id, cx));
+        }
+
+        /// Moves the pointer onto the route view, off the rail.
+        fn leave_rail(&self, cx: &mut TestAppContext) {
+            self.act(cx, |window, cx| {
+                window.pointer_move(point(px(900.), px(400.)), None, cx);
+            });
+        }
+
+        /// Lets `duration` of test time pass and draws the result.
+        fn wait(&self, cx: &mut TestAppContext, duration: Duration) {
+            cx.executor().advance_clock(duration);
+            cx.run_until_parked();
+            self.act(cx, |_, _| {});
+        }
+
         fn press(&self, cx: &mut TestAppContext, key: &'static str) {
             self.act(cx, |window, cx| window.press(key, cx));
         }
@@ -400,6 +628,16 @@ mod tests {
             self.act(cx, |window, cx| {
                 window.click_with_options("route-view", options, cx);
             });
+        }
+
+        fn bounds(&self, cx: &mut TestAppContext, id: &'static str) -> Bounds<Pixels> {
+            let mut bounds = None;
+            self.act(cx, |window, _| bounds = Some(window.find(id).bounds()));
+            bounds.unwrap()
+        }
+
+        fn rail_width(&self, cx: &mut TestAppContext) -> Pixels {
+            self.bounds(cx, "rail").size.width
         }
 
         fn route(&self, cx: &mut TestAppContext) -> Route {
@@ -432,6 +670,136 @@ mod tests {
         fn offset(&self, cx: &mut TestAppContext) -> Point<Pixels> {
             self.view.read_with(cx, |shell, _| shell.scroll.offset())
         }
+    }
+
+    fn pinned() -> RailPrefs {
+        RailPrefs::new(RailMode::ClickPin)
+    }
+
+    #[gpui_kit::test]
+    fn hovering_the_rail_expands_it_over_the_content_after_the_delay(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let poster = shell.bounds(cx, "poster-1");
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "starts collapsed");
+
+        shell.hover(cx, "rail");
+        shell.wait(
+            cx,
+            HOVER_OPEN_DELAY.saturating_sub(Duration::from_millis(1)),
+        );
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "not before the delay");
+
+        shell.wait(cx, Duration::from_millis(1));
+        assert_eq!(shell.rail_width(cx), EXPANDED, "open after the delay");
+        assert_eq!(
+            shell.bounds(cx, "poster-1"),
+            poster,
+            "the grid behind the rail does not move"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn leaving_the_rail_collapses_it_at_once(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+        assert_eq!(shell.rail_width(cx), EXPANDED, "open");
+
+        shell.leave_rail(cx);
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "closed with no delay");
+    }
+
+    #[gpui_kit::test]
+    fn a_pointer_passing_over_the_rail_does_not_open_it(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.hover(cx, "rail");
+        shell.wait(cx, Duration::from_millis(50));
+        shell.leave_rail(cx);
+        shell.wait(cx, HOVER_OPEN_DELAY);
+
+        assert_eq!(
+            shell.rail_width(cx),
+            COLLAPSED,
+            "the pending open was dropped"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_open_overlay_takes_clicks_meant_for_its_items(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+
+        shell.click(cx, "rail-discover");
+
+        assert_eq!(
+            shell.route(cx),
+            Route::Discover,
+            "the rail item got the click"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn with_click_pin_the_toggle_opens_the_rail_and_pushes_the_content(cx: &mut TestAppContext) {
+        let shell = Shell::open_with(cx, pinned());
+        let poster = shell.bounds(cx, "poster-1");
+
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "hover does nothing");
+
+        shell.click(cx, "rail-toggle");
+        assert_eq!(shell.rail_width(cx), EXPANDED, "the toggle opens it");
+        assert_eq!(
+            shell.bounds(cx, "poster-1").origin.x - poster.origin.x,
+            EXPANDED - COLLAPSED,
+            "the content moves over by the extra width"
+        );
+
+        shell.leave_rail(cx);
+        assert_eq!(shell.rail_width(cx), EXPANDED, "it stays open off the rail");
+        shell.click(cx, "rail-toggle");
+        assert_eq!(shell.rail_width(cx), COLLAPSED, "the toggle closes it");
+        assert_eq!(shell.bounds(cx, "poster-1"), poster, "the content is back");
+    }
+
+    #[gpui_kit::test]
+    fn the_click_pin_switch_changes_the_mode_and_saves_it(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        assert!(
+            shell.saved.borrow().is_empty(),
+            "nothing saved until a change"
+        );
+
+        shell.click(cx, "setting-click-pin");
+        assert_eq!(*shell.saved.borrow(), [pinned()], "click-pin on is saved");
+        shell.click(cx, "rail-toggle");
+        assert_eq!(shell.rail_width(cx), EXPANDED, "now in click-pin mode");
+
+        shell.click(cx, "setting-click-pin");
+        assert_eq!(
+            shell.saved.borrow().last(),
+            Some(&RailPrefs::default()),
+            "click-pin off is saved"
+        );
+        assert_eq!(
+            shell.rail_width(cx),
+            COLLAPSED,
+            "leaving the mode collapses"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_system_group_stays_at_the_bottom(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let rail = shell.bounds(cx, "rail");
+        let settings = shell.bounds(cx, "rail-settings");
+
+        assert!(
+            rail.bottom() - settings.bottom() < px(100.),
+            "settings sits near the rail's bottom edge, got {settings:?} in {rail:?}"
+        );
     }
 
     #[gpui_kit::test]

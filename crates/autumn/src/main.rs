@@ -1,16 +1,17 @@
 //! Autumn, a desktop app for anime and manga.
 
 mod logging;
+mod rail_prefs;
 mod settings_store;
 mod startup;
 
 use std::{fmt::Display, process::ExitCode};
 
 use gpui_kit::{
-    App, AppContext, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowDecorations,
+    App, AppContext, Bounds, Pixels, Task, TitlebarOptions, WindowBounds, WindowDecorations,
     WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
-use ui_screens::AppShell;
+use ui_screens::{AppShell, RailPrefs};
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
@@ -31,7 +32,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let _started = match startup::run(&runtime) {
+    let started = match startup::run(&runtime) {
         Ok(started) => started,
         Err(err) => {
             report_fatal(&format_args!("startup failed: {err:#}"));
@@ -44,6 +45,8 @@ fn main() -> ExitCode {
     // The engine takes this sender once it exists (Phase 2). Holding it here
     // keeps the event pump alive for the whole run.
     let (_engine_events, ui_events) = ui_state::events::channel();
+    let prefs = rail_prefs::from_settings(&started.settings);
+    let save_prefs = rail_prefs::saver(started.db, started.settings);
 
     gpui_kit::application()
         .with_assets(AllAssets)
@@ -54,7 +57,7 @@ fn main() -> ExitCode {
             // No store consumes an event yet; the first engine module adds one.
             ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
             ui_state::actions::bind_keys(cx);
-            if let Err(err) = open_main_window(cx) {
+            if let Err(err) = open_main_window(prefs, save_prefs, cx) {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
                 cx.quit();
@@ -89,11 +92,17 @@ fn main_window_decorations() -> Option<WindowDecorations> {
     }
 }
 
-/// Opens the main window, centered on the primary display.
-fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
+/// Opens the main window, centered on the primary display. The shell starts
+/// with `prefs` and calls `save_prefs` when the user changes them.
+fn open_main_window(
+    prefs: RailPrefs,
+    save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+    cx: &mut App,
+) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
-    gpui_kit::open_window(main_window_options(bounds), cx, |window, cx| {
-        cx.new(|cx| AppShell::new(window, cx))
+    let options = main_window_options(bounds);
+    gpui_kit::open_window(options, cx, |window, cx| {
+        cx.new(|cx| AppShell::new(prefs, save_prefs, window, cx))
     })?;
     Ok(())
 }
@@ -108,7 +117,8 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::TestAppContext;
+    use gpui_kit::{Task, TestAppContext};
+    use ui_screens::RailPrefs;
 
     use super::open_main_window;
 
@@ -116,7 +126,8 @@ mod tests {
     fn opens_one_window(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            open_main_window(cx).expect("the test platform opens windows");
+            open_main_window(RailPrefs::default(), |_, _| Task::ready(()), cx)
+                .expect("the test platform opens windows");
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");

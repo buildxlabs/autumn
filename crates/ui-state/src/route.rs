@@ -18,4 +18,10 @@ pub enum Route {
     Schedule,
     /// Manga library and sources.
     Manga,
+    /// Installed and available extensions.
+    Extensions,
+    /// Offline snapshots and sync.
+    Sync,
+    /// App settings.
+    Settings,
 }

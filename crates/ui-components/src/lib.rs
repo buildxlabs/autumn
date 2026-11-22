@@ -4,4 +4,4 @@
 
 mod rail;
 
-pub use rail::{Rail, RailItem};
+pub use rail::{RAIL_EXPANDED_WIDTH, RAIL_WIDTH, Rail, RailExpansion, RailItem};
