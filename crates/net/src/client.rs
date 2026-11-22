@@ -11,8 +11,9 @@ use tokio::time::{Instant, sleep};
 use tracing::{debug, warn};
 
 use crate::{
-    Error, HttpError, Request, Response,
-    limiter::{HostConfig, HostLimiters},
+    Error, HttpError, Request, RequestActivity, Response,
+    activity::{ActiveRequests, InFlight},
+    limiter::{HostConfig, HostLimiters, RateLimit},
 };
 
 /// `AniList`'s GraphQL host, configured with a 25 req/min limiter and a burst of 5.
@@ -158,6 +159,7 @@ impl ClientBuilder {
             inner: Arc::new(Inner {
                 http,
                 limiters,
+                activity: tokio::sync::watch::Sender::new(ActiveRequests::new()),
                 max_retries: self.max_retries,
                 base_backoff: self.base_backoff,
             }),
@@ -169,6 +171,7 @@ impl ClientBuilder {
 struct Inner {
     http: reqwest::Client,
     limiters: HostLimiters,
+    activity: tokio::sync::watch::Sender<ActiveRequests>,
     max_retries: u32,
     base_backoff: Duration,
 }
@@ -201,6 +204,21 @@ impl Client {
         ClientBuilder::default()
     }
 
+    /// Observe in-flight requests across all clones of this client.
+    #[must_use]
+    pub fn request_activity(&self) -> RequestActivity {
+        RequestActivity::new(self.inner.activity.subscribe())
+    }
+
+    /// Observe token waits and server lockouts for a registered host.
+    #[must_use]
+    pub fn rate_limit(&self, host: &str) -> Option<RateLimit> {
+        self.inner
+            .limiters
+            .get(&host.to_ascii_lowercase())
+            .map(|limiter| limiter.subscribe())
+    }
+
     /// The current lockout for a host, if it has been rate limited.
     pub async fn lockout(&self, host: &str) -> Option<Lockout> {
         let host = host.to_ascii_lowercase();
@@ -229,6 +247,7 @@ impl Client {
     }
 
     async fn send(&self, request: Request, mode: SendMode) -> Result<Response, Error> {
+        let in_flight = InFlight::begin(&self.inner.activity);
         let retryable = mode == SendMode::Read;
         let host = request.host().to_owned();
         let limiter = self.inner.limiters.get(&host);
@@ -262,7 +281,7 @@ impl Client {
 
             let status = response.status();
             if status.is_success() {
-                return Ok(Response::new(response));
+                return Ok(Response::new(response, in_flight));
             }
 
             if status == StatusCode::TOO_MANY_REQUESTS {

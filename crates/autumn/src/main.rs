@@ -1,5 +1,6 @@
 //! Autumn, a desktop app for anime and manga.
 
+mod fetch_status;
 mod http_client;
 mod logging;
 mod rail_prefs;
@@ -9,10 +10,11 @@ mod startup;
 use std::{fmt::Display, process::ExitCode, sync::Arc};
 
 use gpui_kit::{
-    App, AppContext, Bounds, Pixels, Task, TitlebarOptions, WindowBounds, WindowDecorations,
-    WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
+    App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use ui_screens::{AppShell, RailPrefs};
+use ui_state::fetch_status::FetchStatus;
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
@@ -43,14 +45,20 @@ fn main() -> ExitCode {
     // One runtime: startup opened the database on it, and the bridge runs
     // UI-requested futures on it.
     let handle = runtime.handle().clone();
-    // The engine takes this sender once it exists (Phase 2). Holding it here
-    // keeps the event pump alive for the whole run.
-    let (_engine_events, ui_events) = ui_state::events::channel();
+    // The one shared client: posters, the fetch-status feed and (in debug
+    // builds) the fetch-status debug actions all go through it.
+    let client = started.client;
+    let (engine_events, ui_events) = ui_state::events::channel();
+    handle.spawn({
+        let client = client.clone();
+        let events = engine_events.clone();
+        async move { fetch_status::observe(&client, events).await }
+    });
     let prefs = rail_prefs::from_settings(&started.settings);
     let save_prefs = rail_prefs::saver(started.db, started.settings);
 
     let http_client =
-        http_client::PosterHttpClient::new(started.client, started.poster_cache, handle.clone());
+        http_client::PosterHttpClient::new(client.clone(), started.poster_cache, handle.clone());
     gpui_kit::application()
         .with_assets(AllAssets)
         .with_http_client(Arc::new(http_client))
@@ -58,10 +66,16 @@ fn main() -> ExitCode {
             gpui_kit::init(cx);
             ui_state::bridge::init(cx, handle);
             ui_theme::init(cx);
-            // No store consumes an event yet; the first engine module adds one.
-            ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
+            let fetch_status = cx.new(|_| FetchStatus::default());
+            #[cfg(debug_assertions)]
+            fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
+            ui_state::events::start_pump(cx, ui_events, {
+                let store = fetch_status.clone();
+                move |event, cx| store.update(cx, |store, cx| store.apply(event, cx))
+            })
+            .detach();
             ui_state::actions::bind_keys(cx);
-            if let Err(err) = open_main_window(prefs, save_prefs, cx) {
+            if let Err(err) = open_main_window(prefs, fetch_status, save_prefs, cx) {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
                 cx.quit();
@@ -100,13 +114,14 @@ fn main_window_decorations() -> Option<WindowDecorations> {
 /// with `prefs` and calls `save_prefs` when the user changes them.
 fn open_main_window(
     prefs: RailPrefs,
+    fetch_status: Entity<FetchStatus>,
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
     let options = main_window_options(bounds);
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| AppShell::new(prefs, save_prefs, window, cx))
+        cx.new(|cx| AppShell::new(prefs, fetch_status, save_prefs, window, cx))
     })?;
     Ok(())
 }
@@ -121,17 +136,23 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{Task, TestAppContext};
+    use gpui_kit::{AppContext, Task, TestAppContext};
     use ui_screens::RailPrefs;
 
-    use super::open_main_window;
+    use super::{FetchStatus, open_main_window};
 
     #[gpui_kit::test]
     fn opens_one_window(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            open_main_window(RailPrefs::default(), |_, _| Task::ready(()), cx)
-                .expect("the test platform opens windows");
+            let fetch_status = cx.new(|_| FetchStatus::default());
+            open_main_window(
+                RailPrefs::default(),
+                fetch_status,
+                |_, _| Task::ready(()),
+                cx,
+            )
+            .expect("the test platform opens windows");
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");

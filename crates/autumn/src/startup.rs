@@ -52,7 +52,18 @@ pub(crate) fn run(runtime: &Runtime) -> anyhow::Result<Started> {
     // struct may be logged. Revisit if a secret-adjacent field is added.
     tracing::debug!(?settings, "settings loaded");
 
-    let client = Client::new().context("could not create the shared HTTP client")?;
+    let client = Client::builder().anilist();
+    // Debug builds add the local host the fetch-status debug actions call.
+    #[cfg(debug_assertions)]
+    let client = client.host(
+        crate::fetch_status::debug::HOST,
+        25,
+        5,
+        net::HostKind::AniList,
+    );
+    let client = client
+        .build()
+        .context("could not create the shared HTTP client")?;
     let poster_cache =
         PosterCache::new(paths.cache_dir()).context("could not open the poster cache")?;
 

@@ -5,7 +5,7 @@
 
 use reqwest::header::{HeaderName, HeaderValue};
 
-use crate::{Error, HttpError};
+use crate::{Error, HttpError, activity::InFlight};
 
 /// HTTP method of a request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,12 +110,17 @@ impl Request {
 pub struct Response {
     status: u16,
     inner: reqwest::Response,
+    _in_flight: InFlight,
 }
 
 impl Response {
-    pub(crate) fn new(inner: reqwest::Response) -> Self {
+    pub(crate) fn new(inner: reqwest::Response, in_flight: InFlight) -> Self {
         let status = inner.status().as_u16();
-        Self { status, inner }
+        Self {
+            status,
+            inner,
+            _in_flight: in_flight,
+        }
     }
 
     /// The HTTP status code as an integer.

@@ -14,10 +14,22 @@ use gpui_kit::{
     },
     div, px,
 };
-use ui_components::{RAIL_WIDTH, Rail, RailExpansion, RailItem};
+use ui_components::{
+    RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    fetch_status::{
+        FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
+    },
+};
 use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore,
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
+    fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
+};
+
+#[cfg(debug_assertions)]
+use ui_state::{
+    actions::{DebugAniListUnavailable, DebugRateLimited, DebugSlowFetch},
+    fetch_status::DebugFetch,
 };
 
 use crate::{
@@ -85,6 +97,7 @@ pub struct AppShell {
     focus: FocusHandle,
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
+    fetch_status: Entity<FetchStatus>,
     prefs: RailPrefs,
     save_prefs: SavePrefs,
     /// The latest save, if it is still running.
@@ -112,6 +125,7 @@ impl AppShell {
     /// `save_prefs` runs whenever the user changes `prefs`.
     pub fn new(
         prefs: RailPrefs,
+        fetch_status: Entity<FetchStatus>,
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
@@ -131,12 +145,14 @@ impl AppShell {
         );
         let badges = cx.new(|_| RailBadges::placeholder());
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
+        cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
             focus,
             palette,
             _palette_events: palette_events,
+            fetch_status,
             prefs,
             save_prefs: Rc::new(save_prefs),
             saving: None,
@@ -306,10 +322,12 @@ impl AppShell {
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
                     .flex()
                     .justify_center()
                     .child(search_pill(cx)),
             )
+            .children(self.fetch_status.read(cx).countdown().map(rate_limit_chip))
     }
 
     fn render_rail(&self, cx: &mut Context<'_, Self>) -> Rail {
@@ -374,7 +392,7 @@ impl AppShell {
                 rows(*route),
                 colors.muted_foreground,
             ))
-            .children((*route == Route::Home).then(|| poster_grid(colors.muted, colors.border)))
+            .children((*route == Route::Home).then(|| self.render_home_posters(cx)))
             .children((*route == Route::Settings).then(|| {
                 div().px_8().child(
                     Switch::new("setting-click-pin")
@@ -400,6 +418,42 @@ impl AppShell {
             .child(content)
             .test_support()
     }
+
+    #[cfg(debug_assertions)]
+    fn debug_fetch(&self, fetch: DebugFetch, cx: &mut Context<'_, Self>) {
+        self.fetch_status.update(cx, |_, cx| {
+            FetchStatus::request(FetchCommand::Debug(fetch), cx);
+        });
+    }
+
+    fn render_home_posters(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let state = self.fetch_status.read(cx).section(HOME_POSTERS);
+        let retry = cx.listener(|shell, _: &ClickEvent, _, cx| {
+            shell.fetch_status.update(cx, |_, cx| {
+                FetchStatus::request(FetchCommand::Retry(HOME_POSTERS), cx);
+            });
+        });
+        match state {
+            Some(SectionStatus::Failed(detail)) => div().px_8().child(error_card(
+                "fetch-error",
+                FetchError::Request(detail),
+                retry,
+            )),
+            Some(SectionStatus::AniListUnavailable) => div().px_8().child(error_card(
+                "fetch-error",
+                FetchError::AniListUnavailable,
+                retry,
+            )),
+            Some(SectionStatus::OfflineEmpty) => {
+                div().px_8().child(offline_empty("offline-empty", retry))
+            }
+            Some(SectionStatus::OfflineCached(age)) => div()
+                .child(div().px_8().pb_4().child(offline_banner(age.as_str())))
+                .child(poster_grid(colors.muted, colors.border)),
+            _ => div().child(poster_grid(colors.muted, colors.border)),
+        }
+    }
 }
 
 impl Render for AppShell {
@@ -417,7 +471,7 @@ impl Render for AppShell {
                 .child(self.render_route(cx))
                 .child(div().absolute().top_0().left_0().h_full().child(rail))
         };
-        div()
+        let shell = div()
             .id("shell")
             .track_focus(&self.focus)
             .key_context(WORKSPACE)
@@ -439,7 +493,20 @@ impl Render for AppShell {
             .bg(colors.background)
             .text_color(colors.foreground)
             .child(self.render_titlebar(cx))
-            .child(body)
+            .children(self.fetch_status.read(cx).loading().then(fetch_loader))
+            .child(body);
+        #[cfg(debug_assertions)]
+        let shell = shell
+            .on_action(cx.listener(|shell, _: &DebugSlowFetch, _, cx| {
+                shell.debug_fetch(DebugFetch::Slow, cx);
+            }))
+            .on_action(cx.listener(|shell, _: &DebugRateLimited, _, cx| {
+                shell.debug_fetch(DebugFetch::RateLimited, cx);
+            }))
+            .on_action(cx.listener(|shell, _: &DebugAniListUnavailable, _, cx| {
+                shell.debug_fetch(DebugFetch::Unavailable, cx);
+            }));
+        shell
     }
 }
 
@@ -448,7 +515,10 @@ fn search_pill(cx: &mut Context<'_, AppShell>) -> impl IntoElement {
     let theme = cx.theme();
     div()
         .id("search-pill")
-        .w(px(320.))
+        .w_full()
+        .max_w(px(320.))
+        .min_w_0()
+        .overflow_hidden()
         .h(px(28.))
         .px_3()
         .flex()
@@ -521,6 +591,7 @@ pub(crate) fn icon(route: Route) -> IconName {
 mod tests {
     use std::{cell::RefCell, rc::Rc, time::Duration};
 
+    use domain::{AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
         Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -529,7 +600,12 @@ mod tests {
         point, px, size,
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
-    use ui_state::{Route, actions::OpenCommandPalette};
+    use ui_state::{
+        Route,
+        actions::OpenCommandPalette,
+        events::{Sender, channel, start_pump},
+        fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
+    };
 
     use super::{AppShell, HOVER_OPEN_DELAY, RailMode, RailPrefs};
     use crate::palette::Mode;
@@ -582,9 +658,11 @@ mod tests {
                     ..WindowOptions::default()
                 };
                 gpui_kit::open_window(options, cx, |window, cx| {
+                    let fetch_status = cx.new(|_| FetchStatus::default());
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
+                            fetch_status,
                             move |prefs: &RailPrefs, _: &mut gpui_kit::App| {
                                 log.borrow_mut().push(prefs.clone());
                                 Task::ready(())
@@ -601,6 +679,18 @@ mod tests {
                 view,
                 saved,
             }
+        }
+
+        fn events(&self, cx: &mut TestAppContext) -> Sender {
+            let (sender, receiver) = channel();
+            cx.update(|cx| {
+                let store = self.view.read(cx).fetch_status.clone();
+                start_pump(cx, receiver, move |event, cx| {
+                    store.update(cx, |store, cx| store.apply(event, cx));
+                })
+                .detach();
+            });
+            sender
         }
 
         fn act(
@@ -731,6 +821,239 @@ mod tests {
         fn offset(&self, cx: &mut TestAppContext) -> Point<Pixels> {
             self.view.read_with(cx, |shell, _| shell.scroll.offset())
         }
+    }
+
+    #[gpui_kit::test]
+    fn the_event_pump_shows_only_requests_that_reach_300_ms(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let sender = shell.events(cx);
+        let now = cx.executor().now();
+
+        sender.send(AppEvent::FetchActivity(Some(now))).unwrap();
+        cx.run_until_parked();
+        shell.wait(cx, Duration::from_millis(299));
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("fetch-loader").is_none(),
+                "loader must be hidden"
+            );
+        });
+        shell.wait(cx, Duration::from_millis(1));
+        shell.act(cx, |window, _| {
+            assert!(
+                window.find("fetch-loader").visible(),
+                "loader appears at 300ms"
+            );
+            assert_eq!(
+                window.find("fetch-progress").bounds().size.height,
+                px(2.),
+                "top bar is 2px tall"
+            );
+        });
+
+        sender.send(AppEvent::FetchActivity(None)).unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("fetch-loader").is_none(),
+                "loader must be hidden"
+            );
+        });
+
+        sender
+            .send(AppEvent::FetchActivity(Some(cx.executor().now())))
+            .unwrap();
+        cx.run_until_parked();
+        shell.wait(cx, Duration::from_millis(100));
+        sender.send(AppEvent::FetchActivity(None)).unwrap();
+        cx.run_until_parked();
+        shell.wait(cx, Duration::from_millis(500));
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("fetch-loader").is_none(),
+                "loader must be hidden"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_titlebar_counts_down_until_anilist_can_accept_requests(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        cx.simulate_window_resize(shell.window.into(), size(px(420.), px(800.)));
+        let sender = shell.events(cx);
+        sender
+            .send(AppEvent::AniListRateLimit(Some(AniListWait::lockout(
+                cx.executor().now() + Duration::from_millis(2500),
+            ))))
+            .unwrap();
+        cx.run_until_parked();
+
+        for seconds in [3, 2, 1] {
+            shell.act(cx, |window, _| {
+                let chip = window.find("anilist-rate-limit");
+                assert!(chip.visible(), "active limit is visible");
+                assert!(
+                    chip.bounds().right() <= px(420.),
+                    "the chip fits a narrow window"
+                );
+                assert!(
+                    window.find("search-pill").bounds().right() <= chip.bounds().left(),
+                    "search leaves room for the chip"
+                );
+                assert!(
+                    has_text(window, &format!("AniList rate limit · {seconds}s")),
+                    "expected {seconds}s remaining"
+                );
+            });
+            shell.wait(
+                cx,
+                Duration::from_millis(if seconds == 3 { 500 } else { 1000 }),
+            );
+        }
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("anilist-rate-limit").is_none(),
+                "chip clears at zero"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_titlebar_keeps_the_chip_until_the_queue_clears(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let sender = shell.events(cx);
+        let until = cx.executor().now() + Duration::from_secs(1);
+        sender
+            .send(AppEvent::AniListRateLimit(Some(AniListWait::queued(until))))
+            .unwrap();
+        cx.run_until_parked();
+
+        shell.wait(cx, Duration::from_secs(1));
+        shell.act(cx, |window, _| {
+            assert!(
+                has_text(window, "AniList rate limit · 0s"),
+                "the queue still has a waiter"
+            );
+        });
+
+        sender.send(AppEvent::AniListRateLimit(None)).unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("anilist-rate-limit").is_none(),
+                "the last waiter left"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn section_fetch_outcomes_keep_other_content_and_retry_the_section(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let sender = shell.events(cx);
+        let retries = Rc::new(RefCell::new(Vec::new()));
+        let _retry = cx.update(|cx| {
+            let store = shell.view.read(cx).fetch_status.clone();
+            let retries = Rc::clone(&retries);
+            cx.subscribe(&store, move |_, event: &FetchCommand, _| {
+                retries.borrow_mut().push(*event);
+            })
+        });
+        let show = |cx: &mut TestAppContext, state| {
+            sender
+                .send(AppEvent::SectionFetch {
+                    section: HOME_POSTERS,
+                    state,
+                })
+                .unwrap();
+            cx.run_until_parked();
+        };
+
+        show(cx, SectionFetch::Failed("The connection timed out.".into()));
+        shell.act(cx, |window, _| {
+            assert!(
+                window.find("fetch-error").visible(),
+                "only the failed section gets a card"
+            );
+            assert!(
+                has_text(window, "Couldn’t load this section"),
+                "generic error title"
+            );
+            assert!(
+                has_text(window, "The connection timed out."),
+                "failure detail"
+            );
+            assert!(
+                window.find("rail-home").visible(),
+                "the shell still renders"
+            );
+        });
+        shell.click(cx, "fetch-retry");
+
+        show(cx, SectionFetch::AniListUnavailable);
+        shell.act(cx, |window, _| {
+            assert!(
+                has_text(window, "AniList unavailable"),
+                "403 has a dedicated message"
+            );
+        });
+        shell.click(cx, "fetch-retry");
+
+        show(
+            cx,
+            SectionFetch::Offline {
+                last_updated: Some(std::time::SystemTime::now()),
+            },
+        );
+        shell.act(cx, |window, _| {
+            assert!(
+                window.find("offline-banner").visible(),
+                "the banner accompanies cached content"
+            );
+            assert!(
+                has_text(window, "Offline: last updated just now"),
+                "the banner includes the cache age"
+            );
+            assert!(
+                window.find("poster-1").visible(),
+                "cached content remains visible"
+            );
+        });
+
+        show(cx, SectionFetch::Offline { last_updated: None });
+        shell.act(cx, |window, _| {
+            assert!(
+                window.find("offline-empty").visible(),
+                "offline without cache has an empty state"
+            );
+            assert!(
+                window.try_find("poster-1").is_none(),
+                "there is no cached content"
+            );
+        });
+        shell.click(cx, "fetch-retry");
+        assert_eq!(
+            *retries.borrow(),
+            [FetchCommand::Retry(HOME_POSTERS); 3],
+            "Retry requests target the failed section"
+        );
+
+        show(cx, SectionFetch::Ready);
+        shell.act(cx, |window, _| {
+            assert!(
+                window.find("poster-1").visible(),
+                "successful fetch restores the section"
+            );
+            assert!(
+                window.try_find("offline-empty").is_none(),
+                "recovery clears the empty state"
+            );
+        });
+    }
+
+    fn has_text(window: &gpui_kit::Window, expected: &str) -> bool {
+        gpui_kit::base::test_support::texts(window)
+            .iter()
+            .any(|text| text.text() == expected)
     }
 
     fn pinned() -> RailPrefs {

@@ -518,6 +518,7 @@ dependencies = [
  "anyhow",
  "axum",
  "db",
+ "domain",
  "gpui-kit",
  "net",
  "settings",
@@ -8269,6 +8270,7 @@ dependencies = [
 name = "ui-screens"
 version = "0.1.0"
 dependencies = [
+ "domain",
  "gpui-kit",
  "ui-components",
  "ui-state",

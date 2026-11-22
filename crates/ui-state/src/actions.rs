@@ -26,6 +26,19 @@ actions!(
     ]
 );
 
+#[cfg(debug_assertions)]
+actions!(
+    workspace,
+    [
+        /// Sends a slow loopback request to exercise the loader.
+        DebugSlowFetch,
+        /// Triggers a loopback 429 to exercise the countdown.
+        DebugRateLimited,
+        /// Triggers a loopback 403 to exercise section recovery.
+        DebugAniListUnavailable
+    ]
+);
+
 /// Back and forward: `cmd-[` / `cmd-]` on macOS, `ctrl-[` / `ctrl-]`
 /// elsewhere. Windows and Linux also bind `alt-left` / `alt-right`.
 #[cfg(target_os = "macos")]
@@ -52,6 +65,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(PALETTE_KEY, OpenCommandPalette, Some(WORKSPACE)),
         KeyBinding::new("q", OpenCommandPalette, Some(WORKSPACE_NOT_TYPING)),
         KeyBinding::new("s", OpenSearch, Some(WORKSPACE_NOT_TYPING)),
+    ]);
+    #[cfg(debug_assertions)]
+    cx.bind_keys([
+        KeyBinding::new("f8", DebugSlowFetch, Some(WORKSPACE)),
+        KeyBinding::new("f9", DebugRateLimited, Some(WORKSPACE)),
+        KeyBinding::new("f10", DebugAniListUnavailable, Some(WORKSPACE)),
     ]);
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     cx.bind_keys([
