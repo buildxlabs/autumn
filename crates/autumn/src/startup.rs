@@ -3,6 +3,7 @@
 
 use anyhow::Context as _;
 use db::Db;
+use net::{Client, PosterCache};
 use settings::{AppPaths, Settings};
 use tokio::runtime::Runtime;
 
@@ -16,6 +17,10 @@ pub(crate) struct Started {
     pub(crate) db: Db,
     /// The settings from the database, or the defaults.
     pub(crate) settings: Settings,
+    /// The shared HTTP client and its rate limits.
+    pub(crate) client: Client,
+    /// The on-disk poster cache for GPUI's image requests.
+    pub(crate) poster_cache: PosterCache,
 }
 
 /// Creates the app dirs, installs logging, opens the database, imports the
@@ -47,9 +52,15 @@ pub(crate) fn run(runtime: &Runtime) -> anyhow::Result<Started> {
     // struct may be logged. Revisit if a secret-adjacent field is added.
     tracing::debug!(?settings, "settings loaded");
 
+    let client = Client::new().context("could not create the shared HTTP client")?;
+    let poster_cache =
+        PosterCache::new(paths.cache_dir()).context("could not open the poster cache")?;
+
     Ok(Started {
         paths,
         db,
         settings,
+        client,
+        poster_cache,
     })
 }
