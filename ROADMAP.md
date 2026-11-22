@@ -62,9 +62,9 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 ### Phase 0: Foundation and window shell
 
 - [x] Resolve O3 (MSRV); record it in this file (D11: Rust 1.100).
-- [ ] Root `Cargo.toml`: `[workspace.dependencies]`, `[profile.dev.package."*"] opt-level = 2`, release profile (`lto`, `codegen-units = 1`, `strip`).
-- [ ] Turn `crates/autumn` into the binary. Create `domain`, `settings`, `ui-theme`, `ui-components`, `ui-state`, `ui-screens`.
-- [ ] Add `gpui-kit`; get `cargo deny check` green with the GPUI tree. With gpui-kit 0.10 it already exits 0, with 68 non-blocking duplicate-version warnings ([research](docs/research/cargo-deny-gpui-kit.md)); which exceptions to accept is open in [#22](https://github.com/buildxlabs/autumn/issues/22).
+- [x] Root `Cargo.toml`: `[workspace.dependencies]`, `[profile.dev.package."*"] opt-level = 2`, release profile (`lto`, `codegen-units = 1`, `strip`).
+- [x] Turn `crates/autumn` into the binary. Create `domain`, `settings`, `ui-theme`, `ui-components`, `ui-state`, `ui-screens`.
+- [x] Add `gpui-kit`; get `cargo deny check` green with the GPUI tree. With gpui-kit 0.10 it already exits 0, with 68 non-blocking duplicate-version warnings ([research](docs/research/cargo-deny-gpui-kit.md)); which exceptions to accept is open in [#22](https://github.com/buildxlabs/autumn/issues/22).
 - [ ] Tokio bridge + event pump (ARCHITECTURE §4) with a test that round-trips a command and an event.
 - [ ] Window: transparent 40px titlebar with back/forward and a search pill, our own sidebar rail with hover expand (click-pin setting) and "More" overflow, router with back/forward and scroll restore, theme tokens applied (ARCHITECTURE §5).
 - [ ] Logging to file. App paths created on first run (ARCHITECTURE §7–8).

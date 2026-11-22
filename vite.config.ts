@@ -49,6 +49,23 @@ export default defineConfig({
       // the files it reads; the Rust and prose steps are plain commands.
       "check:all": {
         command: "pnpm lint:rust && pnpm deny && pnpm lint:typos && vp lint && vp fmt --check",
+        // Tasks start from a clean environment. Cargo build scripts need the
+        // Nix devshell's compiler, linker and pkg-config variables (Linux
+        // finds fontconfig and friends through them) and the macOS SDK path.
+        cache: {
+          untrackedEnv: [
+            "NIX_*",
+            "PKG_CONFIG*",
+            "LD_LIBRARY_PATH",
+            "OPENSSL_*",
+            "SDKROOT",
+            "CC",
+            "CXX",
+            "AR",
+            "LD",
+            "RUST_SRC_PATH",
+          ],
+        },
       },
     },
   },

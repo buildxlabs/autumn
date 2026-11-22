@@ -4,7 +4,21 @@
   nodeToolchain,
 }:
 let
-  inherit (pkgs.stdenv.hostPlatform) isDarwin;
+  inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
+
+  # GPUI's Linux backends: fontconfig and freetype for text, xkbcommon for
+  # keymaps, Wayland and X11/xcb for windows, Vulkan for wgpu. The build
+  # finds them through pkg-config; wgpu and the Wayland client also dlopen
+  # them at run time, hence LD_LIBRARY_PATH below.
+  linuxGuiLibs = with pkgs; [
+    fontconfig
+    freetype
+    libxkbcommon
+    wayland
+    libxcb
+    libx11
+    vulkan-loader
+  ];
 in
 pkgs.mkShell {
   packages = with pkgs; [
@@ -33,7 +47,9 @@ pkgs.mkShell {
 
   # Leave buildInputs empty on Darwin so Nix does not pull its SDK into the
   # shell; xcrun should use the host's toolchain.
-  buildInputs = [ ];
+  buildInputs = pkgs.lib.optionals isLinux linuxGuiLibs;
+
+  LD_LIBRARY_PATH = pkgs.lib.optionalString isLinux (pkgs.lib.makeLibraryPath linuxGuiLibs);
 
   # OpenSSL crates (openssl-sys, native-tls) find the store build without
   # pkg-config having to guess. `pkgs.openssl` is the bin output, so name the
