@@ -1,0 +1,3 @@
+# Check out text files with LF on every OS, so the formatters agree with
+# what is committed. Windows runners default to core.autocrlf=true.
+* text=auto eol=lf

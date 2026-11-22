@@ -53,6 +53,7 @@ fn main() -> ExitCode {
             ui_theme::init(cx);
             // No store consumes an event yet; the first engine module adds one.
             ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
+            ui_state::actions::bind_keys(cx);
             if let Err(err) = open_main_window(cx) {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
@@ -75,7 +76,9 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
         // Lets the titlebar drag the window and draw client-side controls.
         ..TitleBar::window_options()
     };
-    gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| AppShell::new()))?;
+    gpui_kit::open_window(options, cx, |window, cx| {
+        cx.new(|cx| AppShell::new(window, cx))
+    })?;
     Ok(())
 }
 
