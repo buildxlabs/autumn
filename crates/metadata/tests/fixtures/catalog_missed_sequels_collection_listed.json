@@ -1,0 +1,20 @@
+{
+  "data": {
+    "MediaListCollection": {
+      "lists": [
+        {
+          "entries": [
+            {
+              "mediaId": 16498,
+              "status": "COMPLETED"
+            },
+            {
+              "mediaId": 20958,
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

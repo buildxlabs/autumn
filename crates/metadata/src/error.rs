@@ -16,6 +16,11 @@ pub enum Error {
     #[error("AniList has no such media")]
     NotFound,
 
+    /// AniList answered with an invalid media id where a single media was
+    /// requested. List items with invalid ids are dropped instead.
+    #[error("AniList returned media with an invalid id")]
+    InvalidMediaId,
+
     /// AniList answered with a GraphQL error.
     #[error("AniList returned an error: {message}")]
     Api {

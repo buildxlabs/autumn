@@ -432,3 +432,39 @@ async fn an_unlisted_sort_is_sent_as_spelled() {
 
     assert_eq!(mock.variables()["sort"], json!(["TITLE_ROMAJI"]));
 }
+
+#[tokio::test]
+async fn cards_with_an_invalid_anilist_id_are_dropped() {
+    let path = format!(
+        "{}/tests/fixtures/search_frieren.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let good = fixture["data"]["Page"]["media"][0].clone();
+    let mut negative = good.clone();
+    negative["id"] = json!(-1);
+    let mut zero = good.clone();
+    zero["id"] = json!(0);
+    let body = json!({
+        "data": {
+            "Page": {
+                "pageInfo": {"hasNextPage": false},
+                "media": [negative, zero, good]
+            }
+        }
+    });
+    let mock = Mock::serve_json(StatusCode::OK, body).await;
+
+    let page = mock
+        .client
+        .search(&SearchFilters::default(), PageRequest::default())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        page.media.len(),
+        1,
+        "only the card with a valid id survives"
+    );
+    assert_eq!(page.media[0].anilist_id, 154_587);
+}

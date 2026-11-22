@@ -79,10 +79,13 @@ impl From<MediaType> for MediaKind {
     }
 }
 
-impl From<MediaCard> for MediaSummary {
-    fn from(card: MediaCard) -> Self {
-        Self {
-            anilist_id: count(card.id).unwrap_or_default(),
+impl MediaSummary {
+    /// Converts a card into a summary, dropping one whose AniList id is
+    /// invalid: AniList ids are positive, so a negative id must never
+    /// become id 0.
+    pub(crate) fn from_card(card: MediaCard) -> Option<Self> {
+        Some(Self {
+            anilist_id: count(card.id).filter(|id| *id > 0)?,
             mal_id: card.id_mal.and_then(count),
             kind: card.kind.map(MediaKind::from),
             title: card.title.map_or_default(MediaTitle::from),
@@ -97,7 +100,7 @@ impl From<MediaCard> for MediaSummary {
             mean_score: card.mean_score.and_then(|score| u8::try_from(score).ok()),
             genres: card.genres.into_iter().flatten().flatten().collect(),
             is_adult: card.is_adult.unwrap_or_default(),
-        }
+        })
     }
 }
 
@@ -114,7 +117,7 @@ impl From<Title> for MediaTitle {
 impl CoverImage {
     /// The largest cover AniList has: `extraLarge`, then `large`, then
     /// `medium` (decision #20).
-    fn poster(self) -> Option<String> {
+    pub(crate) fn poster(self) -> Option<String> {
         self.extra_large.or(self.large).or(self.medium)
     }
 }

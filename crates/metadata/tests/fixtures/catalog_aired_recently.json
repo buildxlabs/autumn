@@ -1,0 +1,1800 @@
+{
+  "data": {
+    "Page": {
+      "airingSchedules": [
+        {
+          "id": 419244,
+          "episode": 8,
+          "airingAt": 1795354200,
+          "timeUntilAiring": -8981,
+          "media": {
+            "id": 209032,
+            "idMal": 63667,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Mahou no Shimai LuluttoLilly Part 2",
+              "english": "Magical Sisters LuluttoLilly Part 2",
+              "native": "魔法の姉妹ルルットリリィ 第2クール"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209032-R0gP5IFdk7Vd.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209032-R0gP5IFdk7Vd.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209032-R0gP5IFdk7Vd.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/209032-hpYi0dlKkagd.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 69,
+            "genres": ["Mahou Shoujo", "Music"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795959000,
+              "timeUntilAiring": 595819
+            }
+          }
+        },
+        {
+          "id": 418256,
+          "episode": 8,
+          "airingAt": 1795352400,
+          "timeUntilAiring": -10781,
+          "media": {
+            "id": 202079,
+            "idMal": 62907,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Oji-san wa Kawaii Mono ga Osuki.",
+              "english": "Uncle's Obsession with Cute Things",
+              "native": "おじさんはカワイイものがお好き。"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202079-nwBpDUms0Bab.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202079-nwBpDUms0Bab.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202079-nwBpDUms0Bab.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/202079-oeULOdC1R1AR.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 65,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795957200,
+              "timeUntilAiring": 594019
+            }
+          }
+        },
+        {
+          "id": 419794,
+          "episode": 8,
+          "airingAt": 1795350600,
+          "timeUntilAiring": -12581,
+          "media": {
+            "id": 186541,
+            "idMal": 60948,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Mezametara Saikyou Soubi to Uchuusen-mochi datta node, Ikkodate Mezashite Youhei to shite Jiyuu ni Ikitai",
+              "english": "Reborn as a Space Mercenary: I Woke Up Piloting the Strongest Starship!",
+              "native": "目覚めたら最強装備と宇宙船持ちだったので、一戸建て目指して傭兵として自由に生きたい"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx186541-caYpLsLmbCh7.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx186541-caYpLsLmbCh7.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx186541-caYpLsLmbCh7.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 13,
+            "chapters": null,
+            "meanScore": 69,
+            "genres": ["Action", "Comedy", "Drama", "Mecha", "Romance", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795955400,
+              "timeUntilAiring": 592219
+            }
+          }
+        },
+        {
+          "id": 422508,
+          "episode": 9,
+          "airingAt": 1795348800,
+          "timeUntilAiring": -14381,
+          "media": {
+            "id": 215835,
+            "idMal": 64867,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Umayuru: Full Gate!",
+              "english": null,
+              "native": "うまゆるふるげ〜と!"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx215835-B0seSw93V5qM.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx215835-B0seSw93V5qM.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx215835-B0seSw93V5qM.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 26,
+            "chapters": null,
+            "meanScore": 74,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 10,
+              "airingAt": 1795953600,
+              "timeUntilAiring": 590419
+            }
+          }
+        },
+        {
+          "id": 394999,
+          "episode": 2859,
+          "airingAt": 1795339800,
+          "timeUntilAiring": -23381,
+          "media": {
+            "id": 2406,
+            "idMal": 2406,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sazae-san",
+              "english": null,
+              "native": "サザエさん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 1969,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 2860,
+              "airingAt": 1795944600,
+              "timeUntilAiring": 581419
+            }
+          }
+        },
+        {
+          "id": 416934,
+          "episode": 393,
+          "airingAt": 1795338000,
+          "timeUntilAiring": -25181,
+          "media": {
+            "id": 118123,
+            "idMal": 44042,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Holo no Graffiti",
+              "english": null,
+              "native": "ホロのぐらふぃてぃ"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx118123-xqn5fYsjKXJU.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx118123-xqn5fYsjKXJU.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx118123-xqn5fYsjKXJU.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/118123-BvHyzWd850nZ.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2019,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 79,
+            "genres": ["Action", "Adventure", "Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 394,
+              "airingAt": 1795942800,
+              "timeUntilAiring": 579619
+            }
+          }
+        },
+        {
+          "id": 419581,
+          "episode": 7,
+          "airingAt": 1795336200,
+          "timeUntilAiring": -26981,
+          "media": {
+            "id": 213658,
+            "idMal": 64505,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Diamond no Ace act II: Second Season Part 2",
+              "english": "Ace of the Diamond act II -Second Season-",
+              "native": "ダイヤのA actⅡ -Second Season- 第2クール"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213658-D3BPJaqawLxS.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213658-D3BPJaqawLxS.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213658-D3BPJaqawLxS.png"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 87,
+            "genres": ["Sports"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795941000,
+              "timeUntilAiring": 577819
+            }
+          }
+        },
+        {
+          "id": 421988,
+          "episode": 8,
+          "airingAt": 1795334400,
+          "timeUntilAiring": -28781,
+          "media": {
+            "id": 191788,
+            "idMal": 61603,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Aoashi 2nd Season",
+              "english": "Aoashi Season 2",
+              "native": "アオアシ 第2期"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx191788-XC6F24LdX6a4.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx191788-XC6F24LdX6a4.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx191788-XC6F24LdX6a4.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/191788-tyhsHpXeF26X.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 24,
+            "chapters": null,
+            "meanScore": 82,
+            "genres": ["Sports"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795939200,
+              "timeUntilAiring": 576019
+            }
+          }
+        },
+        {
+          "id": 422229,
+          "episode": 7,
+          "airingAt": 1795334400,
+          "timeUntilAiring": -28781,
+          "media": {
+            "id": 213657,
+            "idMal": 64503,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Yozakura-san Chi no Daisakusen 2nd Season Part 2",
+              "english": "Mission: Yozakura Family Season 2 Part 2",
+              "native": "夜桜さんちの大作戦 第2期 第2クール"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213657-ORNXVEBCjXaz.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213657-ORNXVEBCjXaz.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213657-ORNXVEBCjXaz.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 76,
+            "genres": ["Action", "Comedy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795939200,
+              "timeUntilAiring": 576019
+            }
+          }
+        },
+        {
+          "id": 423030,
+          "episode": 7,
+          "airingAt": 1795332600,
+          "timeUntilAiring": -30581,
+          "media": {
+            "id": 189123,
+            "idMal": 61323,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Ao no Hako Season 2",
+              "english": "Blue Box Season 2",
+              "native": "アオのハコ Season２"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx189123-0secXELIhkIW.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189123-0secXELIhkIW.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx189123-0secXELIhkIW.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/189123-aGJ7pIDUo2Xs.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 82,
+            "genres": ["Romance", "Slice of Life", "Sports"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795937400,
+              "timeUntilAiring": 574219
+            }
+          }
+        },
+        {
+          "id": 423631,
+          "episode": 1,
+          "airingAt": 1795320000,
+          "timeUntilAiring": -43181,
+          "media": {
+            "id": 219986,
+            "idMal": 64448,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Doupo Cangqiong Movie: Shuang Di Zhi Zhan",
+              "english": null,
+              "native": "斗破苍穹剧场版 双帝之战"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx219986-AJSNzqbspfOY.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx219986-AJSNzqbspfOY.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx219986-AJSNzqbspfOY.jpg"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "FINISHED",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 1,
+            "chapters": null,
+            "meanScore": 70,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": null
+          }
+        },
+        {
+          "id": 408377,
+          "episode": 432,
+          "airingAt": 1795312800,
+          "timeUntilAiring": -50381,
+          "media": {
+            "id": 155723,
+            "idMal": null,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Wushen Zhuzai: Da Wei Pian",
+              "english": null,
+              "native": "武神主宰 大威篇"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx155723-hM261Imc5yfd.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx155723-hM261Imc5yfd.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx155723-hM261Imc5yfd.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 448,
+            "chapters": null,
+            "meanScore": 77,
+            "genres": ["Action", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 433,
+              "airingAt": 1795917600,
+              "timeUntilAiring": 554419
+            }
+          }
+        },
+        {
+          "id": 424204,
+          "episode": 23,
+          "airingAt": 1795312800,
+          "timeUntilAiring": -50381,
+          "media": {
+            "id": 213356,
+            "idMal": 64398,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Guangyin Zhi Wai 2",
+              "english": "Beyond Time's Gaze 2",
+              "native": "光阴之外2"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213356-nYFTX2yeMBd5.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213356-nYFTX2yeMBd5.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213356-nYFTX2yeMBd5.jpg"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 52,
+            "chapters": null,
+            "meanScore": 86,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 24,
+              "airingAt": 1795917600,
+              "timeUntilAiring": 554419
+            }
+          }
+        },
+        {
+          "id": 422181,
+          "episode": 8,
+          "airingAt": 1795309200,
+          "timeUntilAiring": -53981,
+          "media": {
+            "id": 217787,
+            "idMal": 64211,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Pop Pap Polters",
+              "english": null,
+              "native": "ポップパップポルターズ"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b217787-NHLlgGiqy59P.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b217787-NHLlgGiqy59P.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b217787-NHLlgGiqy59P.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 47,
+            "genres": ["Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795914000,
+              "timeUntilAiring": 550819
+            }
+          }
+        },
+        {
+          "id": 410162,
+          "episode": 34,
+          "airingAt": 1795307400,
+          "timeUntilAiring": -55781,
+          "media": {
+            "id": 206523,
+            "idMal": 63352,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Onegai AiPri",
+              "english": null,
+              "native": "おねがいアイプリ"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx206523-2IaJCk4R7i63.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx206523-2IaJCk4R7i63.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx206523-2IaJCk4R7i63.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 62,
+            "genres": ["Music"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 35,
+              "airingAt": 1795912200,
+              "timeUntilAiring": 549019
+            }
+          }
+        },
+        {
+          "id": 420097,
+          "episode": 8,
+          "airingAt": 1795306560,
+          "timeUntilAiring": -56621,
+          "media": {
+            "id": 216860,
+            "idMal": null,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Punirunes Puni 4",
+              "english": null,
+              "native": "ぷにるんず ぷに４"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx216860-ghfSopHbPVNa.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx216860-ghfSopHbPVNa.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx216860-ghfSopHbPVNa.png"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 60,
+            "genres": ["Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795911360,
+              "timeUntilAiring": 548179
+            }
+          }
+        },
+        {
+          "id": 422989,
+          "episode": 42,
+          "airingAt": 1795303800,
+          "timeUntilAiring": -59381,
+          "media": {
+            "id": 202957,
+            "idMal": 63042,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Meitantei Precure!",
+              "english": "Star Detective Precure!",
+              "native": "名探偵プリキュア！"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202957-fxZGgJTvwXzP.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202957-fxZGgJTvwXzP.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202957-fxZGgJTvwXzP.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/202957-B9U0hNv2Dqap.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "WINTER",
+            "seasonYear": 2026,
+            "episodes": 51,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Mahou Shoujo", "Mystery"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 43,
+              "airingAt": 1795908600,
+              "timeUntilAiring": 545419
+            }
+          }
+        },
+        {
+          "id": 423321,
+          "episode": 85,
+          "airingAt": 1795302000,
+          "timeUntilAiring": -61181,
+          "media": {
+            "id": 185646,
+            "idMal": 60534,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Koupen-chan",
+              "english": null,
+              "native": "コウペンちゃん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx185646-2eGmsnaSHiLC.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx185646-2eGmsnaSHiLC.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx185646-2eGmsnaSHiLC.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/185646-69FyAu3rfhEC.jpg",
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2025,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 73,
+            "genres": ["Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 86,
+              "airingAt": 1795906800,
+              "timeUntilAiring": 543619
+            }
+          }
+        },
+        {
+          "id": 410610,
+          "episode": 33,
+          "airingAt": 1795298400,
+          "timeUntilAiring": -64781,
+          "media": {
+            "id": 204269,
+            "idMal": 63125,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Odekake Kozame Season 2",
+              "english": "Little Shark's Day Out Season 2",
+              "native": "おでかけ子ザメ シーズン2"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx204269-fTR4iyVjTHiC.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204269-fTR4iyVjTHiC.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx204269-fTR4iyVjTHiC.png"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2026,
+            "episodes": 72,
+            "chapters": null,
+            "meanScore": 77,
+            "genres": ["Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 34,
+              "airingAt": 1795903200,
+              "timeUntilAiring": 540019
+            }
+          }
+        },
+        {
+          "id": 422012,
+          "episode": 8,
+          "airingAt": 1795298400,
+          "timeUntilAiring": -64781,
+          "media": {
+            "id": 213298,
+            "idMal": 64430,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Yuruyuru Zukan",
+              "english": null,
+              "native": "ゆるゆる図鑑"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213298-ymB1Sw0yDZ0Y.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213298-ymB1Sw0yDZ0Y.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213298-ymB1Sw0yDZ0Y.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": [],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795903200,
+              "timeUntilAiring": 540019
+            }
+          }
+        },
+        {
+          "id": 422361,
+          "episode": 8,
+          "airingAt": 1795298400,
+          "timeUntilAiring": -64781,
+          "media": {
+            "id": 218011,
+            "idMal": 64028,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Tanuki to Kitsune (TV)",
+              "english": "Raccoon Dog & Fox",
+              "native": "タヌキとキツネ"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx218011-dPgr1MlfSuhH.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx218011-dPgr1MlfSuhH.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx218011-dPgr1MlfSuhH.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 42,
+            "genres": ["Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795903200,
+              "timeUntilAiring": 540019
+            }
+          }
+        },
+        {
+          "id": 419569,
+          "episode": 8,
+          "airingAt": 1795278600,
+          "timeUntilAiring": -84581,
+          "media": {
+            "id": 202250,
+            "idMal": 62922,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Kashita Maryoku wa [Revo Barai] de Kyousei Choushuu",
+              "english": "Magic Repo Man: Dumped by My Party, I’ll Cash In With a Cute Support Fairy to Become the Strongest!",
+              "native": "貸した魔力は【リボ払い】で強制徴収"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202250-mpm2cvr92Au2.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202250-mpm2cvr92Au2.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202250-mpm2cvr92Au2.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 62,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795883400,
+              "timeUntilAiring": 520219
+            }
+          }
+        },
+        {
+          "id": 417721,
+          "episode": 8,
+          "airingAt": 1795276560,
+          "timeUntilAiring": -86621,
+          "media": {
+            "id": 209872,
+            "idMal": 63801,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Ranma 1/2 (2024) 3rd Season",
+              "english": "Ranma1/2 (2024) Season 3",
+              "native": "らんま1/2 (2024) 第3期"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209872-RBeVPqwejHFp.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209872-RBeVPqwejHFp.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209872-RBeVPqwejHFp.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/209872-Qczb4k9Mw0pq.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 80,
+            "genres": ["Action", "Comedy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795881360,
+              "timeUntilAiring": 518179
+            }
+          }
+        },
+        {
+          "id": 418851,
+          "episode": 8,
+          "airingAt": 1795275000,
+          "timeUntilAiring": -88181,
+          "media": {
+            "id": 191656,
+            "idMal": 61578,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Seitokai ni mo Ana wa Aru!",
+              "english": "Even the Student Council Has Its Holes!",
+              "native": "生徒会にも穴はある！"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx191656-xFHtxM8SUTdU.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx191656-xFHtxM8SUTdU.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx191656-xFHtxM8SUTdU.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/191656-JQILdzh3FQxN.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 75,
+            "genres": ["Comedy", "Ecchi", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795879800,
+              "timeUntilAiring": 516619
+            }
+          }
+        },
+        {
+          "id": 422400,
+          "episode": 9,
+          "airingAt": 1795273200,
+          "timeUntilAiring": -89981,
+          "media": {
+            "id": 169581,
+            "idMal": 56733,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Magical★Explorer: Eroge no Yuujin Chara ni Tensei Shitakedo, Game Chishiki Tsukatte Jiyuu ni Ikiru",
+              "english": "Magical Explorer",
+              "native": "マジカル★エクスプローラー　エロゲの友人キャラに転生したけど、ゲーム知識使って自由に生きる"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx169581-UlAviVH36Hxi.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx169581-UlAviVH36Hxi.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx169581-UlAviVH36Hxi.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/169581-cdooqY7Jqy3x.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 13,
+            "chapters": null,
+            "meanScore": 69,
+            "genres": ["Action", "Adventure", "Ecchi", "Fantasy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 10,
+              "airingAt": 1795878000,
+              "timeUntilAiring": 514819
+            }
+          }
+        },
+        {
+          "id": 423784,
+          "episode": 14,
+          "airingAt": 1795273200,
+          "timeUntilAiring": -89981,
+          "media": {
+            "id": 168085,
+            "idMal": 60598,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Dali Si Rizhi 3",
+              "english": "White Cat Legend 3",
+              "native": "大理寺日志 第3季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx168085-hPOOODUADp7D.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx168085-hPOOODUADp7D.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx168085-hPOOODUADp7D.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 60,
+            "genres": ["Action", "Adventure", "Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 15,
+              "airingAt": 1795618800,
+              "timeUntilAiring": 255619
+            }
+          }
+        },
+        {
+          "id": 420246,
+          "episode": 7,
+          "airingAt": 1795272300,
+          "timeUntilAiring": -90881,
+          "media": {
+            "id": 203473,
+            "idMal": 63053,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Kyoufu Collector",
+              "english": "HORROR COLLECTOR",
+              "native": "恐怖コレクター"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b203473-pzyaqV432Qko.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b203473-pzyaqV432Qko.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b203473-pzyaqV432Qko.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/203473-KCGlCZL2ApjB.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 52,
+            "genres": ["Horror", "Mystery", "Supernatural"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795877100,
+              "timeUntilAiring": 513919
+            }
+          }
+        },
+        {
+          "id": 417948,
+          "episode": 3,
+          "airingAt": 1795271400,
+          "timeUntilAiring": -91781,
+          "media": {
+            "id": 214536,
+            "idMal": 63938,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Cardfight!! Vanguard Divinez Unmei Seisen-hen",
+              "english": "CARDFIGHT!! VANGUARD Divinez: Parallactic Fate",
+              "native": "カードファイト!! ヴァンガード Divinez 運命星戦編"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx214536-dl2KJdHcKWJl.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx214536-dl2KJdHcKWJl.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx214536-dl2KJdHcKWJl.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "FINISHED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 3,
+            "chapters": null,
+            "meanScore": 66,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": null
+          }
+        },
+        {
+          "id": 419807,
+          "episode": 8,
+          "airingAt": 1795271400,
+          "timeUntilAiring": -91781,
+          "media": {
+            "id": 209562,
+            "idMal": 63764,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Vertex Force",
+              "english": "VERTEX FORCE",
+              "native": "バーテックスフォース"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209562-kQQbTKDuql9p.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209562-kQQbTKDuql9p.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209562-kQQbTKDuql9p.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/209562-dvyIvOOVgDNp.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 56,
+            "genres": ["Action", "Mecha"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795876200,
+              "timeUntilAiring": 513019
+            }
+          }
+        },
+        {
+          "id": 423119,
+          "episode": 7,
+          "airingAt": 1795271400,
+          "timeUntilAiring": -91781,
+          "media": {
+            "id": 199007,
+            "idMal": 62524,
+            "type": "ANIME",
+            "title": {
+              "romaji": "#Zombie Sagashitemasu",
+              "english": "#I'm Looking For a Zombie",
+              "native": "#ゾンビさがしてます"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx199007-8R1HsnflnHJE.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx199007-8R1HsnflnHJE.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx199007-8R1HsnflnHJE.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 58,
+            "genres": ["Action", "Comedy", "Horror", "Mystery", "Supernatural"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795876200,
+              "timeUntilAiring": 513019
+            }
+          }
+        },
+        {
+          "id": 419557,
+          "episode": 8,
+          "airingAt": 1795269600,
+          "timeUntilAiring": -93581,
+          "media": {
+            "id": 195604,
+            "idMal": 61967,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Black Clover 2nd Season",
+              "english": "Black Clover Season 2",
+              "native": "ブラッククローバー 第2期"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx195604-tSZcfKbVqSEG.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx195604-tSZcfKbVqSEG.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx195604-tSZcfKbVqSEG.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/195604-lQpCzTziSA17.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 88,
+            "genres": ["Action", "Adventure", "Comedy", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795874400,
+              "timeUntilAiring": 511219
+            }
+          }
+        },
+        {
+          "id": 420148,
+          "episode": 9,
+          "airingAt": 1795267800,
+          "timeUntilAiring": -95381,
+          "media": {
+            "id": 204389,
+            "idMal": 63140,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Yasei no Last Boss ga Arawareta! 2nd Season",
+              "english": "A Wild Last Boss Appeared! Season 2",
+              "native": "野生のラスボスが現れた！ 第2期"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx204389-jCoFCeTthDMy.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204389-jCoFCeTthDMy.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx204389-jCoFCeTthDMy.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/204389-PFtzs8KcRzCz.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 75,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 10,
+              "airingAt": 1795872600,
+              "timeUntilAiring": 509419
+            }
+          }
+        },
+        {
+          "id": 421889,
+          "episode": 9,
+          "airingAt": 1795266000,
+          "timeUntilAiring": -97181,
+          "media": {
+            "id": 187402,
+            "idMal": 61153,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Tensei shita Dai Seijo wa, Seijo de Aru Koto wo Hita Kakusu",
+              "english": "A Tale of the Secret Saint",
+              "native": "転生した大聖女は、聖女であることをひた隠す"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx187402-ReKkLwFmMV3q.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx187402-ReKkLwFmMV3q.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx187402-ReKkLwFmMV3q.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/187402-bRt4OO90jcmt.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 70,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 10,
+              "airingAt": 1795870800,
+              "timeUntilAiring": 507619
+            }
+          }
+        },
+        {
+          "id": 419831,
+          "episode": 8,
+          "airingAt": 1795262400,
+          "timeUntilAiring": -100781,
+          "media": {
+            "id": 180894,
+            "idMal": 59787,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Romelia Senki: Maou wo Taoshita nochi mo Jinrui Yabasou dakara Guntai Soshiki Shita",
+              "english": "Romelia War Chronicle",
+              "native": "ロメリア戦記 〜魔王を倒した後も人類やばそうだから軍隊組織した〜"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx180894-o3pz4DWFm3je.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx180894-o3pz4DWFm3je.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx180894-o3pz4DWFm3je.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/180894-msSUHJ5Qejvf.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 74,
+            "genres": ["Adventure", "Drama", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795867200,
+              "timeUntilAiring": 504019
+            }
+          }
+        },
+        {
+          "id": 421844,
+          "episode": 8,
+          "airingAt": 1795253100,
+          "timeUntilAiring": -110081,
+          "media": {
+            "id": 212799,
+            "idMal": 64326,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Marronnier Oukoku no Shichinin no Kishi",
+              "english": "The Seven Knights of the Marronnier Kingdom",
+              "native": "マロニエ王国の七人の騎士"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx212799-n7WDdic7IL1z.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx212799-n7WDdic7IL1z.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx212799-n7WDdic7IL1z.png"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 20,
+            "chapters": null,
+            "meanScore": 71,
+            "genres": ["Drama", "Fantasy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795857900,
+              "timeUntilAiring": 494719
+            }
+          }
+        },
+        {
+          "id": 424103,
+          "episode": 1221,
+          "airingAt": 1795251600,
+          "timeUntilAiring": -111581,
+          "media": {
+            "id": 235,
+            "idMal": 235,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Meitantei Conan",
+              "english": "Detective Conan",
+              "native": "名探偵コナン"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx235-MyYT7K3chBdO.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx235-MyYT7K3chBdO.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx235-MyYT7K3chBdO.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/235-MTmiz0uB0fMd.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "WINTER",
+            "seasonYear": 1996,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 82,
+            "genres": ["Adventure", "Comedy", "Mystery", "Psychological"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 1222,
+              "airingAt": 1796461200,
+              "timeUntilAiring": 1098019
+            }
+          }
+        },
+        {
+          "id": 422494,
+          "episode": 7,
+          "airingAt": 1795249800,
+          "timeUntilAiring": -113381,
+          "media": {
+            "id": 195571,
+            "idMal": 61999,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Shuiro no Kamen",
+              "english": "The Vermilion Mask",
+              "native": "朱色の仮面"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx195571-fvj7u5GI7BRT.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx195571-fvj7u5GI7BRT.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx195571-fvj7u5GI7BRT.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/195571-UkdB06UpyL8k.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 68,
+            "genres": ["Action", "Drama", "Supernatural"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 8,
+              "airingAt": 1795854600,
+              "timeUntilAiring": 491419
+            }
+          }
+        },
+        {
+          "id": 380070,
+          "episode": 942,
+          "airingAt": 1795248000,
+          "timeUntilAiring": -115181,
+          "media": {
+            "id": 8687,
+            "idMal": 8687,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Doraemon (2005)",
+              "english": null,
+              "native": "ドラえもん (2005)"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b8687-bBnJMGnih4PT.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/8687-aa3QbJjGfy3B.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2005,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Adventure", "Comedy", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 943,
+              "airingAt": 1795852800,
+              "timeUntilAiring": 489619
+            }
+          }
+        },
+        {
+          "id": 409447,
+          "episode": 1362,
+          "airingAt": 1795246200,
+          "timeUntilAiring": -116981,
+          "media": {
+            "id": 966,
+            "idMal": 966,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Crayon Shin-chan",
+              "english": "Shin Chan",
+              "native": "クレヨンしんちゃん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b966-QUCdKAk4ls9J.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b966-QUCdKAk4ls9J.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b966-QUCdKAk4ls9J.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/966-J5CwLLTBs4OO.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 1992,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Comedy", "Ecchi", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 1363,
+              "airingAt": 1795851000,
+              "timeUntilAiring": 487819
+            }
+          }
+        },
+        {
+          "id": 421820,
+          "episode": 8,
+          "airingAt": 1795246140,
+          "timeUntilAiring": -117041,
+          "media": {
+            "id": 209709,
+            "idMal": 63901,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sirotan",
+              "english": null,
+              "native": "しろたん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx209709-Wz8BKL1fm5MC.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx209709-Wz8BKL1fm5MC.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx209709-Wz8BKL1fm5MC.png"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 61,
+            "genres": [],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795850940,
+              "timeUntilAiring": 487759
+            }
+          }
+        },
+        {
+          "id": 423366,
+          "episode": 25,
+          "airingAt": 1795230000,
+          "timeUntilAiring": -133181,
+          "media": {
+            "id": 202851,
+            "idMal": 63240,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fanren Xiu Xian Zhuan Di Wu Ji",
+              "english": null,
+              "native": "凡人修仙传 第五季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx202851-iHwg4I1NdfMx.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx202851-iHwg4I1NdfMx.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx202851-iHwg4I1NdfMx.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/202851-o9JMx6xWGQUT.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 52,
+            "chapters": null,
+            "meanScore": 88,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 26,
+              "airingAt": 1795834800,
+              "timeUntilAiring": 471619
+            }
+          }
+        },
+        {
+          "id": 414716,
+          "episode": 180,
+          "airingAt": 1795226400,
+          "timeUntilAiring": -136781,
+          "media": {
+            "id": 137683,
+            "idMal": 51836,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Douluo Dalu 2: Jueshi Tangmen",
+              "english": "Soul Land 2: The Peerless Tang Clan",
+              "native": "斗罗大陆2绝世唐门"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx137683-IMuvIECdZNBh.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx137683-IMuvIECdZNBh.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx137683-IMuvIECdZNBh.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 182,
+            "chapters": null,
+            "meanScore": 80,
+            "genres": ["Action", "Adventure", "Fantasy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 181,
+              "airingAt": 1795831200,
+              "timeUntilAiring": 468019
+            }
+          }
+        },
+        {
+          "id": 423430,
+          "episode": 10,
+          "airingAt": 1795226400,
+          "timeUntilAiring": -136781,
+          "media": {
+            "id": 199353,
+            "idMal": 60597,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Dawang Raoming 3",
+              "english": null,
+              "native": "大王饶命 第三季"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx199353-S2jczHjCWHGL.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx199353-S2jczHjCWHGL.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx199353-S2jczHjCWHGL.png"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 16,
+            "chapters": null,
+            "meanScore": 83,
+            "genres": ["Action", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 11,
+              "airingAt": 1795831200,
+              "timeUntilAiring": 468019
+            }
+          }
+        },
+        {
+          "id": 417670,
+          "episode": 21,
+          "airingAt": 1795222800,
+          "timeUntilAiring": -140381,
+          "media": {
+            "id": 214260,
+            "idMal": 61619,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Zeri Feisheng",
+              "english": "A Good Day to Ascend",
+              "native": "择日飞升"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx214260-m2fg5OwduwSt.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx214260-m2fg5OwduwSt.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx214260-m2fg5OwduwSt.jpg"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 30,
+            "chapters": null,
+            "meanScore": 76,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 22,
+              "airingAt": 1795827600,
+              "timeUntilAiring": 464419
+            }
+          }
+        },
+        {
+          "id": 418616,
+          "episode": 8,
+          "airingAt": 1795221000,
+          "timeUntilAiring": -142181,
+          "media": {
+            "id": 214968,
+            "idMal": 64789,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Nezumi-kun no Chokki (TV) 2nd Season",
+              "english": null,
+              "native": "ねずみくんのチョッキ (TV) 第2期"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx214968-rrPSP2nKF40C.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx214968-rrPSP2nKF40C.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx214968-rrPSP2nKF40C.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 35,
+            "genres": ["Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795825800,
+              "timeUntilAiring": 462619
+            }
+          }
+        },
+        {
+          "id": 419532,
+          "episode": 8,
+          "airingAt": 1795221000,
+          "timeUntilAiring": -142181,
+          "media": {
+            "id": 216557,
+            "idMal": 63157,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Keroro Gunsou☆",
+              "english": "KERORO☆",
+              "native": "ケロロ軍曹☆"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx216557-b72dAqbVEDO7.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx216557-b72dAqbVEDO7.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx216557-b72dAqbVEDO7.jpg"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/216557-FdbwnWM2oskW.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 62,
+            "genres": ["Comedy", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795825800,
+              "timeUntilAiring": 462619
+            }
+          }
+        },
+        {
+          "id": 421157,
+          "episode": 33,
+          "airingAt": 1795220760,
+          "timeUntilAiring": -142421,
+          "media": {
+            "id": 183231,
+            "idMal": 60153,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Rilakkuma",
+              "english": "RILAKKUMA",
+              "native": "リラックマ"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b183231-z7SgjmXZBcoX.png",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b183231-z7SgjmXZBcoX.png",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b183231-z7SgjmXZBcoX.png"
+            },
+            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/183231-JFjTqQe3rPCw.jpg",
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "SPRING",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 69,
+            "genres": ["Fantasy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 34,
+              "airingAt": 1795825560,
+              "timeUntilAiring": 462379
+            }
+          }
+        },
+        {
+          "id": 420282,
+          "episode": 21,
+          "airingAt": 1795217400,
+          "timeUntilAiring": -145781,
+          "media": {
+            "id": 212308,
+            "idMal": 64210,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Pan no Akachan (TV)",
+              "english": null,
+              "native": "パンの赤ちゃん"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx212308-HUdh20Djd7cm.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx212308-HUdh20Djd7cm.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx212308-HUdh20Djd7cm.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "SUMMER",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 57,
+            "genres": ["Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 22,
+              "airingAt": 1795822200,
+              "timeUntilAiring": 459019
+            }
+          }
+        },
+        {
+          "id": 418628,
+          "episode": 8,
+          "airingAt": 1795193580,
+          "timeUntilAiring": -169601,
+          "media": {
+            "id": 178083,
+            "idMal": 59088,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Tokyo Revengers: Santen Sensou-hen",
+              "english": "Tokyo Revengers: War of the Three Titans Arc",
+              "native": "東京リベンジャーズ 三天戦争編"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx178083-bg7pg6TCHwtG.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178083-bg7pg6TCHwtG.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx178083-bg7pg6TCHwtG.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 13,
+            "chapters": null,
+            "meanScore": 78,
+            "genres": ["Action", "Drama", "Romance", "Supernatural"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 9,
+              "airingAt": 1795798380,
+              "timeUntilAiring": 435199
+            }
+          }
+        },
+        {
+          "id": 421095,
+          "episode": 20,
+          "airingAt": 1795186800,
+          "timeUntilAiring": -176381,
+          "media": {
+            "id": 203490,
+            "idMal": 63061,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Uchi no Otouto-domo ga Sumimasen",
+              "english": "Please Excuse My Younger Brothers",
+              "native": "うちの弟どもがすみません"
+            },
+            "coverImage": {
+              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx203490-YQXiymUiDQNA.jpg",
+              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx203490-YQXiymUiDQNA.jpg",
+              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx203490-YQXiymUiDQNA.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SUMMER",
+            "seasonYear": 2026,
+            "episodes": 24,
+            "chapters": null,
+            "meanScore": 70,
+            "genres": ["Comedy", "Romance", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": {
+              "episode": 21,
+              "airingAt": 1795791600,
+              "timeUntilAiring": 428419
+            }
+          }
+        }
+      ]
+    }
+  }
+}

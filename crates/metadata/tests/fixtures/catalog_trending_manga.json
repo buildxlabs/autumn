@@ -1,0 +1,1258 @@
+{
+  "data": {
+    "Page": {
+      "media": [
+        {
+          "id": 211510,
+          "idMal": 193207,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Isegyeseo Yubunamdoen Sseol",
+            "english": "The Otherworldly Family Man",
+            "native": "이세계서 유부남된 썰"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx211510-6DsPrnzmNZSY.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx211510-6DsPrnzmNZSY.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx211510-6DsPrnzmNZSY.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 75,
+          "genres": ["Fantasy", "Slice of Life"],
+          "isAdult": false
+        },
+        {
+          "id": 151512,
+          "idMal": 149438,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Bireomeogeul Hwansaeng",
+            "english": "My Blasted Reincarnated Life",
+            "native": "빌어먹을 환생"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx151512-q0Xddr1JNKNq.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx151512-q0Xddr1JNKNq.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx151512-q0Xddr1JNKNq.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/151512-EPskkVDBQvtC.jpg",
+          "format": "MANGA",
+          "status": "FINISHED",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": 81,
+          "meanScore": 78,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 30013,
+          "idMal": 13,
+          "type": "MANGA",
+          "title": {
+            "romaji": "ONE PIECE",
+            "english": "One Piece",
+            "native": "ONE PIECE"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30013-BeslEMqiPhlk.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx30013-BeslEMqiPhlk.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx30013-BeslEMqiPhlk.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30013-hbbRZqC5MjYh.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 91,
+          "genres": ["Action", "Adventure", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 210397,
+          "idMal": 192574,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Neoman Boindan Mariya",
+            "english": null,
+            "native": "너만 보인단 말이야"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx210397-ylqPjFPXwTAo.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx210397-ylqPjFPXwTAo.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx210397-ylqPjFPXwTAo.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 75,
+          "genres": ["Comedy", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 178379,
+          "idMal": 170974,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Mabeop Hakgyo Apjeommyeol Cheonjae-ga Doeeotda",
+            "english": "Blink Master of the Magic Academy",
+            "native": "마법학교 앞점멸 천재가 되었다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx178379-dokda9kEw3Ns.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx178379-dokda9kEw3Ns.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx178379-dokda9kEw3Ns.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 77,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 214417,
+          "idMal": 195181,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Sacheondanggaui Mangnaettareul Napchihaetda",
+            "english": null,
+            "native": "사천당가의 막내딸을 납치했다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx214417-HKPHxAInENKJ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx214417-HKPHxAInENKJ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx214417-HKPHxAInENKJ.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 71,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 149332,
+          "idMal": 146949,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Geomsulmyeongga Mangnaeadeul",
+            "english": "The Swordmaster's Son",
+            "native": "검술명가 막내아들"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx149332-adkSyOFY3c5U.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx149332-adkSyOFY3c5U.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx149332-adkSyOFY3c5U.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 79,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 172619,
+          "idMal": 166865,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Academy-eseo Saranamgi",
+            "english": "The Extra’s Academy Survival Guide",
+            "native": "아카데미에서 살아남기"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx172619-LSoXY45QAas4.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx172619-LSoXY45QAas4.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx172619-LSoXY45QAas4.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 82,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 137304,
+          "idMal": 147577,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Gwangmahoegwi",
+            "english": "Return of the Mad Demon",
+            "native": "광마회귀"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx137304-XZ91kOmUIMQo.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx137304-XZ91kOmUIMQo.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx137304-XZ91kOmUIMQo.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/137304-6aGcY98dBeUY.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 80,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 116353,
+          "idMal": null,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Mo Huang Da Guanjia",
+            "english": "The Devil Butler",
+            "native": "魔皇大管家"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx116353-DYuIigXuPwpZ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx116353-DYuIigXuPwpZ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx116353-DYuIigXuPwpZ.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/116353-oRFNFjzfqWV1.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 82,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 166154,
+          "idMal": 159734,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Player-ga Gwageoreul Sumgim",
+            "english": "The Player Hides His Past",
+            "native": "플레이어가 과거를 숨김"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx166154-m65LKgDdfe8p.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx166154-m65LKgDdfe8p.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx166154-m65LKgDdfe8p.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 76,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 137280,
+          "idMal": 147392,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Na Honja Mallep Newbie",
+            "english": "I’m the Max-Level Newbie",
+            "native": "나 혼자 만렙 뉴비"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx137280-juUL79K7f9s7.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx137280-juUL79K7f9s7.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx137280-juUL79K7f9s7.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/137280-I46ILENRzGYY.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 77,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 173233,
+          "idMal": 169830,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Myeolmanghan Gamunui Hoegwija",
+            "english": "A Flame Reborn",
+            "native": "멸망한 가문의 회귀자"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx173233-sSWxsYy8oXFK.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx173233-sSWxsYy8oXFK.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx173233-sSWxsYy8oXFK.png"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 73,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 201009,
+          "idMal": 188109,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Akdangdeurui Huwonjaga Doeeotda",
+            "english": "The Patron of Villains",
+            "native": "악당들의 후원자가 되었다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx201009-jTY2arWw21sc.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx201009-jTY2arWw21sc.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx201009-jTY2arWw21sc.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/201009-kUre2tjoXghs.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 79,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 206766,
+          "idMal": 190681,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Sesange Nappeun Yeongaeneun Eopda",
+            "english": "There's No Such Thing as a Bad Lady",
+            "native": "세상에 나쁜 영애는 없다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx206766-W5A0TIH5RM0a.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx206766-W5A0TIH5RM0a.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx206766-W5A0TIH5RM0a.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 73,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 192888,
+          "idMal": 181906,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Bammeokgogara",
+            "english": "Eat Before You Go",
+            "native": "밥먹고가라"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx192888-OGHUsb6Ec73P.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx192888-OGHUsb6Ec73P.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx192888-OGHUsb6Ec73P.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 72,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 202986,
+          "idMal": 189030,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Mawanginde Yongsaga Neomu Maneum",
+            "english": "Too Many Heroes for the Demon Lord",
+            "native": "마왕인데 용사가 너무 많음"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx202986-0wn84aV9jlHq.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx202986-0wn84aV9jlHq.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx202986-0wn84aV9jlHq.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 78,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 213942,
+          "idMal": 194701,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Dungeon-eul Geurineun Hwaga",
+            "english": null,
+            "native": "던전을 그리는 화가"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx213942-bmqafwT9feOb.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx213942-bmqafwT9feOb.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx213942-bmqafwT9feOb.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 84,
+          "genres": ["Fantasy", "Mystery", "Thriller"],
+          "isAdult": false
+        },
+        {
+          "id": 189051,
+          "idMal": 180376,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Pungjagieyo, Mawangnim!",
+            "english": "What a Bountiful Harvest, Demon Lord!",
+            "native": "풍작이에요, 마왕님!"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx189051-ORxxDJZvMHxj.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx189051-ORxxDJZvMHxj.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx189051-ORxxDJZvMHxj.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/189051-jWJEJeJE0mcv.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 80,
+          "genres": ["Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 117460,
+          "idMal": 147727,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Temppal",
+            "english": "Overgeared",
+            "native": "템빨"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx117460-hUdgIZ5fXy9I.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx117460-hUdgIZ5fXy9I.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx117460-hUdgIZ5fXy9I.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 77,
+          "genres": ["Action", "Adventure", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 128067,
+          "idMal": 146909,
+          "type": "MANGA",
+          "title": {
+            "romaji": "SSS-geup Jugeoya Saneun Hunter",
+            "english": "SSS-Class Revival Hunter",
+            "native": "SSS급 죽어야 사는 헌터"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx128067-wnLBg6Cy1ncs.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx128067-wnLBg6Cy1ncs.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx128067-wnLBg6Cy1ncs.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/128067-F2qRPwWiCG7b.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 83,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 164122,
+          "idMal": 157232,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Gwihwanhaenneunde Ipdae Jeonnarida",
+            "english": null,
+            "native": "귀환했는데 입대 전날이다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx164122-zdeLVK8DfxBt.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx164122-zdeLVK8DfxBt.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx164122-zdeLVK8DfxBt.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 70,
+          "genres": ["Action", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 187427,
+          "idMal": 179465,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Akdangeun Salgo Sipda",
+            "english": "The Villain's Survival Route",
+            "native": "악당은 살고 싶다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx187427-7A225QIPaIU3.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx187427-7A225QIPaIU3.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx187427-7A225QIPaIU3.png"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 79,
+          "genres": ["Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 135325,
+          "idMal": 146827,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Natae Gongja, Nolyeog Cheonjae Doeda",
+            "english": "The Lazy Lord Masters the Sword",
+            "native": "나태 공자, 노력 천재 되다"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx135325-YAhEGWro8zFK.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx135325-YAhEGWro8zFK.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx135325-YAhEGWro8zFK.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 78,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 184502,
+          "idMal": 174162,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Sashimi Han Jaruro Academy-reul Ssipeomeokeum",
+            "english": "The Academy’s Sashimi Sword Master",
+            "native": "사시미 한 자루로 아카데미를 씹어먹음"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx184502-uu4QoBUwEfNH.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx184502-uu4QoBUwEfNH.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx184502-uu4QoBUwEfNH.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 75,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 120980,
+          "idMal": 147863,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Nano Machine",
+            "english": "Nano Machine",
+            "native": "나노마신"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx120980-RZ9WLd0o9hyo.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx120980-RZ9WLd0o9hyo.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx120980-RZ9WLd0o9hyo.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/120980-7ak3NnHP5f2X.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 81,
+          "genres": ["Action", "Adventure", "Fantasy", "Sci-Fi"],
+          "isAdult": false
+        },
+        {
+          "id": 140407,
+          "idMal": 147272,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Yeokdaegeum Yeongji Seolgyesa",
+            "english": "The Greatest Estate Developer",
+            "native": "역대급 영지 설계사"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx140407-fJQr0fmqq1IO.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx140407-fJQr0fmqq1IO.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx140407-fJQr0fmqq1IO.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/140407-WMGs02Q3fFUb.jpg",
+          "format": "MANGA",
+          "status": "FINISHED",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": 222,
+          "meanScore": 90,
+          "genres": ["Adventure", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 154258,
+          "idMal": null,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Dingji Qiyun, Qiaoqiao Xiulian Qian Nian",
+            "english": "Lucky Me: I Secretly Cultivated for 1,000 Years",
+            "native": "顶级气运，悄悄修炼千年"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/b154258-UirlUQqaOwVR.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/b154258-UirlUQqaOwVR.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/b154258-UirlUQqaOwVR.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/154258-PLPFdJclQCOo.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 80,
+          "genres": ["Action", "Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 215524,
+          "idMal": 196341,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Saengjonjisangjuui",
+            "english": null,
+            "native": "생존지상주의"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx215524-nE44c551hMXt.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx215524-nE44c551hMXt.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx215524-nE44c551hMXt.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 74,
+          "genres": ["Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 120385,
+          "idMal": 147389,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Login Murim",
+            "english": "Log-in Murim",
+            "native": "로그인 무림"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx120385-4JYGuOR6cn72.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx120385-4JYGuOR6cn72.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx120385-4JYGuOR6cn72.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 81,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 132144,
+          "idMal": 146878,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Hwasangwihwan",
+            "english": "Return of the Blossoming Blade",
+            "native": "화산귀환"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx132144-i5B4VnG9sRgh.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx132144-i5B4VnG9sRgh.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx132144-i5B4VnG9sRgh.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/132144-tITrsibdFo3n.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 85,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 186963,
+          "idMal": 178631,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Uri Guild Idol",
+            "english": "Our Guild's Idol",
+            "native": "우리 길드 아이돌"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx186963-tvrJneeK0edX.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx186963-tvrJneeK0edX.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx186963-tvrJneeK0edX.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/186963-5AXSEGKcxENg.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 82,
+          "genres": ["Drama", "Romance"],
+          "isAdult": false
+        },
+        {
+          "id": 188216,
+          "idMal": 177489,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Cheonjungyongmun",
+            "english": "Regression of the Yong Clan Heir",
+            "native": "천중용문"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx188216-mTtOB8nOl1iO.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx188216-mTtOB8nOl1iO.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx188216-mTtOB8nOl1iO.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 67,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 208364,
+          "idMal": 191461,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Masu Sanyangkkuni Saraganeun Beop",
+            "english": "Life of a Demon Hunter",
+            "native": "마수 사냥꾼이 살아가는 법"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx208364-4tmwUlvm9Jek.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx208364-4tmwUlvm9Jek.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx208364-4tmwUlvm9Jek.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 72,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 102476,
+          "idMal": 115194,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Boukensha ni Naritai to Miyako ni Deteitta Musume ga S-Rank ni Natteta: Kurokami no Ikusaotome",
+            "english": "My Daughter Left the Nest and Returned an S-Rank Adventurer: The Black-Haired Valkyrie",
+            "native": "冒険者になりたいと都に出て行った娘がSランクになってた　黒髪の戦乙女"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx102476-1ARODmEyZdne.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx102476-1ARODmEyZdne.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx102476-1ARODmEyZdne.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/102476-QVnc5T520h8a.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 73,
+          "genres": ["Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 164857,
+          "idMal": 158296,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Game Sok Babarian-euro Saranamgi",
+            "english": "Surviving the Game as a Barbarian",
+            "native": "게임 속 바바리안으로 살아남기"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx164857-MVeV0leMZb0m.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx164857-MVeV0leMZb0m.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx164857-MVeV0leMZb0m.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 81,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 169355,
+          "idMal": 162479,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Kagurabachi",
+            "english": "Kagurabachi",
+            "native": "カグラバチ"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx169355-5pqzh1Wb4NOQ.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx169355-5pqzh1Wb4NOQ.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx169355-5pqzh1Wb4NOQ.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/169355-MzURKZ3veXa7.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 79,
+          "genres": ["Action", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 205173,
+          "idMal": null,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Quan Qiu Yi Neng: Kaiju Juexing Zi Xiao Shen Lei",
+            "english": "Global Awakening: I Awakened Celestial Lightning",
+            "native": "全球异能：开局觉醒紫霄神雷"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx205173-o5cCat4jaMcA.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx205173-o5cCat4jaMcA.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx205173-o5cCat4jaMcA.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 73,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 155485,
+          "idMal": 152405,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Dungeon Gyeonmullok",
+            "english": "Dungeon Odyssey",
+            "native": "던전 견문록"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx155485-YlWPkBFvWG3v.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx155485-YlWPkBFvWG3v.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx155485-YlWPkBFvWG3v.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 80,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 74347,
+          "idMal": 44347,
+          "type": "MANGA",
+          "title": {
+            "romaji": "One Punch-Man",
+            "english": "One-Punch Man",
+            "native": "ワンパンマン"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx74347-sZpmNJ5xLwRK.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx74347-sZpmNJ5xLwRK.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx74347-sZpmNJ5xLwRK.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/74347-xAQI9BxcpWM3.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 85,
+          "genres": ["Action", "Comedy", "Sci-Fi", "Supernatural"],
+          "isAdult": false
+        },
+        {
+          "id": 119257,
+          "idMal": 132214,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Jeonjijeok Dokja Sijeom",
+            "english": "Omniscient Reader",
+            "native": "전지적 독자 시점"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx119257-Pi21aq3ey9GG.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx119257-Pi21aq3ey9GG.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx119257-Pi21aq3ey9GG.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/119257-RtxJMRCunHXc.jpg",
+          "format": "MANGA",
+          "status": "HIATUS",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 86,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 30002,
+          "idMal": 2,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Berserk",
+            "english": "Berserk",
+            "native": "ベルセルク"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30002-Cul4OeN7bYtn.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx30002-Cul4OeN7bYtn.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx30002-Cul4OeN7bYtn.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/30002-3TuoSMl20fUX.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 92,
+          "genres": ["Action", "Adventure", "Drama", "Fantasy", "Horror", "Psychological"],
+          "isAdult": false
+        },
+        {
+          "id": 174233,
+          "idMal": 166626,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Majo to Youhei",
+            "english": "The Witch and the Mercenary",
+            "native": "魔女と傭兵"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/b174233-VVAJkWx1XwCh.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/b174233-VVAJkWx1XwCh.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/b174233-VVAJkWx1XwCh.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 80,
+          "genres": ["Action", "Adventure", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 180891,
+          "idMal": 172750,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Jeoldaehoegwi",
+            "english": "Absolute Regression",
+            "native": "절대회귀"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx180891-ZBbyOWSYI41R.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx180891-ZBbyOWSYI41R.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx180891-ZBbyOWSYI41R.jpg"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/180891-q5sLZRnEzqih.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 83,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 182511,
+          "idMal": 174562,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Jungse Fantasy Sok Mangnani Gyeongbijojang",
+            "english": "The Roguish Guard in a Medieval Fantasy",
+            "native": "중세 판타지 속 망나니 경비조장"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx182511-9pAIuxcTT6pi.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx182511-9pAIuxcTT6pi.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx182511-9pAIuxcTT6pi.png"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 71,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 183855,
+          "idMal": 175209,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Hoegwigeomgaui Seojaga Saneun Beop",
+            "english": "The Bastard of Swordborne",
+            "native": "회귀검가의 서자가 사는 법"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx183855-BbnSsUPiOVrM.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx183855-BbnSsUPiOVrM.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx183855-BbnSsUPiOVrM.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 75,
+          "genres": ["Action", "Adventure", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 185979,
+          "idMal": 177451,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Jeonseolgeup Yeongungeun Academy Udeungsaeng",
+            "english": "The Legendary Hero is an Academy Honors Student",
+            "native": "전설급 영웅은 아카데미 우등생"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx185979-0PIJkgbfPZhZ.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx185979-0PIJkgbfPZhZ.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx185979-0PIJkgbfPZhZ.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 73,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 203593,
+          "idMal": null,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Tensei Streamer",
+            "english": "Streaming My Second Life",
+            "native": "転生ストリーマー"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx203593-L46M3wKxLkc2.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx203593-L46M3wKxLkc2.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx203593-L46M3wKxLkc2.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 76,
+          "genres": ["Action", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 46765,
+          "idMal": 16765,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Kingdom",
+            "english": "Kingdom",
+            "native": "キングダム"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/nx46765-KPXir4sRqJBW.png",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/nx46765-KPXir4sRqJBW.png",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/nx46765-KPXir4sRqJBW.png"
+          },
+          "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/manga/banner/46765-8DqCBEYyt9yP.jpg",
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 89,
+          "genres": ["Action", "Drama"],
+          "isAdult": false
+        },
+        {
+          "id": 134141,
+          "idMal": 130858,
+          "type": "MANGA",
+          "title": {
+            "romaji": "Meccha Shoukan Sareta Ken THE COMIC",
+            "english": "Oversummoned, Overpowered, and Over It!",
+            "native": "めっちゃ召喚された件 THE COMIC"
+          },
+          "coverImage": {
+            "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx134141-hSgtn9BQCQtU.jpg",
+            "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx134141-hSgtn9BQCQtU.jpg",
+            "medium": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/small/bx134141-hSgtn9BQCQtU.jpg"
+          },
+          "bannerImage": null,
+          "format": "MANGA",
+          "status": "RELEASING",
+          "season": null,
+          "seasonYear": null,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": 68,
+          "genres": ["Action", "Adventure", "Fantasy", "Psychological"],
+          "isAdult": false
+        }
+      ]
+    }
+  }
+}
