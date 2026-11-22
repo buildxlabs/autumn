@@ -1,19 +1,40 @@
 //! Disk cache for poster images, sharing a size cap with metadata blobs.
 
 use std::{
-    fs::{self},
-    io::Write,
+    fmt::Write as _,
+    fs,
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::SystemTime,
 };
 
 use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
+use tokio::task::spawn_blocking;
 use tracing::warn;
 
 use crate::{Client, Error, HttpError, Method, Request};
 
 /// Shared cap for `<cache>/posters/` and `<cache>/metadata/`: about 500 MB.
 const DEFAULT_CAP_BYTES: u64 = 500 * 1024 * 1024;
+
+#[derive(Debug, Default)]
+struct Sizes {
+    posters: AtomicU64,
+    metadata: AtomicU64,
+}
+
+impl Sizes {
+    fn total(&self) -> u64 {
+        self.posters
+            .load(Ordering::SeqCst)
+            .saturating_add(self.metadata.load(Ordering::SeqCst))
+    }
+}
 
 /// A disk cache for poster images, keyed by the final image URL.
 #[derive(Debug, Clone)]
@@ -22,6 +43,7 @@ pub struct PosterCache {
     metadata: PathBuf,
     tmp: PathBuf,
     cap: u64,
+    sizes: Arc<Sizes>,
 }
 
 #[derive(Debug)]
@@ -36,7 +58,7 @@ impl PosterCache {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Cache`] if a cache directory cannot be created.
+    /// Returns [`Error::Cache`] if a cache directory cannot be created or read.
     pub fn new(cache_dir: impl AsRef<Path>) -> Result<Self, Error> {
         Self::with_cap(cache_dir, DEFAULT_CAP_BYTES)
     }
@@ -45,7 +67,7 @@ impl PosterCache {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Cache`] if a cache directory cannot be created.
+    /// Returns [`Error::Cache`] if a cache directory cannot be created or read.
     pub fn with_cap(cache_dir: impl AsRef<Path>, cap: u64) -> Result<Self, Error> {
         let root = cache_dir.as_ref();
         let cache = Self {
@@ -53,31 +75,58 @@ impl PosterCache {
             metadata: root.join("metadata"),
             tmp: root.join("tmp"),
             cap,
+            sizes: Arc::new(Sizes::default()),
         };
         for dir in [&cache.posters, &cache.metadata, &cache.tmp] {
-            fs::create_dir_all(dir).map_err(|source| Error::Cache {
-                path: dir.clone(),
-                source: HttpError::new(source),
-            })?;
+            fs::create_dir_all(dir).map_err(|source| cache_error(dir, source))?;
         }
+        // Clear leftovers from interrupted writes, then measure both caches once.
+        for entry in entries(&cache.tmp)? {
+            remove_file(&entry.path)?;
+        }
+        let posters = entries(&cache.posters)?
+            .iter()
+            .fold(0u64, |total, entry| total.saturating_add(entry.len));
+        let metadata = entries(&cache.metadata)?
+            .iter()
+            .fold(0u64, |total, entry| total.saturating_add(entry.len));
+        cache.sizes.posters.store(posters, Ordering::SeqCst);
+        cache.sizes.metadata.store(metadata, Ordering::SeqCst);
         Ok(cache)
     }
 
     /// Fetch a poster, serving a cached copy without a network request.
     ///
+    /// Disk work runs on a blocking pool. If eviction fails after the poster
+    /// has been stored, the poster is still returned and the failure is logged.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`] if the download fails or a cache write fails.
+    /// Returns [`Error`] if the download or the cache write fails.
     pub async fn get(&self, client: &Client, url: &str) -> Result<Vec<u8>, Error> {
         let name = file_name(url);
-        let path = self.posters.join(&name);
-        if let Ok(bytes) = fs::read(&path) {
+        let read_path = self.posters.join(&name);
+        let cached = spawn_blocking(move || fs::read(read_path))
+            .await
+            .map_err(join_error)?;
+        if let Ok(bytes) = cached {
             return Ok(bytes);
         }
+
         let response = client.read(Request::new(Method::Get, url)).await?;
         let bytes = response.bytes().await?;
-        self.store(&name, &bytes)?;
-        self.evict()?;
+
+        let cache = self.clone();
+        let bytes = spawn_blocking(move || {
+            cache.store(&name, &bytes)?;
+            if let Err(error) = cache.evict() {
+                warn!(?error, "poster cache eviction failed");
+            }
+            Ok::<Vec<u8>, Error>(bytes)
+        })
+        .await
+        .map_err(join_error)??;
+
         Ok(bytes)
     }
 
@@ -86,64 +135,85 @@ impl PosterCache {
     /// # Errors
     ///
     /// Returns [`Error::Cache`] if a poster cannot be removed.
-    pub fn clear(&self) -> Result<(), Error> {
-        for entry in entries(&self.posters)? {
-            fs::remove_file(&entry.path).map_err(|source| Error::Cache {
-                path: entry.path,
-                source: HttpError::new(source),
-            })?;
-        }
-        Ok(())
+    pub async fn clear(&self) -> Result<(), Error> {
+        let cache = self.clone();
+        spawn_blocking(move || {
+            let mut removed = 0u64;
+            for entry in entries(&cache.posters)? {
+                remove_file(&entry.path)?;
+                removed = removed.saturating_add(entry.len);
+            }
+            cache.sizes.posters.fetch_sub(removed, Ordering::SeqCst);
+            Ok(())
+        })
+        .await
+        .map_err(join_error)?
     }
 
     fn store(&self, name: &str, bytes: &[u8]) -> Result<(), Error> {
+        let mut temp =
+            NamedTempFile::new_in(&self.tmp).map_err(|source| cache_error(&self.tmp, source))?;
+        temp.write_all(bytes)
+            .map_err(|source| cache_error(&self.tmp, source))?;
+        temp.as_file()
+            .sync_all()
+            .map_err(|source| cache_error(&self.tmp, source))?;
         let target = self.posters.join(name);
-        let temp = self.tmp.join(format!("{name}.tmp"));
-        let written = (|| {
-            let mut file = fs::File::create(&temp)?;
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            drop(file);
-            fs::rename(&temp, &target)
-        })();
-        if let Err(error) = written {
-            if let Err(cleanup) = fs::remove_file(&temp) {
-                warn!(?cleanup, "could not remove an incomplete poster file");
-            }
-            return Err(Error::Cache {
-                path: temp,
-                source: HttpError::new(error),
-            });
-        }
+        temp.persist(&target)
+            .map_err(|source| cache_error(&target, source.error))?;
+        self.sizes.posters.fetch_add(
+            u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+            Ordering::SeqCst,
+        );
         Ok(())
     }
 
     fn evict(&self) -> Result<(), Error> {
-        let mut all = entries(&self.posters)?;
-        all.extend(entries(&self.metadata)?);
-        let mut total = all
-            .iter()
-            .fold(0u64, |sum, entry| sum.saturating_add(entry.len));
+        let mut total = self.sizes.total();
         if total <= self.cap {
             return Ok(());
         }
-        all.sort_by_key(|entry| entry.modified);
-        for entry in all {
+        let mut files = entries(&self.posters)?;
+        files.extend(entries(&self.metadata)?);
+        files.sort_by_key(|entry| entry.modified);
+        for entry in files {
             if total <= self.cap {
                 break;
             }
-            fs::remove_file(&entry.path).map_err(|source| Error::Cache {
-                path: entry.path.clone(),
-                source: HttpError::new(source),
-            })?;
+            remove_file(&entry.path)?;
             total = total.saturating_sub(entry.len);
+            if entry.path.starts_with(&self.posters) {
+                self.sizes.posters.fetch_sub(entry.len, Ordering::SeqCst);
+            } else {
+                self.sizes.metadata.fetch_sub(entry.len, Ordering::SeqCst);
+            }
         }
         Ok(())
     }
 }
 
+fn join_error(source: tokio::task::JoinError) -> Error {
+    Error::Task {
+        source: HttpError::new(source),
+    }
+}
+
+fn cache_error(path: &Path, source: impl std::error::Error + Send + Sync + 'static) -> Error {
+    Error::Cache {
+        path: path.to_path_buf(),
+        source: HttpError::new(source),
+    }
+}
+
+fn remove_file(path: &Path) -> Result<(), Error> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(cache_error(path, error)),
+    }
+}
+
 fn file_name(url: &str) -> String {
-    use std::fmt::Write;
     Sha256::digest(url.as_bytes())
         .iter()
         .fold(String::with_capacity(64), |mut name, byte| {
@@ -153,30 +223,22 @@ fn file_name(url: &str) -> String {
 }
 
 fn entries(dir: &Path) -> Result<Vec<Entry>, Error> {
-    let listing = fs::read_dir(dir).map_err(|source| Error::Cache {
-        path: dir.to_path_buf(),
-        source: HttpError::new(source),
-    })?;
+    let listing = fs::read_dir(dir).map_err(|source| cache_error(dir, source))?;
     let mut result = Vec::new();
     for item in listing {
-        let item = item.map_err(|source| Error::Cache {
-            path: dir.to_path_buf(),
-            source: HttpError::new(source),
-        })?;
-        let metadata = item.metadata().map_err(|source| Error::Cache {
-            path: item.path(),
-            source: HttpError::new(source),
-        })?;
+        let item = item.map_err(|source| cache_error(dir, source))?;
+        let metadata = item
+            .metadata()
+            .map_err(|source| cache_error(&item.path(), source))?;
         if !metadata.is_file() {
             continue;
         }
         result.push(Entry {
             path: item.path(),
             len: metadata.len(),
-            modified: metadata.modified().map_err(|source| Error::Cache {
-                path: item.path(),
-                source: HttpError::new(source),
-            })?,
+            modified: metadata
+                .modified()
+                .map_err(|source| cache_error(&item.path(), source))?,
         });
     }
     Ok(result)

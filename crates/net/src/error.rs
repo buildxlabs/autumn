@@ -98,6 +98,14 @@ pub enum Error {
         source: HttpError,
     },
 
+    /// A blocking cache task failed before it could finish.
+    #[error("background cache task failed: {source}")]
+    Task {
+        /// The cause of the failure.
+        #[source]
+        source: HttpError,
+    },
+
     /// A disk-cache operation failed.
     #[error("cache operation failed at {path:?}: {source}")]
     Cache {
