@@ -10,3 +10,12 @@ publish                = false
 workspace = true
 
 [dependencies]
+domain.workspace    = true
+flume.workspace     = true
+gpui-kit.workspace  = true
+thiserror.workspace = true
+tokio               = { features = [ "rt" ], workspace = true }
+
+[dev-dependencies]
+gpui-kit = { features = [ "test-support" ], workspace = true }
+tokio    = { features = [ "rt-multi-thread" ], workspace = true }

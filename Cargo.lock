@@ -501,6 +501,8 @@ name = "autumn"
 version = "0.1.0"
 dependencies = [
  "gpui-kit",
+ "tokio",
+ "ui-state",
 ]
 
 [[package]]
@@ -7322,6 +7324,13 @@ version = "0.1.0"
 [[package]]
 name = "ui-state"
 version = "0.1.0"
+dependencies = [
+ "domain",
+ "flume",
+ "gpui-kit",
+ "thiserror 2.0.21",
+ "tokio",
+]
 
 [[package]]
 name = "ui-theme"
