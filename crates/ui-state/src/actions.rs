@@ -26,7 +26,8 @@ actions!(
     ]
 );
 
-/// Back and forward: `cmd-[` / `cmd-]` on macOS, `ctrl` elsewhere.
+/// Back and forward: `cmd-[` / `cmd-]` on macOS, `ctrl-[` / `ctrl-]`
+/// elsewhere. Windows and Linux also bind `alt-left` / `alt-right`.
 #[cfg(target_os = "macos")]
 const NAVIGATION_KEYS: (&str, &str) = ("cmd-[", "cmd-]");
 #[cfg(not(target_os = "macos"))]
@@ -38,6 +39,11 @@ const PALETTE_KEY: &str = "cmd-j";
 #[cfg(not(target_os = "macos"))]
 const PALETTE_KEY: &str = "ctrl-j";
 
+/// Arrow-key chords to walk the same history as [`NAVIGATION_KEYS`] on
+/// Windows and Linux, where `ctrl-[` is awkward on many keyboard layouts.
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+const ALT_NAVIGATION_KEYS: (&str, &str) = ("alt-left", "alt-right");
+
 /// Registers the workspace key bindings. Call it once at boot.
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
@@ -46,5 +52,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(PALETTE_KEY, OpenCommandPalette, Some(WORKSPACE)),
         KeyBinding::new("q", OpenCommandPalette, Some(WORKSPACE_NOT_TYPING)),
         KeyBinding::new("s", OpenSearch, Some(WORKSPACE_NOT_TYPING)),
+    ]);
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    cx.bind_keys([
+        KeyBinding::new(ALT_NAVIGATION_KEYS.0, GoBack, Some(WORKSPACE)),
+        KeyBinding::new(ALT_NAVIGATION_KEYS.1, GoForward, Some(WORKSPACE)),
     ]);
 }
