@@ -23,7 +23,10 @@ tokio              = { default-features = false, version = "1.54" }
 tracing            = "0.1"
 tracing-appender   = "0.2"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3" }
+ui-components      = { path = "crates/ui-components" }
+ui-screens         = { path = "crates/ui-screens" }
 ui-state           = { path = "crates/ui-state" }
+ui-theme           = { path = "crates/ui-theme" }
 
 [profile.dev.package."*"]
 opt-level = 2

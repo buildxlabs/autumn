@@ -517,7 +517,9 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "ui-screens",
  "ui-state",
+ "ui-theme",
 ]
 
 [[package]]
@@ -7808,10 +7810,19 @@ dependencies = [
 [[package]]
 name = "ui-components"
 version = "0.1.0"
+dependencies = [
+ "gpui-kit",
+]
 
 [[package]]
 name = "ui-screens"
 version = "0.1.0"
+dependencies = [
+ "gpui-kit",
+ "ui-components",
+ "ui-state",
+ "ui-theme",
+]
 
 [[package]]
 name = "ui-state"
@@ -7827,6 +7838,9 @@ dependencies = [
 [[package]]
 name = "ui-theme"
 version = "0.1.0"
+dependencies = [
+ "gpui-kit",
+]
 
 [[package]]
 name = "unarray"
