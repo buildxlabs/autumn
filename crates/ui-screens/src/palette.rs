@@ -1,15 +1,18 @@
 //! The command palette: route navigation and slash modes. See ARCHITECTURE §5.
 //!
 //! Search results arrive later (#63). They plug in where [`entries`] returns
-//! nothing for a search mode, and where the query callback notifies the view.
+//! nothing for a search mode, and where the query callback re-renders the
+//! view. Rows are one ungrouped list, so a confirmed `IndexPath` is a row
+//! number; grouped results must keep that mapping.
 
 use gpui_kit::{
     App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
     Render, SharedString, Styled, TestSupportExt, Window,
     assets::IconName,
     component::{
-        ActiveTheme, IndexPath,
+        ActiveTheme,
         command::{Command, CommandItem, CommandState},
+        dialog::Cancel,
     },
     div,
 };
@@ -17,7 +20,8 @@ use ui_state::{Route, actions::COMMAND_PALETTE};
 
 use crate::shell::{icon, title};
 
-/// Routes the palette offers with no query, in order.
+/// Routes the palette offers with no query, in order. Every route, unlike
+/// the rail, which shows only some.
 const ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
 
 /// What the palette lists, chosen by a slash command at the start of the query.
@@ -151,12 +155,23 @@ impl CommandPalette {
         Mode::parse(&self.query(cx)).0
     }
 
-    fn confirm(&self, index: IndexPath, window: &mut Window, cx: &mut Context<'_, Self>) {
+    fn confirm(&self, entry: Entry, window: &mut Window, cx: &mut Context<'_, Self>) {
+        match entry {
+            Entry::Route(route) => cx.emit(PaletteEvent::Navigate(route)),
+            Entry::Mode(mode) => self.open(mode, window, cx),
+        }
+    }
+
+    /// Escape on a bare slash command, such as the `/search ` that `s`
+    /// opens with, closes the palette instead of only clearing the query.
+    ///
+    /// It runs before the command list's own handler, which closes the
+    /// dialog when the query is empty and clears it otherwise.
+    fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<'_, Self>) {
         let query = self.state.read(cx).query(cx);
-        match entries_for(&query).1.get(index.row) {
-            Some(&Entry::Route(route)) => cx.emit(PaletteEvent::Navigate(route)),
-            Some(&Entry::Mode(mode)) => self.open(mode, window, cx),
-            None => {}
+        if let (Mode::Search | Mode::Anime | Mode::Manga, "") = Mode::parse(&query) {
+            self.state
+                .update(cx, |state, cx| state.set_query("", window, cx));
         }
     }
 }
@@ -167,26 +182,32 @@ impl Render for CommandPalette {
         let (mode, rows) = entries_for(&query);
         let on_query = cx.entity().downgrade();
         let on_confirm = cx.entity().downgrade();
-        div().key_context(COMMAND_PALETTE).child(
-            Command::new(&self.state)
-                .bordered(false)
-                .items(rows.into_iter().map(Entry::item))
-                // Search modes get their rows already matched (#63).
-                .filterable(mode == Mode::Navigate)
-                .placeholder("Go to a page, or type / for search modes")
-                .empty(move |_, _, cx| empty_state(mode, cx))
-                .on_query(move |_, _, cx| {
-                    // The rows depend on the query, so render them again.
-                    if let Some(palette) = on_query.upgrade() {
-                        palette.update(cx, |_, cx| cx.notify());
-                    }
-                })
-                .on_confirm(move |index, window, cx| {
-                    if let Some(palette) = on_confirm.upgrade() {
-                        palette.update(cx, |palette, cx| palette.confirm(index, window, cx));
-                    }
-                }),
-        )
+        // The rows on screen, so a pick never lands in a newer query's list.
+        let picked = rows.clone();
+        div()
+            .key_context(COMMAND_PALETTE)
+            .capture_action(cx.listener(Self::cancel))
+            .child(
+                Command::new(&self.state)
+                    .bordered(false)
+                    .items(rows.into_iter().map(Entry::item))
+                    // Search modes get their rows already matched (#63).
+                    .filterable(mode == Mode::Navigate)
+                    .placeholder("Go to a page, or type / for search modes")
+                    .empty(move |_, _, cx| empty_state(mode, cx))
+                    .on_query(move |_, _, cx| {
+                        // The rows depend on the query, so render them again.
+                        if let Some(palette) = on_query.upgrade() {
+                            palette.update(cx, |_, cx| cx.notify());
+                        }
+                    })
+                    .on_confirm(move |index, window, cx| {
+                        let entry = picked.get(index.row).copied();
+                        if let (Some(entry), Some(palette)) = (entry, on_confirm.upgrade()) {
+                            palette.update(cx, |palette, cx| palette.confirm(entry, window, cx));
+                        }
+                    }),
+            )
     }
 }
 

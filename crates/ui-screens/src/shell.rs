@@ -525,10 +525,8 @@ mod tests {
         assert!(shell.palette_open(cx), "s opens it");
         assert_eq!(shell.query(cx), "/search ", "s opens it in /search mode");
         assert_eq!(shell.mode(cx), Mode::Search, "in search mode");
-        // The first escape clears the query, the second closes.
         shell.press(cx, "escape");
-        shell.press(cx, "escape");
-        assert!(!shell.palette_open(cx), "closed again");
+        assert!(!shell.palette_open(cx), "one escape closes a bare /search");
 
         shell.click(cx, "search-pill");
         assert!(shell.palette_open(cx), "the pill opens it");
@@ -549,6 +547,9 @@ mod tests {
 
         assert_eq!(shell.route(cx), Route::Discover, "navigated to discover");
         assert!(!shell.palette_open(cx), "the palette closed");
+
+        shell.press(cx, "q");
+        assert!(shell.palette_open(cx), "focus is back on the shell");
     }
 
     #[gpui_kit::test]
@@ -561,9 +562,12 @@ mod tests {
         shell.act(cx, |window, _| {
             assert!(window.find("palette-empty").visible(), "empty state shown");
         });
-        // Escape clears the query: back to navigation, palette still open.
+        // With text typed, escape clears the query and the palette stays.
+        shell.input(cx, " naruto");
+        assert_eq!(shell.mode(cx), Mode::Anime, "still anime with text");
         shell.press(cx, "escape");
         assert!(shell.palette_open(cx), "still open");
+        assert_eq!(shell.query(cx), "", "query cleared");
 
         shell.input(cx, "/ma");
         shell.press(cx, "enter");

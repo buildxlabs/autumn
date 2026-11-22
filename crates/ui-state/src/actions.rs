@@ -9,7 +9,7 @@ pub const WORKSPACE: &str = "Workspace";
 pub const COMMAND_PALETTE: &str = "CommandPalette";
 
 /// The shell's context while no text input has focus, so single-letter
-/// shortcuts never eat typed text.
+/// shortcuts never eat typed text. Must name [`WORKSPACE`].
 const WORKSPACE_NOT_TYPING: &str = "Workspace && !Input";
 
 actions!(
