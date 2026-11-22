@@ -15,5 +15,6 @@ ui-components.workspace = true
 ui-state.workspace      = true
 
 [dev-dependencies]
+domain.workspace   = true
 gpui-kit           = { features = [ "test-support" ], workspace = true }
 ui-theme.workspace = true

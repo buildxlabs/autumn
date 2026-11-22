@@ -6,13 +6,16 @@
 //! a size cap shared with metadata blobs. See ARCHITECTURE §2 and §6. This is
 //! a back-end crate: no GPUI.
 
+mod activity;
 mod cache;
 mod client;
 mod error;
 mod limiter;
 mod request;
 
+pub use activity::RequestActivity;
 pub use cache::PosterCache;
 pub use client::{ANILIST_HOST, Client, ClientBuilder, HostKind, Lockout};
 pub use error::{Error, HttpError};
+pub use limiter::{RateLimit, RateLimitSnapshot};
 pub use request::{Method, Request, Response};

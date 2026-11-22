@@ -226,11 +226,22 @@ async fn lockout_exposes_time_remaining() {
         .host("127.0.0.1", 120, 10, HostKind::Generic)
         .build()
         .unwrap();
+    let mut observed = client.rate_limit("127.0.0.1").unwrap();
     let error = client
         .mutate(post_request(&format!("{base}/")))
         .await
         .unwrap_err();
 
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), observed.changed())
+            .await
+            .unwrap(),
+        "the 429 must be observable"
+    );
+    assert!(
+        observed.snapshot().is_some(),
+        "a lockout needs no queued request"
+    );
     assert!(
         matches!(error, Error::RateLimited { retry_after, .. } if retry_after == Duration::from_secs(1)),
         "expected the advertised Retry-After, got {error:?}"
@@ -361,5 +372,89 @@ async fn a_429_on_an_unregistered_host_still_delays_the_retry() {
         start.elapsed() >= Duration::from_secs(1),
         "a host without a limiter must still wait out Retry-After"
     );
+    server.abort();
+}
+
+#[tokio::test]
+async fn observers_see_requests_queue_and_cancel() {
+    let state = Arc::new(MockState::default());
+    let app = Router::new().route("/", get(stall)).with_state(state);
+    let (base, server) = serve(app).await;
+    let client = Client::builder()
+        .host("127.0.0.1", 1, 1, HostKind::AniList)
+        .build()
+        .unwrap();
+    let mut activity = client.request_activity();
+    let mut rate = client.rate_limit("127.0.0.1").unwrap();
+    let first = tokio::spawn({
+        let client = client.clone();
+        let request = get_request(&base);
+        async move { client.read(request).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), activity.changed())
+            .await
+            .unwrap(),
+        "the first request should become observable"
+    );
+    let oldest = activity.oldest_request().unwrap();
+    let second = tokio::spawn({
+        let client = client.clone();
+        async move { client.read(get_request(&base)).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), rate.changed())
+            .await
+            .unwrap(),
+        "the second request should queue"
+    );
+    assert_eq!(
+        activity.oldest_request(),
+        Some(oldest),
+        "first request is oldest"
+    );
+    assert!(
+        rate.snapshot().is_some_and(|status| status.queued),
+        "waiting for a token"
+    );
+
+    second.abort();
+    assert!(
+        second.await.unwrap_err().is_cancelled(),
+        "second request was cancelled"
+    );
+    assert!(rate.snapshot().is_none(), "cancelled waiter removed");
+    assert_eq!(
+        activity.oldest_request(),
+        Some(oldest),
+        "first request remains in flight"
+    );
+    first.abort();
+    assert!(
+        first.await.unwrap_err().is_cancelled(),
+        "first request was cancelled"
+    );
+    assert!(
+        activity.oldest_request().is_none(),
+        "cancellation clears request activity"
+    );
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_request_stays_active_until_its_body_is_consumed() {
+    let state = Arc::new(MockState::default());
+    let app = Router::new().route("/", get(ok)).with_state(state);
+    let (base, server) = serve(app).await;
+    let client = Client::builder().build().unwrap();
+    let mut activity = client.request_activity();
+
+    let response = client.read(get_request(&base)).await.unwrap();
+    assert!(
+        activity.oldest_request().is_some(),
+        "headers arrived, body is still pending"
+    );
+    assert_eq!(response.text().await.unwrap(), "ok", "body is unchanged");
+    assert!(activity.oldest_request().is_none(), "body completed");
     server.abort();
 }

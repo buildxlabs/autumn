@@ -14,8 +14,11 @@ use gpui_kit::{App, Task};
 /// falling this far behind means it is stalled, and back-pressure is right.
 const EVENT_CAPACITY: usize = 256;
 
+/// Publishes engine events to the foreground pump.
+pub type Sender = flume::Sender<AppEvent>;
+
 /// Creates the bounded engine-to-UI event channel.
-pub fn channel() -> (flume::Sender<AppEvent>, flume::Receiver<AppEvent>) {
+pub fn channel() -> (Sender, flume::Receiver<AppEvent>) {
     flume::bounded(EVENT_CAPACITY)
 }
 

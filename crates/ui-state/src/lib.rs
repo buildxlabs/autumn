@@ -6,6 +6,7 @@ pub mod actions;
 mod badges;
 pub mod bridge;
 pub mod events;
+pub mod fetch_status;
 mod route;
 mod router;
 mod scroll;

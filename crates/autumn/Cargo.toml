@@ -12,10 +12,11 @@ workspace = true
 [dependencies]
 anyhow.workspace             = true
 db                           = { path = "../db" }
+domain.workspace             = true
 gpui-kit.workspace           = true
 net.workspace                = true
 settings                     = { path = "../settings" }
-tokio                        = { features = [ "rt-multi-thread" ], workspace = true }
+tokio                        = { features = [ "io-util", "rt-multi-thread" ], workspace = true }
 tracing.workspace            = true
 tracing-appender.workspace   = true
 tracing-subscriber.workspace = true
