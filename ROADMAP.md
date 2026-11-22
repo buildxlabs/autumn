@@ -10,72 +10,77 @@ Last reviewed: 2026-11-21.
 
 ### Made
 
-| #   | Decision                                                                                    | Why                                                                                                                                     |
-| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Rust + GPUI through **`gpui-kit` 0.10** as the single UI dependency                         | It pins matching `gpui-pre`, `gpui-base`, `gpui-component` and assets, so there are no duplicate-type mismatches.                       |
-| D2  | Multi-crate workspace (about 25 crates, created phase by phase)                             | Editing UI never recompiles librqbit or QuickJS, and back-end crates never see GPUI. See ARCHITECTURE §2–3.                             |
-| D3  | Own Tokio bridge, not `gpui-tokio-bridge`                                                   | `gpui-tokio-bridge 0.1.0` depends on `gpui 0.2`, while `gpui-kit` uses `gpui-pre 0.3.12`. The types are incompatible.                   |
-| D4  | Playback through an **external mpv/IINA/VLC/MPC-HC** first, embedded libmpv later (Phase 9) | Native players already handle 10-bit HEVC, AV1 and ASS subtitles. Embedding is the riskiest piece, so it comes after the product works. |
-| D5  | No transcoding pipeline                                                                     | Browser-oriented HLS transcoding and in-browser subtitle renderers solve a problem a desktop app with mpv doesn't have.                 |
-| D6  | SQLite via `sqlx` (WAL, embedded migrations). Secrets in the OS keychain                    | Async fits the Tokio engine. Tokens never land in the DB or logs.                                                                       |
-| D7  | Account-free use is first-class (local tracking platform)                                   | The app must be fully usable without AniList/MAL login.                                                                                 |
-| D8  | Content sources ship as **extensions** (`rquickjs` sandbox). The app bundles no scrapers    | Keeps the core small and legally clean. Sources break and get fixed without an app release.                                             |
-| D9  | License: **GPL-3.0-only** (`LICENSE`). Private repo, non-commercial, shared with friends    | Lets us port code from the GPL-3.0 references. Ported files keep their original notice. AGPL references stay behavior-only.             |
+| #   | Decision                                                                                                                                  | Why                                                                                                                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Rust + GPUI through **`gpui-kit` 0.10** as the single UI dependency                                                                       | It pins matching `gpui-pre`, `gpui-base`, `gpui-component` and assets, so there are no duplicate-type mismatches.                                                                                                                       |
+| D2  | Multi-crate workspace (about 25 crates, created phase by phase)                                                                           | Editing UI never recompiles librqbit or Luau, and back-end crates never see GPUI. See ARCHITECTURE §2–3.                                                                                                                                |
+| D3  | Own Tokio bridge, not `gpui-tokio-bridge`                                                                                                 | `gpui-tokio-bridge 0.1.0` depends on `gpui 0.2`, while `gpui-kit` uses `gpui-pre 0.3.12`. The types are incompatible. `gpui-kit 0.10` ships no Tokio integration; switch if a later release does.                                       |
+| D4  | Playback through an **external mpv/IINA/VLC/MPC-HC** first, embedded libmpv later (Phase 9)                                               | Native players already handle 10-bit HEVC, AV1 and ASS subtitles. Embedding is the riskiest piece, so it comes after the product works.                                                                                                 |
+| D5  | No transcoding pipeline and no ffmpeg dependency                                                                                          | Every source reaches the player directly or through the loopback relay, and mpv/IINA/VLC play 10-bit HEVC, AV1 and ASS natively. Transcoding only matters for browsers and casting, both out of scope.                                  |
+| D6  | SQLite via `sqlx` (WAL, embedded migrations). Secrets in the OS keychain only                                                             | Async fits the Tokio engine. Tokens never land in the DB or logs. Without a keychain, AniList login is refused ([ADR 0002](docs/adr/0002-refuse-anilist-login-without-keychain.md)).                                                    |
+| D7  | Account-free use is first-class (local tracking platform). AniList is bring-your-own-account                                              | The app must be fully usable without AniList/MAL login. The public AniList catalog needs no account either way. Whether AniList's terms allow an account-free tracker is open in [#21](https://github.com/buildxlabs/autumn/issues/21). |
+| D8  | Content sources ship as **extensions**: Luau via `mlua`, plus declarative sources; WASM later; no JavaScript. The app bundles no scrapers | Keeps the core small and legally clean. Sources break and get fixed without an app release. Luau's built-in sandbox avoids maintaining a JS barrier ([ADR 0003](docs/adr/0003-extensions-run-luau-with-our-own-api.md)).                |
+| D9  | License: **GPL-3.0-only** (`LICENSE`). Private repo, non-commercial, shared with friends                                                  | Lets us port code from the GPL-3.0 references. Ported files keep their original notice. AGPL references stay behavior-only.                                                                                                             |
+| D10 | Extensions target **our own manifest and host API** (was O2)                                                                              | No compatibility layer for an existing community format. The extensions we need are ported by hand ([ADR 0003](docs/adr/0003-extensions-run-luau-with-our-own-api.md)).                                                                 |
+| D11 | MSRV is **Rust 1.100**, the toolchain channel (was O3)                                                                                    | `rust-toolchain.toml`, `rust-version` in `Cargo.toml` and `flake.nix` all pin 1.100. One toolchain, no older-compiler support.                                                                                                          |
+| D12 | Media are identified by Autumn's own `MediaId`, minted on the first user fact                                                             | Keeps AniList, MAL, AniDB, Kitsu and custom sources equal; external ids are cross-references ([ADR 0001](docs/adr/0001-own-media-id-minted-on-first-user-fact.md)).                                                                     |
 
 ### Open (resolve before the phase that needs them)
 
-| #   | Question                                                                                                  | Needed by | Default if nobody decides                                                                     |
-| --- | --------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------- |
-| O2  | Extension format: our own manifest/API, or compatibility with an existing community extension format?     | Phase 4   | Our own manifest, with an API shaped so an adapter for an existing format can be added later. |
-| O3  | MSRV: workspace says `rust-version = "1.85"`, toolchain is 1.100. Raise to what `gpui-pre` needs?         | Phase 0   | Set `rust-version` to the toolchain channel once gpui-kit compiles.                           |
-| O4  | Embedded player approach: mpv `--wid` into a child native view, or libmpv render API into a GPUI texture? | Phase 9   | Prototype `--wid` first: it is simpler, and VortX desktop proves it works.                    |
-| O5  | Watch party: own protocol, or Syncplay-compatible?                                                        | Phase 10  | Syncplay-compatible, so it works with existing servers.                                       |
+| #   | Question                                                                                                  | Needed by | Default if nobody decides                                                  |
+| --- | --------------------------------------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------- |
+| O4  | Embedded player approach: mpv `--wid` into a child native view, or libmpv render API into a GPUI texture? | Phase 9   | Prototype `--wid` first: it is simpler, and VortX desktop proves it works. |
+| O5  | Watch party: own protocol, or Syncplay-compatible?                                                        | Phase 10  | Syncplay-compatible, so it works with existing servers.                    |
 
 ## 2. Stack
 
 Versions checked on crates.io on 2026-11-21. Pin them in `[workspace.dependencies]` when the crate that needs them is created.
 
-| Concern             | Crate(s)                                                                                                  | Notes                                                               |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| UI                  | `gpui-kit 0.10` (→ `gpui-pre =0.3.12`, `gpui-component 0.10`)                                             | Use `test-support` in dev-deps. Optional `gpui-fast` backend later. |
-| Async               | `tokio 1.54`, `flume 0.12`                                                                                | Tokio for the engine. flume for engine → UI events.                 |
-| HTTP                | `reqwest 0.13` (rustls), `axum 0.8` / `hyper 1`                                                           | axum serves the loopback endpoints.                                 |
-| GraphQL             | `cynic 3.14`                                                                                              | AniList schema-typed queries.                                       |
-| Storage             | `sqlx 0.9` (sqlite), `rmp-serde 1.3`, `keyring 4`                                                         | MessagePack for cached metadata blobs.                              |
-| Torrent             | `librqbit 9.1`                                                                                            | Embedded engine and stream reader.                                  |
-| Extensions          | `rquickjs 0.14`                                                                                           | One runtime per extension, with memory/time limits.                 |
-| Player (embedded)   | `libmpv2 7`                                                                                               | Phase 9 only, behind a cargo feature.                               |
-| Files               | `notify 9`, `directories 6`                                                                               | Watcher and OS paths.                                               |
-| Parsing             | `scraper 0.29`, `quick-xml 0.42`, `strsim 0.11`, `nucleo-matcher 0.3`                                     | HTML indexers, RSS, title similarity, palette fuzzy search.         |
-| Desktop integration | `discord-rich-presence 1.1`, `notify-rust 4`                                                              | RPC and OS notifications.                                           |
-| Observability       | `tracing 0.1`, `tracing-subscriber 0.3`, `tracing-appender 0.2`                                           | Rolling file logs and the in-app viewer.                            |
-| Errors              | `thiserror 2`                                                                                             | `anyhow` only in the binary.                                        |
-| Tooling (exists)    | clippy (strict workspace lints), rustfmt, taplo, typos, cargo-deny, cargo-nextest, Vite+ hooks, Nix flake | Already set up in the repo.                                         |
+| Concern             | Crate(s)                                                                                                  | Notes                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| UI                  | `gpui-kit 0.10` (→ `gpui-pre =0.3.12`, `gpui-component 0.10`)                                             | Use `test-support` in dev-deps. Optional `gpui-fast` backend later.                                                       |
+| Async               | `tokio 1.54`, `flume 0.12`                                                                                | Tokio for the engine. flume for engine → UI events.                                                                       |
+| HTTP                | `reqwest 0.13` (rustls), `axum 0.8` / `hyper 1`                                                           | axum serves the loopback endpoints.                                                                                       |
+| GraphQL             | `cynic 3.14`                                                                                              | AniList schema-typed queries.                                                                                             |
+| Storage             | `sqlx 0.9` (sqlite), `rmp-serde 1.3`, `keyring 4`                                                         | MessagePack for cached metadata blobs.                                                                                    |
+| Torrent             | `librqbit 9.1`                                                                                            | Embedded engine and stream reader.                                                                                        |
+| Extensions          | `mlua 0.12` (features `luau`, `async`, `send`; not `vendored`)                                            | One Luau VM per extension, with memory and interrupt limits. `luau` already builds from source, so `vendored` is dropped. |
+| Player (embedded)   | `libmpv2 7`                                                                                               | Phase 9 only, behind a cargo feature.                                                                                     |
+| Files               | `notify 9`, `directories 6`                                                                               | Watcher and OS paths.                                                                                                     |
+| Parsing             | `scraper 0.29`, `quick-xml 0.42`, `strsim 0.11`, `nucleo-matcher 0.3`                                     | HTML indexers, RSS, title similarity, palette fuzzy search.                                                               |
+| Desktop integration | `discord-rich-presence 1.1`, `notify-rust 4`                                                              | RPC and OS notifications.                                                                                                 |
+| Observability       | `tracing 0.1`, `tracing-subscriber 0.3`, `tracing-appender 0.2`                                           | Rolling file logs and the in-app viewer.                                                                                  |
+| Errors              | `thiserror 2`                                                                                             | `anyhow` only in the binary.                                                                                              |
+| Tooling (exists)    | clippy (strict workspace lints), rustfmt, taplo, typos, cargo-deny, cargo-nextest, Vite+ hooks, Nix flake | Already set up in the repo.                                                                                               |
 
 ## 3. Phases
 
 Each phase ends on an **exit criterion**: something you can run or observe. A phase is done when every box is checked and `pnpm check` plus `pnpm test:rust` pass.
 
+Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then the Phase 0 shell and the Phase 1 back-end crates (`net`, `db`, `metadata`, `tracker`) proceed in parallel. Phase 1 screens wait for the shell.
+
 ### Phase 0: Foundation and window shell
 
-- [ ] Resolve O3 (MSRV); record it in this file.
+- [x] Resolve O3 (MSRV); record it in this file (D11: Rust 1.100).
 - [ ] Root `Cargo.toml`: `[workspace.dependencies]`, `[profile.dev.package."*"] opt-level = 2`, release profile (`lto`, `codegen-units = 1`, `strip`).
 - [ ] Turn `crates/autumn` into the binary. Create `domain`, `settings`, `ui-theme`, `ui-components`, `ui-state`, `ui-screens`.
-- [ ] Add `gpui-kit`; get `cargo deny check` green with the GPUI tree (add scoped license exceptions with reasons).
+- [ ] Add `gpui-kit`; get `cargo deny check` green with the GPUI tree. With gpui-kit 0.10 it already exits 0, with 68 non-blocking duplicate-version warnings ([research](docs/research/cargo-deny-gpui-kit.md)); which exceptions to accept is open in [#22](https://github.com/buildxlabs/autumn/issues/22).
 - [ ] Tokio bridge + event pump (ARCHITECTURE §4) with a test that round-trips a command and an event.
-- [ ] Window: transparent 40px titlebar, sidebar rail with hover expand and "More" overflow, router with back/forward and scroll restore, theme tokens applied.
-- [ ] Logging to file. App paths created on first run.
-- [ ] CI workflow running `pnpm check` and `cargo nextest` on macOS, Linux and Windows.
+- [ ] Window: transparent 40px titlebar with back/forward and a search pill, our own sidebar rail with hover expand (click-pin setting) and "More" overflow, router with back/forward and scroll restore, theme tokens applied (ARCHITECTURE §5).
+- [ ] Logging to file. App paths created on first run (ARCHITECTURE §7–8).
+- [ ] CI workflow on pull requests only, running `pnpm check` and `cargo nextest`. Linux runs on every PR through the Nix dev shell. macOS and Windows run when the PR carries the `ci:macos` / `ci:windows` label, or on manual dispatch.
+- [ ] Pre-push hook refuses pushes to `main`. The org's Free plan has no server-side rulesets for a private repo, so the guard is local.
 - **Exit:** `cargo run -p autumn` opens the themed shell on all three OSes. Navigating between placeholder routes and pressing Back restores scroll position.
 
 ### Phase 1: Catalog, tracking, and discovery
 
-- [ ] `net` (shared client, retry, rate limiter, poster cache), `db` (migrations, settings rows), `metadata` (AniList catalog/search/schedule/user collection), `tracker` (AniList + Local platforms).
-- [ ] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator. Token in keychain.
+- [ ] `net` (shared client, up to 3 retries, one rate limiter shared by every AniList request at its current degraded 30 req/min plus an unpublished burst limit, poster disk cache), `db` (migrations, settings rows imported once from the Phase 0 `settings.json`, media ids with cross-references to the AniList id and `idMal` only), `metadata` (AniList catalog/search/schedule/user collection; at most 50 items per page, and `MediaListCollection` stops at 11k entries and needs its custom lists read too), `tracker` (AniList + Local platforms).
+- [ ] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator (countdown). Token in keychain; login refused without one (ADR 0002). Re-login prompt before the one-year token expires.
 - [ ] Components: media card (badges, hover popup, context menu, skeleton), carousel (drag, arrows, Alt+wheel), hero banner, virtualized poster grid.
-- [ ] Screens: Home (fixed default widgets), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
+- [ ] Screens: Home (fixed default widgets: continue-watching header, discover header, my lists, missed sequels, aired recently, anime carousel, centered title), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
 - [ ] Command palette: open/close, `/search`, `/anime`, `/manga`.
 - [ ] Top indefinite loader during background fetches.
+- [ ] Settings screen with a Storage tab holding a "Clear poster cache" button.
 - **Exit:** with no account, a user can browse, search, add a show to a local list and see it on Home after restart. With AniList, the same edits round-trip to AniList.
 
 ### Phase 2: Local library and external playback
@@ -99,7 +104,7 @@ Each phase ends on an **exit criterion**: something you can run or observe. A ph
 
 ### Phase 4: Extensions
 
-- [ ] Resolve O2. `extensions`: rquickjs sandbox, limits, outbound guard, manifest, repository URLs, install/update/remove, settings per extension, error surfacing.
+- [ ] `extensions`: Luau sandbox (one VM per extension, ADR 0003), declarative sources, limits, outbound guard, manifest, repository URLs, install/update/remove, settings per extension, error surfacing.
 - [ ] Provider adapters: torrent provider (feeds `search`), online stream, manga, custom source, tracker.
 - [ ] Screens: Extensions (installed, marketplace, update diff review), extension playground (editor + run).
 - [ ] Sidebar badge for updates/errors.
@@ -134,7 +139,7 @@ Each phase ends on an **exit criterion**: something you can run or observe. A ph
 - [ ] Settings: every tab live-reloads affected modules. Unsaved-changes bar.
 - [ ] Offline mode: snapshot selected entries, offline platform, queued changes synced on reconnect, offline sidebar.
 - [ ] Custom sources screen. MyAnimeList platform. DNS-over-HTTPS setting.
-- [ ] Diagnostics: log viewer, error explainer, anonymized issue report bundle, crash log, file-cache screen.
+- [ ] Diagnostics: log viewer, error explainer, anonymized issue report bundle, crash log, file-cache screen (extends the Phase 1 Settings Storage tab).
 - [ ] Updater (GitHub releases, signature check, stable/beta channels) + announcements banner. Packaging for all three OSes.
 - **Exit:** a new user installs from a release artifact, customizes theme and home, goes offline and keeps watching local files, then comes back online and the queued progress syncs.
 
@@ -153,62 +158,62 @@ Each phase ends on an **exit criterion**: something you can run or observe. A ph
 
 Every feature from the research documents and the reference code is listed here with a phase, or marked out of scope with a reason. When a feature is added or dropped, update this table.
 
-| Area                | Feature                                                                                                   | Phase                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Library             | Multi-directory library, fuzzy scanner without naming rules                                               | 2                                                  |
-|                     | Release filename parser; configurable matching threshold, legacy fallback                                 | 2                                                  |
-|                     | File watcher + auto-scan; shelving on drive disconnect                                                    | 2                                                  |
-|                     | Library explorer (tree, lock/unlock, re-match, rename, delete); bulk file actions                         | 2                                                  |
-|                     | Scan summaries with confidence + unmatched list                                                           | 2                                                  |
-|                     | Specials / OVA / NCOP / NCED separation; filler marking                                                   | 2                                                  |
-|                     | Local subtitle file discovery next to videos                                                              | 2                                                  |
-| Playback sources    | Local direct play                                                                                         | 2                                                  |
-|                     | Torrent streaming: head+tail priority, batch file pick, preload next, disk handoff, cleanup, live overlay | 3                                                  |
-|                     | Debrid streaming: 4 providers, cached detection, download to library, dashboard                           | 5                                                  |
-|                     | Online streaming via extensions: sub/dub, servers, stale-URL refresh, manual mapping, merge into library  | 5                                                  |
-|                     | Loopback relay: header injection, HLS/DASH rewrite, prefetch, ranged sub-requests                         | 5                                                  |
-| Players             | External mpv, IINA, VLC, MPC-HC; detection per OS; fresh IPC per launch; detached + supervised            | 2                                                  |
-|                     | Continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next countdown       | 2                                                  |
-|                     | Chapter OP/ED skip with custom patterns                                                                   | 2                                                  |
-|                     | Embedded libmpv player + full control chrome, mini-player, stats, screenshots, Anime4K                    | 9                                                  |
-|                     | Online skip-time database (intro/outro)                                                                   | 9                                                  |
-|                     | Subtitle translation of embedded tracks                                                                   | Backlog                                            |
-| Torrents            | Search drawer: indexers, resolution/codec/group/seeders/size/date, batch badge, availability              | 3                                                  |
-|                     | Auto-select scoring profiles                                                                              | 3                                                  |
-|                     | qBittorrent (re-auth), Transmission, rqbit, built-in client, torrent list with live badges                | 3                                                  |
-|                     | Mirror base URL + proxy per indexer; infohash-only magnet copy                                            | 3                                                  |
-|                     | Auto-downloader: rules, profiles, delay timers, multi-indexer, queue approve/reject, history              | 6                                                  |
-| Metadata & tracking | AniList: login, avatar, collection sync, full list editor, manual refresh                                 | 1                                                  |
-|                     | Local account-free tracking                                                                               | 1                                                  |
-|                     | AniZip / animap episode metadata; anime-offline-database for matching                                     | 1–2                                                |
-|                     | MyAnimeList platform                                                                                      | 8                                                  |
-|                     | Tracker extensions (sync to other services)                                                               | 4                                                  |
-|                     | Custom sources (non-AniList entries)                                                                      | 8                                                  |
-| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, manga, by country)     | 1                                                  |
-|                     | Advanced search with all filters + scroll restore                                                         | 1                                                  |
-|                     | My Lists with status tabs, custom lists, quick edit                                                       | 1                                                  |
-|                     | Schedule calendar + missing episodes                                                                      | 6                                                  |
-|                     | Playlists (cross-series queues)                                                                           | 6                                                  |
-| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync        | 7                                                  |
-| Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                          | 4                                                  |
-|                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                               | Backlog (after 4; needs a stable UI-injection API) |
-| Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                   | 0                                                  |
-|                     | Command palette + slash commands + magnet paste interception                                              | 1, 3                                               |
-|                     | Media cards (badges, hover popup, context menu, skeleton); episode cards; carousels (drag, Alt+wheel)     | 1–2                                                |
-|                     | Entry page: 7 banner modes, 2 sizes, 2 info-box layouts, blurred background, source tabs                  | 1, 8                                               |
-|                     | Modular home: 15 widget types + settings dialog                                                           | 8                                                  |
-|                     | Spoiler protection suite (5 toggles)                                                                      | 8                                                  |
-|                     | Theme & UI studio (colors, presets, sidebar, backgrounds, banners, cards, sorting)                        | 8                                                  |
-|                     | Route cross-fade; reduced-motion respect                                                                  | 8                                                  |
-|                     | Onboarding wizard                                                                                         | 2                                                  |
-|                     | Feature tour; announcements banner                                                                        | 8                                                  |
-| System              | Settings with live reload (all tabs)                                                                      | 8                                                  |
-|                     | Offline mode + snapshot sync                                                                              | 8                                                  |
-|                     | Discord Rich Presence; OS notifications; cron jobs                                                        | 6                                                  |
-|                     | DNS-over-HTTPS; outbound request guard; user-agent pool                                                   | 1, 4, 8                                            |
-|                     | Log viewer, error explainer, anonymized issue report, crash log, file-cache screen                        | 8                                                  |
-|                     | Auto-updater with channels + signature verification                                                       | 8                                                  |
-| Social              | Watch party with chat; library sharing                                                                    | 10                                                 |
+| Area                | Feature                                                                                                                                               | Phase                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Library             | Multi-directory library, fuzzy scanner without naming rules                                                                                           | 2                                                  |
+|                     | Release filename parser; configurable matching threshold, legacy fallback                                                                             | 2                                                  |
+|                     | File watcher + auto-scan; shelving on drive disconnect                                                                                                | 2                                                  |
+|                     | Library explorer (tree, lock/unlock, re-match, rename, delete); bulk file actions                                                                     | 2                                                  |
+|                     | Scan summaries with confidence + unmatched list                                                                                                       | 2                                                  |
+|                     | Specials / OVA / NCOP / NCED separation; filler marking                                                                                               | 2                                                  |
+|                     | Local subtitle file discovery next to videos                                                                                                          | 2                                                  |
+| Playback sources    | Local direct play                                                                                                                                     | 2                                                  |
+|                     | Torrent streaming: head+tail priority, batch file pick, preload next, disk handoff, cleanup, live overlay                                             | 3                                                  |
+|                     | Debrid streaming: 4 providers, cached detection, download to library, dashboard                                                                       | 5                                                  |
+|                     | Online streaming via extensions: sub/dub, servers, stale-URL refresh, manual mapping, merge into library                                              | 5                                                  |
+|                     | Loopback relay: header injection, HLS/DASH rewrite, prefetch, ranged sub-requests                                                                     | 5                                                  |
+| Players             | External mpv, IINA, VLC, MPC-HC; detection per OS; fresh IPC per launch; detached + supervised                                                        | 2                                                  |
+|                     | Continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next countdown                                                   | 2                                                  |
+|                     | Chapter OP/ED skip with custom patterns                                                                                                               | 2                                                  |
+|                     | Embedded libmpv player + full control chrome, mini-player, stats, screenshots, Anime4K                                                                | 9                                                  |
+|                     | Online skip-time database (intro/outro)                                                                                                               | 9                                                  |
+|                     | Subtitle translation of embedded tracks                                                                                                               | Backlog                                            |
+| Torrents            | Search drawer: indexers, resolution/codec/group/seeders/size/date, batch badge, availability                                                          | 3                                                  |
+|                     | Auto-select scoring profiles                                                                                                                          | 3                                                  |
+|                     | qBittorrent (re-auth), Transmission, rqbit, built-in client, torrent list with live badges                                                            | 3                                                  |
+|                     | Mirror base URL + proxy per indexer; infohash-only magnet copy                                                                                        | 3                                                  |
+|                     | Auto-downloader: rules, profiles, delay timers, multi-indexer, queue approve/reject, history                                                          | 6                                                  |
+| Metadata & tracking | AniList: login, avatar, collection sync, full list editor, manual refresh                                                                             | 1                                                  |
+|                     | Local account-free tracking                                                                                                                           | 1                                                  |
+|                     | AniZip / animap episode metadata; anime-offline-database for matching                                                                                 | 1–2                                                |
+|                     | MyAnimeList platform                                                                                                                                  | 8                                                  |
+|                     | Tracker extensions (sync to other services)                                                                                                           | 4                                                  |
+|                     | Custom sources (non-AniList entries)                                                                                                                  | 8                                                  |
+| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, manga, by country)                                                 | 1                                                  |
+|                     | Advanced search with all filters + scroll restore                                                                                                     | 1                                                  |
+|                     | My Lists with status tabs, custom lists, quick edit                                                                                                   | 1                                                  |
+|                     | Schedule calendar + missing episodes                                                                                                                  | 6                                                  |
+|                     | Playlists (cross-series queues)                                                                                                                       | 6                                                  |
+| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync                                                    | 7                                                  |
+| Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                                                                      | 4                                                  |
+|                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                                                                           | Backlog (after 4; needs a stable UI-injection API) |
+| Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                                                               | 0                                                  |
+|                     | Command palette + slash commands + magnet paste interception                                                                                          | 1, 3                                               |
+|                     | Media cards (badges, hover popup, context menu, skeleton); episode cards; carousels (drag, Alt+wheel)                                                 | 1–2                                                |
+|                     | Entry page: default banner mode (Large, Fluid) in Phase 1; 6 other banner modes, Small, Boxed, blurred background in 8; source tabs with their phases | 1, 2, 3, 5, 8                                      |
+|                     | Home: fixed set of 7 widgets in Phase 1; library/schedule/manga widgets with their phases; modular home (15 widget types) + settings dialog in 8      | 1, 8                                               |
+|                     | Spoiler protection suite (5 toggles)                                                                                                                  | 8                                                  |
+|                     | Theme & UI studio (colors, presets, sidebar, backgrounds, banners, cards, sorting)                                                                    | 8                                                  |
+|                     | Route cross-fade; reduced-motion respect                                                                                                              | 8                                                  |
+|                     | Onboarding wizard                                                                                                                                     | 2                                                  |
+|                     | Feature tour; announcements banner                                                                                                                    | 8                                                  |
+| System              | Settings with live reload (all tabs)                                                                                                                  | 8                                                  |
+|                     | Offline mode + snapshot sync                                                                                                                          | 8                                                  |
+|                     | Discord Rich Presence; OS notifications; cron jobs                                                                                                    | 6                                                  |
+|                     | DNS-over-HTTPS; outbound request guard; user-agent pool                                                                                               | 1, 4, 8                                            |
+|                     | Log viewer, error explainer, anonymized issue report, crash log, file-cache screen                                                                    | 8                                                  |
+|                     | Auto-updater with channels + signature verification                                                                                                   | 8                                                  |
+| Social              | Watch party with chat; library sharing                                                                                                                | 10                                                 |
 
 ### Out of scope (desktop-only product)
 
@@ -245,6 +250,10 @@ The source research lives in [`docs/research/`](docs/research/):
 - `STREAMING_PLATFORMS_RESEARCH.md`: the 14 reference apps compared feature by feature.
 - `GPUI_STREAMING_ARCHITECTURE.md`: the original GPUI blueprint. Superseded by ARCHITECTURE.md where they differ (bridge crate, crate names, phase order).
 - `SEANIME_UI_SPEC.md`, `seanime-complete-master-feature-list-backend-ui-ux.md`: screen-by-screen UI spec and feature list for the primary reference.
+- `anilist-api.md`: AniList rate limits, auth, schema limits and ToS, checked for Phase 1.
+- `gpui-kit-shell.md`: what gpui-kit 0.10 gives the Phase 0 shell, and its gaps.
+- `mlua-luau-sandbox.md`: the Luau sandbox spike behind D8.
+- `cargo-deny-gpui-kit.md`: what `cargo deny check` reports with gpui-kit 0.10 in the tree.
 
 ## 6. Reference map
 
