@@ -16,7 +16,7 @@ use gpui_kit::{
 };
 use ui_components::{RAIL_WIDTH, Rail, RailExpansion, RailItem};
 use ui_state::{
-    Route, RouterState, ScrollRestore,
+    RailBadges, Route, RouterState, ScrollRestore,
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
 };
 
@@ -46,12 +46,14 @@ const SYSTEM_ROUTES: [Route; 3] = [Route::Extensions, Route::Sync, Route::Settin
 pub struct RailPrefs {
     /// How the rail opens.
     pub mode: RailMode,
+    /// Main items the user moved into "More".
+    pub unpinned: Vec<Route>,
 }
 
 impl RailPrefs {
-    /// Preferences with the rail opening in `mode`.
-    pub fn new(mode: RailMode) -> Self {
-        Self { mode }
+    /// Preferences with the rail opening in `mode` and `unpinned` in "More".
+    pub fn new(mode: RailMode, unpinned: Vec<Route>) -> Self {
+        Self { mode, unpinned }
     }
 }
 
@@ -91,6 +93,8 @@ pub struct AppShell {
     rail_open: bool,
     /// The pending hover open; dropping it cancels the open.
     hover_open: Option<Task<()>>,
+    /// The counts on the rail's items.
+    badges: Entity<RailBadges>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -125,6 +129,8 @@ impl AppShell {
                 }
             },
         );
+        let badges = cx.new(|_| RailBadges::placeholder());
+        cx.observe(&badges, |_, _, cx| cx.notify()).detach();
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -136,6 +142,7 @@ impl AppShell {
             saving: None,
             rail_open: false,
             hover_open: None,
+            badges,
         }
     }
 
@@ -248,6 +255,17 @@ impl AppShell {
         cx.notify();
     }
 
+    /// Moves `route` into "More", or back onto the rail, and saves that.
+    fn toggle_pinned(&mut self, route: Route, cx: &mut Context<'_, Self>) {
+        if let Some(at) = self.prefs.unpinned.iter().position(|&r| r == route) {
+            self.prefs.unpinned.remove(at);
+        } else {
+            self.prefs.unpinned.push(route);
+        }
+        self.saving = Some((self.save_prefs)(&self.prefs, cx));
+        cx.notify();
+    }
+
     fn rail_expansion(&self) -> RailExpansion {
         match (self.rail_open, self.prefs.mode) {
             (false, _) => RailExpansion::Collapsed,
@@ -296,29 +314,32 @@ impl AppShell {
 
     fn render_rail(&self, cx: &mut Context<'_, Self>) -> Rail {
         let current = *self.router.current();
+        let badges = self.badges.read(cx);
         let item = |route: Route| RailItem {
             id: rail_id(route).into(),
             label: title(route),
             icon: icon(route),
             active: route == current,
+            badge: badges.count(route),
+            pinned: !self.prefs.unpinned.contains(&route),
         };
+        let items = RAIL_ROUTES.map(item).into();
+        let system = SYSTEM_ROUTES.map(item).into();
         let shell = cx.entity().downgrade();
-        let rail = Rail::new(
-            RAIL_ROUTES.map(item).into(),
-            SYSTEM_ROUTES.map(item).into(),
-            "Guest",
-            move |id, _, cx| {
-                let route = RAIL_ROUTES
-                    .into_iter()
-                    .chain(SYSTEM_ROUTES)
-                    .find(|&route| rail_id(route) == id.as_ref());
-                if let Some(route) = route {
-                    // The shell outlives its rail, so the update fails only
-                    // while the window is closing.
-                    let _ = shell.update(cx, |shell, cx| shell.navigate(route, cx));
-                }
-            },
-        )
+        let pin_shell = shell.clone();
+        let rail = Rail::new(items, system, "Guest", move |id, _, cx| {
+            if let Some(route) = route_for(id) {
+                // The shell outlives its rail, so the update fails only
+                // while the window is closing.
+                let _ = shell.update(cx, |shell, cx| shell.navigate(route, cx));
+            }
+        })
+        .on_pin_toggle(move |id, _, cx| {
+            if let Some(route) = route_for(id) {
+                // Fails only while the window is closing.
+                let _ = pin_shell.update(cx, |shell, cx| shell.toggle_pinned(route, cx));
+            }
+        })
         .expansion(self.rail_expansion());
         match self.prefs.mode {
             RailMode::Hover => rail.on_hover(cx.listener(|shell, hovered: &bool, _, cx| {
@@ -448,16 +469,14 @@ fn search_pill(cx: &mut Context<'_, AppShell>) -> impl IntoElement {
         .test_support()
 }
 
-fn rail_id(route: Route) -> &'static str {
-    match route {
-        Route::Home => "rail-home",
-        Route::Discover => "rail-discover",
-        Route::Schedule => "rail-schedule",
-        Route::Manga => "rail-manga",
-        Route::Extensions => "rail-extensions",
-        Route::Sync => "rail-sync",
-        Route::Settings => "rail-settings",
-    }
+/// The route whose rail item has the element id `id`.
+fn route_for(id: &str) -> Option<Route> {
+    Route::ALL.into_iter().find(|&route| rail_id(route) == id)
+}
+
+/// The element id of `route`'s rail item.
+fn rail_id(route: Route) -> String {
+    format!("rail-{}", route.key())
 }
 
 pub(crate) fn title(route: Route) -> SharedString {
@@ -636,6 +655,48 @@ mod tests {
             bounds.unwrap()
         }
 
+        /// Whether an element with `id` was drawn in the last frame. It
+        /// draws no new frame, so it sees only what the app itself drew.
+        fn shows(&self, cx: &mut TestAppContext, id: &'static str) -> bool {
+            cx.update_window(self.window.into(), |_, window, _| {
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        }
+
+        fn right_click(&self, cx: &mut TestAppContext, id: &'static str) {
+            self.act(cx, |window, cx| window.right_click(id, cx));
+        }
+
+        /// Clicks entry `index` (separators count) of the open popup menu.
+        fn pick(&self, cx: &mut TestAppContext, index: usize) {
+            self.act(cx, |window, cx| {
+                window.within("popup-menu").click(index, cx);
+            });
+        }
+
+        /// Resizes the window, then draws only the frames the app asks for,
+        /// as the platform's frame loop would.
+        fn resize(&self, cx: &mut TestAppContext, height: f32) {
+            cx.simulate_window_resize(self.window.into(), size(px(1280.), px(height)));
+            let settled = cx
+                .update_window(self.window.into(), |_, window, cx| {
+                    for _ in 0..10 {
+                        if window.simulate_next_frame(cx) == 0 {
+                            return true;
+                        }
+                        window.render_frame(cx);
+                    }
+                    false
+                })
+                .unwrap();
+            assert!(settled, "the rail stops asking for frames");
+        }
+
+        fn last_saved(&self) -> Option<RailPrefs> {
+            self.saved.borrow().last().cloned()
+        }
+
         fn rail_width(&self, cx: &mut TestAppContext) -> Pixels {
             self.bounds(cx, "rail").size.width
         }
@@ -673,7 +734,7 @@ mod tests {
     }
 
     fn pinned() -> RailPrefs {
-        RailPrefs::new(RailMode::ClickPin)
+        RailPrefs::new(RailMode::ClickPin, Vec::new())
     }
 
     #[gpui_kit::test]
@@ -799,6 +860,97 @@ mod tests {
         assert!(
             rail.bottom() - settings.bottom() < px(100.),
             "settings sits near the rail's bottom edge, got {settings:?} in {rail:?}"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_short_window_folds_the_bottom_items_into_more(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        assert!(shell.shows(cx, "rail-manga"), "everything fits at 800px");
+        assert!(
+            !shell.shows(cx, "rail-more"),
+            "no More while everything fits"
+        );
+
+        shell.resize(cx, 400.);
+        assert!(shell.shows(cx, "rail-home"), "the top item stays");
+        assert!(!shell.shows(cx, "rail-manga"), "the bottom item folds");
+        assert!(shell.shows(cx, "rail-more"), "More holds it");
+        assert!(
+            shell.shows(cx, "rail-settings"),
+            "the system group never folds"
+        );
+
+        shell.resize(cx, 800.);
+        assert!(shell.shows(cx, "rail-manga"), "growing brings it back");
+        assert!(!shell.shows(cx, "rail-more"), "and More goes away");
+    }
+
+    #[gpui_kit::test]
+    fn unpinning_moves_an_item_into_more_and_pinning_brings_it_back(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+
+        shell.right_click(cx, "rail-discover");
+        shell.pick(cx, 0);
+        assert!(!shell.shows(cx, "rail-discover"), "unpinned off the rail");
+        assert!(shell.shows(cx, "rail-more"), "into More");
+        assert_eq!(
+            shell.last_saved(),
+            Some(RailPrefs::new(RailMode::Hover, vec![Route::Discover])),
+            "the unpinned set is saved"
+        );
+
+        // More lists Discover, a separator, then "Pin Discover".
+        shell.click(cx, "rail-more");
+        shell.pick(cx, 0);
+        assert_eq!(shell.route(cx), Route::Discover, "More navigates");
+        // More's highlight is Button's presentation-only `selected`, which UI
+        // queries can't see; it is checked by eye in the running app.
+
+        shell.click(cx, "rail-more");
+        shell.pick(cx, 2);
+        assert!(shell.shows(cx, "rail-discover"), "pinned back");
+        assert!(!shell.shows(cx, "rail-more"), "More is empty again");
+        assert_eq!(
+            shell.last_saved(),
+            Some(RailPrefs::default()),
+            "the pin is saved"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn system_items_cannot_be_unpinned(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.right_click(cx, "rail-settings");
+        assert!(!shell.shows(cx, "popup-menu"), "no menu on system items");
+    }
+
+    #[gpui_kit::test]
+    fn a_saved_unpinned_item_starts_in_more(cx: &mut TestAppContext) {
+        let shell = Shell::open_with(cx, RailPrefs::new(RailMode::Hover, vec![Route::Schedule]));
+        assert!(!shell.shows(cx, "rail-schedule"));
+        assert!(shell.shows(cx, "rail-more"));
+    }
+
+    #[gpui_kit::test]
+    fn badges_show_collapsed_and_expanded(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        assert!(shell.shows(cx, "rail-schedule-badge"), "a pill on the icon");
+        assert!(!shell.shows(cx, "rail-home-badge"), "no count, no pill");
+
+        shell.hover(cx, "rail");
+        shell.wait(cx, HOVER_OPEN_DELAY);
+        assert!(
+            shell.shows(cx, "rail-schedule-badge"),
+            "a trailing pill when expanded"
+        );
+
+        shell.leave_rail(cx);
+        shell.right_click(cx, "rail-schedule");
+        shell.pick(cx, 0);
+        assert!(
+            shell.shows(cx, "rail-more-badge"),
+            "an unpinned item's count moves onto More"
         );
     }
 

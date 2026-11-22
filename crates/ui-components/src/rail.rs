@@ -4,10 +4,17 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui_kit::{
-    Animation, AnimationExt, App, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
-    Pixels, RenderOnce, SharedString, StatefulInteractiveElement, Styled, TestSupportExt, Window,
+    Animation, AnimationExt, AnyElement, App, ElementId, Hsla, InteractiveElement, IntoElement,
+    ParentElement, Pixels, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
+    TestSupportExt, Window,
     assets::IconName,
-    component::{ActiveTheme, Icon, tooltip::Tooltip},
+    canvas,
+    component::{
+        ActiveTheme, Icon, Selectable,
+        button::{Button, ButtonVariants},
+        menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMenuItem},
+        tooltip::Tooltip,
+    },
     div, ease_in_out,
     prelude::FluentBuilder,
     px,
@@ -23,14 +30,18 @@ const WIDTH_ANIMATION: Duration = Duration::from_millis(200);
 const ITEM_SIZE: f32 = 44.;
 /// The gap between a row and the rail's edges, so a collapsed row is centred.
 const ITEM_MARGIN: f32 = (RAIL_WIDTH - ITEM_SIZE) / 2.;
+/// The vertical gap between rows.
+const ITEM_GAP: f32 = 4.;
 /// The icon's size; the row's padding keeps it centred while collapsed.
 const ICON_SIZE: f32 = 20.;
+/// The element id of the "More" button.
+const MORE_ID: &str = "rail-more";
 
 /// One rail entry, as the shell describes it.
 #[derive(Debug, Clone)]
 pub struct RailItem {
-    /// Element id, unique within the rail. [`Rail::new`]'s callback gets it
-    /// back when the item is clicked.
+    /// Element id, unique within the rail. The rail's callbacks get it back.
+    /// The item's badge, if any, has the id `<id>-badge`.
     pub id: SharedString,
     /// Shown next to the icon when expanded, and as the tooltip when not.
     pub label: SharedString,
@@ -38,6 +49,11 @@ pub struct RailItem {
     pub icon: IconName,
     /// Whether this item's route is the one on screen.
     pub active: bool,
+    /// A count to show as a pill; `None` shows none.
+    pub badge: Option<u32>,
+    /// Whether the item sits on the rail. An unpinned main item lives in
+    /// "More". System items ignore this.
+    pub pinned: bool,
 }
 
 /// How much room the rail takes.
@@ -60,29 +76,31 @@ impl RailExpansion {
     }
 }
 
-/// Called with the clicked item's id.
-type OnSelect = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
+/// Called with an item's id.
+type OnItem = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 /// Called with `true` when the pointer enters the rail, `false` when it leaves.
 type OnHover = Box<dyn Fn(&bool, &mut Window, &mut App)>;
-/// Called when the expand/collapse toggle is clicked.
-type OnToggle = Rc<dyn Fn(&mut Window, &mut App)>;
+/// Called when a control with nothing to pass back is clicked.
+type OnAction = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// A vertical strip of route buttons with a system group pinned to the bottom.
 ///
-/// The shell decides the expansion and handles hover, toggling and
-/// selection; the rail only remembers, per element, whether to animate its
-/// width. In overlay mode the shell places it over the
-/// content, after it in paint order; the rail blocks the mouse to what is
-/// behind it.
+/// Main items that don't fit the height, and unpinned ones, share a "More"
+/// menu; system items never fold. The shell decides the expansion and
+/// handles hover, toggling, selection and pinning. The rail only remembers,
+/// per element, its measured height and whether to animate its width. In
+/// overlay mode the shell places it over the content, after it in paint
+/// order; the rail blocks the mouse to what is behind it.
 #[derive(IntoElement)]
 pub struct Rail {
     items: Vec<RailItem>,
     system: Vec<RailItem>,
     account: SharedString,
     expansion: RailExpansion,
-    on_select: OnSelect,
+    on_select: OnItem,
+    on_pin_toggle: Option<OnItem>,
     on_hover: Option<OnHover>,
-    on_toggle: Option<OnToggle>,
+    on_toggle: Option<OnAction>,
 }
 
 impl Rail {
@@ -101,6 +119,7 @@ impl Rail {
             account: account.into(),
             expansion: RailExpansion::Collapsed,
             on_select: Rc::new(on_select),
+            on_pin_toggle: None,
             on_hover: None,
             on_toggle: None,
         }
@@ -110,6 +129,17 @@ impl Rail {
     #[must_use]
     pub fn expansion(mut self, expansion: RailExpansion) -> Self {
         self.expansion = expansion;
+        self
+    }
+
+    /// Offers Unpin on a main item's context menu and Pin in "More"; both run
+    /// `on_pin_toggle` with the item's id, and the shell flips its `pinned`.
+    #[must_use]
+    pub fn on_pin_toggle(
+        mut self,
+        on_pin_toggle: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_pin_toggle = Some(Rc::new(on_pin_toggle));
         self
     }
 
@@ -136,6 +166,24 @@ impl std::fmt::Debug for Rail {
             .field("account", &self.account)
             .field("expansion", &self.expansion)
             .finish_non_exhaustive()
+    }
+}
+
+/// How many of the `pinned` items show when the main section is `available`
+/// pixels tall. The rest fold into "More", which takes a row itself whenever
+/// it shows: when some pinned items fold, or when any item is `unpinned`.
+fn shown_count(pinned: usize, unpinned: usize, available: f32) -> usize {
+    // Counted rather than divided, to stay clear of float-to-int casts.
+    let mut rows = 0_usize;
+    let mut used = ITEM_SIZE;
+    while used <= available && rows <= pinned {
+        rows += 1;
+        used += ITEM_GAP + ITEM_SIZE;
+    }
+    if unpinned == 0 && pinned <= rows {
+        pinned
+    } else {
+        rows.saturating_sub(1).min(pinned)
     }
 }
 
@@ -169,62 +217,81 @@ impl Motion {
     }
 }
 
+/// The colours rows are drawn with, read once from the theme.
+#[derive(Debug, Clone, Copy)]
+struct Palette {
+    active_wash: Hsla,
+    active: Hsla,
+    muted: Hsla,
+    hover: Hsla,
+    badge: Hsla,
+    badge_text: Hsla,
+    avatar: Hsla,
+    radius: Pixels,
+}
+
+impl Palette {
+    fn new(cx: &App) -> Self {
+        let theme = cx.theme();
+        Self {
+            active_wash: theme.accent,
+            active: theme.primary,
+            muted: theme.muted_foreground,
+            hover: theme.list_hover,
+            badge: theme.danger,
+            badge_text: theme.danger_foreground,
+            avatar: theme.primary,
+            radius: theme.radius,
+        }
+    }
+}
+
 impl RenderOnce for Rail {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let expanded = self.expansion.is_expanded();
-        let animate = Motion::track(self.expansion, window, cx);
-
+        let expansion = self.expansion;
+        let animate = Motion::track(expansion, window, cx);
+        let palette = Palette::new(cx);
         let theme = cx.theme();
-        let hover = theme.list_hover;
-        let radius = theme.radius;
-        let muted = theme.muted_foreground;
-        let row = |item: RailItem, on_select: &OnSelect| {
-            let on_select = Rc::clone(on_select);
-            let id = item.id.clone();
-            let (wash, color) = if item.active {
-                (theme.accent, theme.primary)
-            } else {
-                (gpui_kit::transparent_black(), muted)
-            };
-            rail_row(
-                RowLook {
-                    id: item.id,
-                    icon: item.icon,
-                    text: item.label,
-                    expanded,
-                    wash,
-                    color,
-                    hover,
-                    radius,
-                },
-                move |window, cx| on_select(&id, window, cx),
-            )
-        };
+        let (bg, border) = (theme.sidebar, theme.sidebar_border);
 
         let toggle = self.on_toggle.map(|on_toggle| {
-            let (icon, text) = if expanded {
+            let (icon, text) = if expansion.is_expanded() {
                 (IconName::PanelLeftClose, "Collapse")
             } else {
                 (IconName::PanelLeftOpen, "Expand")
             };
+            let item = RailItem {
+                id: "rail-toggle".into(),
+                label: text.into(),
+                icon,
+                active: false,
+                badge: None,
+                pinned: true,
+            };
             rail_row(
-                RowLook {
-                    id: "rail-toggle".into(),
-                    icon,
-                    text: text.into(),
-                    expanded,
-                    wash: gpui_kit::transparent_black(),
-                    color: muted,
-                    hover,
-                    radius,
-                },
+                item,
+                expansion,
+                palette,
                 move |window, cx| on_toggle(window, cx),
+                None,
             )
         });
-        let account = account_row(self.account, self.expansion, theme.primary, muted);
+        let main = main_section(
+            self.items,
+            expansion,
+            palette,
+            &self.on_select,
+            self.on_pin_toggle.as_ref(),
+            window,
+            cx,
+        );
+        let on_select = &self.on_select;
+        let system = self
+            .system
+            .into_iter()
+            .map(|item| select_row(item, expansion, palette, on_select, None));
 
-        let on_select = self.on_select;
-        let (from, to) = if expanded {
+        let (from, to) = if expansion.is_expanded() {
             (RAIL_WIDTH, RAIL_EXPANDED_WIDTH)
         } else {
             (RAIL_EXPANDED_WIDTH, RAIL_WIDTH)
@@ -238,27 +305,24 @@ impl RenderOnce for Rail {
             .w(px(to))
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(ITEM_GAP))
             .py_2()
             .overflow_hidden()
-            .bg(theme.sidebar)
+            .bg(bg)
             .border_r_1()
-            .border_color(theme.sidebar_border)
-            .when(self.expansion == RailExpansion::Overlay, |rail| {
-                rail.shadow_lg()
-            })
+            .border_color(border)
+            .when(expansion == RailExpansion::Overlay, Styled::shadow_lg)
             .when_some(self.on_hover, |rail, on_hover| {
                 rail.on_hover(move |hovered, window, cx| on_hover(hovered, window, cx))
             })
             .children(toggle)
-            .children(self.items.into_iter().map(|item| row(item, &on_select)))
-            .child(div().flex_1())
-            .children(self.system.into_iter().map(|item| row(item, &on_select)))
-            .child(account);
+            .child(main)
+            .children(system)
+            .child(account_row(self.account, expansion, palette));
 
         if animate {
             rail.with_animation(
-                ElementId::Name(format!("rail-width-{expanded}").into()),
+                ElementId::Name(format!("rail-width-{}", expansion.is_expanded()).into()),
                 Animation::new(WIDTH_ANIMATION).with_easing(ease_in_out),
                 move |rail, delta| rail.w(px(from + (to - from) * delta)),
             )
@@ -269,34 +333,226 @@ impl RenderOnce for Rail {
     }
 }
 
-/// What one rail row shows.
-struct RowLook {
-    id: SharedString,
-    icon: IconName,
-    text: SharedString,
-    expanded: bool,
-    wash: Hsla,
-    color: Hsla,
-    hover: Hsla,
-    radius: Pixels,
+/// The main items: as many as fit the measured height, then "More" with the
+/// rest and the unpinned ones. The height is measured while painting, and a
+/// new height asks for another frame to fold to it.
+fn main_section(
+    items: Vec<RailItem>,
+    expansion: RailExpansion,
+    palette: Palette,
+    on_select: &OnItem,
+    on_pin_toggle: Option<&OnItem>,
+    window: &mut Window,
+    cx: &mut App,
+) -> impl IntoElement {
+    let height = window.use_keyed_state("rail-main-height", cx, |_, _| None::<f32>);
+    // Until the first measurement, show everything; it is clipped anyway.
+    let available = height.read(cx).unwrap_or(f32::MAX);
+    let (mut shown, unpinned): (Vec<_>, Vec<_>) = items.into_iter().partition(|item| item.pinned);
+    let folded = shown.split_off(shown_count(shown.len(), unpinned.len(), available));
+    let more = (!folded.is_empty() || !unpinned.is_empty()).then(|| {
+        more_button(
+            folded,
+            unpinned,
+            expansion,
+            palette,
+            on_select,
+            on_pin_toggle,
+        )
+    });
+
+    let measure = canvas(
+        move |bounds, window, cx| {
+            let measured = Some(bounds.size.height.as_f32());
+            let changed = height.update(cx, |height, _| {
+                let changed = *height != measured;
+                *height = measured;
+                changed
+            });
+            if changed {
+                // A refresh is ignored mid-draw, so ask for the next frame.
+                window.request_animation_frame();
+            }
+        },
+        |_, (), _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full();
+
+    div()
+        .relative()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .gap(px(ITEM_GAP))
+        .overflow_hidden()
+        .child(measure)
+        .children(
+            shown
+                .into_iter()
+                .map(|item| select_row(item, expansion, palette, on_select, on_pin_toggle)),
+        )
+        .children(more)
 }
 
-/// A clickable row: icon, then the label when expanded. Collapsed, the label
-/// moves into a tooltip.
-fn rail_row(look: RowLook, on_click: impl Fn(&mut Window, &mut App) + 'static) -> impl IntoElement {
-    let RowLook {
-        id,
-        icon,
-        text,
-        expanded,
-        wash,
-        color,
-        hover,
-        radius,
-    } = look;
+/// The "More" button and its menu: the `folded` and `unpinned` items to go
+/// to, then a Pin entry per unpinned item. It is selected when its menu holds
+/// the active route.
+fn more_button(
+    folded: Vec<RailItem>,
+    unpinned: Vec<RailItem>,
+    expansion: RailExpansion,
+    palette: Palette,
+    on_select: &OnItem,
+    on_pin_toggle: Option<&OnItem>,
+) -> impl IntoElement {
+    let hidden = || folded.iter().chain(&unpinned);
+    let active = hidden().any(|item| item.active);
+    // The badges of the items inside, so their counts stay in sight.
+    let total = hidden().filter_map(|item| item.badge).sum::<u32>();
+    let pill =
+        (total > 0).then(|| badge_pill(format!("{MORE_ID}-badge"), total, expansion, palette));
+    let on_select = Rc::clone(on_select);
+    let on_pin_toggle = on_pin_toggle.cloned();
+    let (inner_pill, corner_pill) = if expansion.is_expanded() {
+        (pill, None)
+    } else {
+        (None, pill)
+    };
+    // Button centres its content, so the icon and label go in a full-width
+    // row that lines up with the other items.
+    let content = div()
+        .w_full()
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(
+            Icon::new(IconName::Ellipsis)
+                .size(px(ICON_SIZE))
+                .flex_none(),
+        )
+        .when(expansion.is_expanded(), |row| {
+            row.child(label("More".into()))
+        })
+        .children(inner_pill);
+    let button = Button::new(MORE_ID)
+        .ghost()
+        .selected(active)
+        .w_full()
+        .h(px(ITEM_SIZE))
+        .px(px((ITEM_SIZE - ICON_SIZE) / 2.))
+        .child(content)
+        .when(!expansion.is_expanded(), |button| button.tooltip("More"))
+        .dropdown_menu(move |menu, _, _| {
+            more_menu(menu, &folded, &unpinned, &on_select, on_pin_toggle.as_ref())
+        });
+    // Lined up with the rows, so a corner pill sits where theirs do.
     div()
+        .relative()
+        .flex_none()
+        .mx(px(ITEM_MARGIN))
+        .child(button)
+        .children(corner_pill)
+}
+
+fn more_menu(
+    mut menu: PopupMenu,
+    folded: &[RailItem],
+    unpinned: &[RailItem],
+    on_select: &OnItem,
+    on_pin_toggle: Option<&OnItem>,
+) -> PopupMenu {
+    for item in folded.iter().chain(unpinned) {
+        let on_select = Rc::clone(on_select);
+        let id = item.id.clone();
+        let text = match item.badge {
+            Some(count) => format!("{} ({count})", item.label),
+            None => item.label.to_string(),
+        };
+        menu = menu.item(
+            PopupMenuItem::new(text)
+                .icon(Icon::new(item.icon))
+                .checked(item.active)
+                .on_click(move |_, window, cx| on_select(&id, window, cx)),
+        );
+    }
+    let Some(on_pin_toggle) = on_pin_toggle else {
+        return menu;
+    };
+    if !unpinned.is_empty() {
+        menu = menu.separator();
+    }
+    for item in unpinned {
+        let on_pin_toggle = Rc::clone(on_pin_toggle);
+        let id = item.id.clone();
+        menu = menu.item(
+            PopupMenuItem::new(format!("Pin {}", item.label))
+                .icon(Icon::new(IconName::Pin))
+                .on_click(move |_, window, cx| on_pin_toggle(&id, window, cx)),
+        );
+    }
+    menu
+}
+
+/// A row that runs `on_select` when clicked and, with `on_pin_toggle`, offers Unpin
+/// on right-click.
+fn select_row(
+    item: RailItem,
+    expansion: RailExpansion,
+    palette: Palette,
+    on_select: &OnItem,
+    on_pin_toggle: Option<&OnItem>,
+) -> AnyElement {
+    let id = item.id.clone();
+    let on_select = Rc::clone(on_select);
+    let unpin = on_pin_toggle.map(|on_pin_toggle| {
+        let on_pin_toggle = Rc::clone(on_pin_toggle);
+        let id = id.clone();
+        let unpin: OnAction = Rc::new(move |window: &mut Window, cx: &mut App| {
+            on_pin_toggle(&id, window, cx);
+        });
+        unpin
+    });
+    rail_row(
+        item,
+        expansion,
+        palette,
+        move |window, cx| on_select(&id, window, cx),
+        unpin,
+    )
+}
+
+/// A clickable row: icon, then the label when expanded, and a badge pill.
+/// Collapsed, the label moves into a tooltip and the pill onto the icon.
+/// With `unpin`, right-clicking offers to move the item into "More".
+fn rail_row(
+    item: RailItem,
+    expansion: RailExpansion,
+    palette: Palette,
+    on_click: impl Fn(&mut Window, &mut App) + 'static,
+    unpin: Option<OnAction>,
+) -> AnyElement {
+    let RailItem {
+        id,
+        label: text,
+        icon,
+        active,
+        badge,
+        pinned: _,
+    } = item;
+    let (wash, color) = if active {
+        (palette.active_wash, palette.active)
+    } else {
+        (gpui_kit::transparent_black(), palette.muted)
+    };
+    let pill = badge.map(|count| badge_pill(format!("{id}-badge"), count, expansion, palette));
+    let row = div()
         .id(ElementId::Name(id))
         .test_support()
+        .relative()
         .h(px(ITEM_SIZE))
         .mx(px(ITEM_MARGIN))
         .px(px((ITEM_SIZE - ICON_SIZE) / 2.))
@@ -304,28 +560,69 @@ fn rail_row(look: RowLook, on_click: impl Fn(&mut Window, &mut App) + 'static) -
         .flex_none()
         .items_center()
         .gap_3()
-        .rounded(radius)
+        .rounded(palette.radius)
         .bg(wash)
         .text_color(color)
-        .hover(move |style| style.bg(hover))
+        .hover(move |style| style.bg(palette.hover))
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(Icon::new(icon).size(px(ICON_SIZE)).flex_none())
         .map(|row| {
-            if expanded {
+            if expansion.is_expanded() {
                 row.child(label(text))
             } else {
                 row.tooltip(move |window, cx| Tooltip::new(text.clone()).build(window, cx))
             }
         })
+        .children(pill);
+    match unpin {
+        Some(unpin) => row
+            .context_menu(move |menu, _, _| {
+                let unpin = Rc::clone(&unpin);
+                menu.item(
+                    PopupMenuItem::new("Unpin")
+                        .icon(Icon::new(IconName::PinOff))
+                        .on_click(move |_, window, cx| unpin(window, cx)),
+                )
+            })
+            .into_any_element(),
+        None => row.into_any_element(),
+    }
+}
+
+/// A count pill: on the icon's corner when collapsed, trailing when expanded.
+fn badge_pill(
+    id: String,
+    count: u32,
+    expansion: RailExpansion,
+    palette: Palette,
+) -> impl IntoElement {
+    div()
+        .id(ElementId::Name(id.into()))
+        .test_support()
+        .flex_none()
+        .min_w(px(16.))
+        .h(px(16.))
+        .px_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(palette.badge)
+        .text_color(palette.badge_text)
+        .text_size(px(10.))
+        .map(|pill| {
+            if expansion.is_expanded() {
+                pill
+            } else {
+                // Over the icon's top-right corner.
+                pill.absolute().top(px(4.)).left(px(26.))
+            }
+        })
+        .child(count.to_string())
 }
 
 /// The placeholder account row: an avatar dot, then `name` when expanded.
-fn account_row(
-    name: SharedString,
-    expansion: RailExpansion,
-    avatar: Hsla,
-    muted: Hsla,
-) -> impl IntoElement {
+fn account_row(name: SharedString, expansion: RailExpansion, palette: Palette) -> impl IntoElement {
     div()
         .h(px(ITEM_SIZE))
         .mx(px(ITEM_MARGIN))
@@ -339,10 +636,10 @@ fn account_row(
                 .flex_none()
                 .size(px(ICON_SIZE))
                 .rounded_full()
-                .bg(avatar),
+                .bg(palette.avatar),
         )
         .when(expansion.is_expanded(), |row| {
-            row.child(label(name).text_color(muted))
+            row.child(label(name).text_color(palette.muted))
         })
 }
 
@@ -354,4 +651,33 @@ fn label(text: SharedString) -> gpui_kit::Div {
         .overflow_hidden()
         .text_sm()
         .child(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shown_count;
+
+    /// Rows are 44px with 4px gaps, so n rows need 48n - 4 px.
+    #[test]
+    fn overflow_split_folds_the_bottom_items_into_more() {
+        // (pinned, unpinned, available height, expected items shown)
+        let cases = [
+            (4, 0, 188., 4), // exactly 4 rows: everything fits, no "More"
+            (4, 0, 400., 4), // room to spare
+            (4, 0, 187., 2), // 3 rows fit: "More" takes one, so 2 items show
+            (4, 0, 92., 1),  // 2 rows: 1 item + "More"
+            (4, 0, 44., 0),  // 1 row: only "More"
+            (4, 0, 10., 0),  // no room at all
+            (3, 1, 400., 3), // an unpinned item: "More" shows but fits too
+            (3, 1, 140., 2), // 3 rows, "More" needed for the unpinned item
+            (0, 2, 400., 0), // all unpinned
+        ];
+        for (pinned, unpinned, available, expected) in cases {
+            assert_eq!(
+                shown_count(pinned, unpinned, available),
+                expected,
+                "{pinned} pinned, {unpinned} unpinned in {available}px"
+            );
+        }
+    }
 }

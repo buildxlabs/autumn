@@ -24,6 +24,7 @@ fn a_valid_file_reads_its_values() {
     let expected = Settings {
         appearance: AppearanceSettings {
             sidebar_click_pin: true,
+            ..AppearanceSettings::default()
         },
     };
     assert_eq!(read, Some(expected));
