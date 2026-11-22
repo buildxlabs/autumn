@@ -1,6 +1,6 @@
 //! Errors returned by the shared HTTP client.
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use thiserror::Error;
 
@@ -93,6 +93,16 @@ pub enum Error {
     /// The response body could not be read.
     #[error("failed to read response: {source}")]
     Body {
+        /// The cause of the failure.
+        #[source]
+        source: HttpError,
+    },
+
+    /// A disk-cache operation failed.
+    #[error("cache operation failed at {path:?}: {source}")]
+    Cache {
+        /// The path involved in the failure.
+        path: PathBuf,
         /// The cause of the failure.
         #[source]
         source: HttpError,
