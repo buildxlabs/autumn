@@ -3,1378 +3,253 @@
     "Page": {
       "airingSchedules": [
         {
-          "id": 395112,
-          "episode": 2972,
-          "airingAt": 1863682200,
-          "timeUntilAiring": 68325852,
+          "episode": 8,
+          "airingAt": 1795370400,
+          "timeUntilAiring": 4240,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 218217,
+            "idMal": 65169,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "JK Dark Summoner to Deki......Dei Nai!?",
+              "english": "I\u2019m Dating a Dark Summoner Omake Shorts",
+              "native": "JK\u30c0\u30fc\u30af\u30b5\u30e2\u30ca\u30fc\u3068\u30c7\u30ad\u3002\u3002\u3002\u3002\u3002\u3002\u3067\u3044\u306a\u3044!?"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx218217-crIGlnQDg0bJ.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx218217-crIGlnQDg0bJ.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx218217-crIGlnQDg0bJ.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
+            "bannerImage": null,
+            "format": "TV_SHORT",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 12,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 58,
+            "genres": ["Comedy", "Ecchi", "Fantasy", "Romance"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795370400, "timeUntilAiring": 4240 }
           }
         },
         {
-          "id": 395111,
-          "episode": 2971,
-          "airingAt": 1863077400,
-          "timeUntilAiring": 67721052,
+          "episode": 168,
+          "airingAt": 1795399200,
+          "timeUntilAiring": 33040,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 137653,
+            "idMal": 55809,
             "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
+            "title": { "romaji": "Xian Ni", "english": "Renegade Immortal", "native": "\u4ed9\u9006" },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx137653-1wHbCVvABGOr.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx137653-1wHbCVvABGOr.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx137653-1wHbCVvABGOr.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
+            "bannerImage": null,
+            "format": "ONA",
             "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "season": null,
+            "seasonYear": null,
+            "episodes": 180,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 85,
+            "genres": ["Action", "Adventure", "Drama", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 168, "airingAt": 1795399200, "timeUntilAiring": 33040 }
           }
         },
         {
-          "id": 395110,
-          "episode": 2970,
-          "airingAt": 1862472600,
-          "timeUntilAiring": 67116252,
+          "episode": 15,
+          "airingAt": 1795399200,
+          "timeUntilAiring": 33040,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 214593,
+            "idMal": 64717,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Yuusanchi! from Yuuhachi",
+              "english": "YU-SANCHi! from YU-HACHi",
+              "native": "\u3086\u3046\u3055\u3093\u3061\uff01from \u904a\u30cf\u3061"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx214593-WZ0HaPSRae2E.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx214593-WZ0HaPSRae2E.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx214593-WZ0HaPSRae2E.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
+            "bannerImage": null,
+            "format": "TV_SHORT",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 57,
+            "meanScore": 54,
             "genres": ["Comedy", "Slice of Life"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 15, "airingAt": 1795399200, "timeUntilAiring": 33040 }
           }
         },
         {
-          "id": 395109,
-          "episode": 2969,
-          "airingAt": 1861867800,
-          "timeUntilAiring": 66511452,
+          "episode": 8,
+          "airingAt": 1795402800,
+          "timeUntilAiring": 36640,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 218532,
+            "idMal": 65119,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
+              "romaji": "Maomao no Hitorigoto 3rd Season",
               "english": null,
-              "native": "サザエさん"
+              "native": "\u732b\u732b\u306e\u3072\u3068\u308a\u3054\u3068 \u7b2c3\u671f"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx218532-I1GCprJrJ5sm.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx218532-I1GCprJrJ5sm.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx218532-I1GCprJrJ5sm.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
+            "bannerImage": null,
+            "format": "ONA",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 68,
+            "genres": ["Comedy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795402800, "timeUntilAiring": 36640 }
           }
         },
         {
-          "id": 395108,
-          "episode": 2968,
-          "airingAt": 1861263000,
-          "timeUntilAiring": 65906652,
+          "episode": 7,
+          "airingAt": 1795424400,
+          "timeUntilAiring": 58240,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 218938,
+            "idMal": 65184,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
+              "romaji": "Hotaru no Yomeiri: Choitashi",
               "english": null,
-              "native": "サザエさん"
+              "native": "\u30db\u30bf\u30eb\u306e\u5ac1\u5165\u308a \u3061\u3087\u3044\u305f\u3057"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx218938-i29Q90gbQcZQ.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx218938-i29Q90gbQcZQ.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx218938-i29Q90gbQcZQ.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
+            "bannerImage": null,
+            "format": "ONA",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 61,
+            "genres": ["Comedy", "Romance"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 7, "airingAt": 1795424400, "timeUntilAiring": 58240 }
           }
         },
         {
-          "id": 395107,
-          "episode": 2967,
-          "airingAt": 1860658200,
-          "timeUntilAiring": 65301852,
+          "episode": 8,
+          "airingAt": 1795437000,
+          "timeUntilAiring": 70840,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 207191,
+            "idMal": 63409,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Doumo, Suki na Hito ni Horegusuri wo Irai Sareta Majo desu.",
+              "english": "Hello, I am a Witch and my Crush Wants me to Make a Love Potion!",
+              "native": "\u3069\u3046\u3082\u3001\u597d\u304d\u306a\u4eba\u306b\u60da\u308c\u85ac\u3092\u4f9d\u983c\u3055\u308c\u305f\u9b54\u5973\u3067\u3059\u3002"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx207191-VgkIzfH92WoZ.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx207191-VgkIzfH92WoZ.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx207191-VgkIzfH92WoZ.jpg"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/207191-xYgpkCDnXc5m.jpg",
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 12,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 75,
+            "genres": ["Fantasy", "Romance"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795437000, "timeUntilAiring": 70840 }
           }
         },
         {
-          "id": 395106,
-          "episode": 2966,
-          "airingAt": 1860053400,
-          "timeUntilAiring": 64697052,
+          "episode": 8,
+          "airingAt": 1795438800,
+          "timeUntilAiring": 72640,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 209219,
+            "idMal": 63712,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Tensei Goblin Dakedo Shitsumon Aru?",
+              "english": "So What's Wrong with Getting Reborn as a Goblin?",
+              "native": "\u8ee2\u751f\u30b4\u30d6\u30ea\u30f3\u3060\u3051\u3069\u8cea\u554f\u3042\u308b\uff1f"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx209219-3yhKlRx0LX3p.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx209219-3yhKlRx0LX3p.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx209219-3yhKlRx0LX3p.jpg"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 65,
+            "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795438800, "timeUntilAiring": 72640 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795453200,
+          "timeUntilAiring": 87040,
+          "media": {
+            "id": 160803,
+            "idMal": 54344,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Mahou Shoujo Ikusei Keikaku: restart",
+              "english": "MAGICAL GIRL RAISING PROJECT restart",
+              "native": "\u9b54\u6cd5\u5c11\u5973\u80b2\u6210\u8a08\u753b restart"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx160803-Rcr3IvhE7q9c.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx160803-Rcr3IvhE7q9c.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx160803-Rcr3IvhE7q9c.png"
+            },
+            "bannerImage": null,
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 63,
+            "genres": ["Action", "Fantasy", "Mahou Shoujo", "Thriller"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795453200, "timeUntilAiring": 87040 }
           }
         },
         {
-          "id": 395105,
-          "episode": 2965,
-          "airingAt": 1859448600,
-          "timeUntilAiring": 64092252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395104,
-          "episode": 2964,
-          "airingAt": 1858843800,
-          "timeUntilAiring": 63487452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395103,
-          "episode": 2963,
-          "airingAt": 1858239000,
-          "timeUntilAiring": 62882652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395102,
-          "episode": 2962,
-          "airingAt": 1857634200,
-          "timeUntilAiring": 62277852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395101,
-          "episode": 2961,
-          "airingAt": 1857029400,
-          "timeUntilAiring": 61673052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395100,
-          "episode": 2960,
-          "airingAt": 1856424600,
-          "timeUntilAiring": 61068252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395099,
-          "episode": 2959,
-          "airingAt": 1855819800,
-          "timeUntilAiring": 60463452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395098,
-          "episode": 2958,
-          "airingAt": 1855215000,
-          "timeUntilAiring": 59858652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395097,
-          "episode": 2957,
-          "airingAt": 1854610200,
-          "timeUntilAiring": 59253852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395096,
-          "episode": 2956,
-          "airingAt": 1854005400,
-          "timeUntilAiring": 58649052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395095,
-          "episode": 2955,
-          "airingAt": 1853400600,
-          "timeUntilAiring": 58044252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395094,
-          "episode": 2954,
-          "airingAt": 1852795800,
-          "timeUntilAiring": 57439452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395093,
-          "episode": 2953,
-          "airingAt": 1852191000,
-          "timeUntilAiring": 56834652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395092,
-          "episode": 2952,
-          "airingAt": 1851586200,
-          "timeUntilAiring": 56229852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395091,
-          "episode": 2951,
-          "airingAt": 1850981400,
-          "timeUntilAiring": 55625052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395090,
-          "episode": 2950,
-          "airingAt": 1850376600,
-          "timeUntilAiring": 55020252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395089,
-          "episode": 2949,
-          "airingAt": 1849771800,
-          "timeUntilAiring": 54415452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395088,
-          "episode": 2948,
-          "airingAt": 1849167000,
-          "timeUntilAiring": 53810652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395087,
-          "episode": 2947,
-          "airingAt": 1848562200,
-          "timeUntilAiring": 53205852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395086,
-          "episode": 2946,
-          "airingAt": 1847957400,
-          "timeUntilAiring": 52601052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395085,
-          "episode": 2945,
-          "airingAt": 1847352600,
-          "timeUntilAiring": 51996252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395084,
-          "episode": 2944,
-          "airingAt": 1846747800,
-          "timeUntilAiring": 51391452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395083,
-          "episode": 2943,
-          "airingAt": 1846143000,
-          "timeUntilAiring": 50786652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395082,
-          "episode": 2942,
-          "airingAt": 1845538200,
-          "timeUntilAiring": 50181852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395081,
-          "episode": 2941,
-          "airingAt": 1844933400,
-          "timeUntilAiring": 49577052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395080,
-          "episode": 2940,
-          "airingAt": 1844328600,
-          "timeUntilAiring": 48972252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395079,
-          "episode": 2939,
-          "airingAt": 1843723800,
-          "timeUntilAiring": 48367452,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395078,
-          "episode": 2938,
-          "airingAt": 1843119000,
-          "timeUntilAiring": 47762652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395077,
-          "episode": 2937,
-          "airingAt": 1842514200,
-          "timeUntilAiring": 47157852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395076,
-          "episode": 2936,
-          "airingAt": 1841909400,
-          "timeUntilAiring": 46553052,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 395075,
-          "episode": 2935,
-          "airingAt": 1841304600,
-          "timeUntilAiring": 45948252,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
-            "format": "TV",
-            "status": "RELEASING",
-            "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
-            "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
-          }
-        },
-        {
-          "id": 415323,
-          "episode": 100,
-          "airingAt": 1840845600,
-          "timeUntilAiring": 45489252,
+          "episode": 25,
+          "airingAt": 1795485600,
+          "timeUntilAiring": 119440,
           "media": {
             "id": 213188,
             "idMal": 64388,
@@ -1382,12 +257,12 @@
             "title": {
               "romaji": "Jueshi Zhan Hun 2",
               "english": null,
-              "native": "绝世战魂 第2季"
+              "native": "\u7edd\u4e16\u6218\u9b42 \u7b2c2\u5b63"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213188-zwmmMVqqUjh8.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213188-zwmmMVqqUjh8.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213188-zwmmMVqqUjh8.png"
             },
             "bannerImage": null,
             "format": "ONA",
@@ -1399,407 +274,1266 @@
             "meanScore": 78,
             "genres": ["Action", "Adventure", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 25,
-              "airingAt": 1795485600,
-              "timeUntilAiring": 129252
-            }
+            "nextAiringEpisode": { "episode": 25, "airingAt": 1795485600, "timeUntilAiring": 119440 }
           }
         },
         {
-          "id": 395074,
-          "episode": 2934,
-          "airingAt": 1840699800,
-          "timeUntilAiring": 45343452,
+          "episode": 8,
+          "airingAt": 1795523160,
+          "timeUntilAiring": 157000,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 206949,
+            "idMal": 63382,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Kyouran Reijou Nia Liston",
+              "english": "Nia Liston: The Merciless Maiden",
+              "native": "\u51f6\u4e71\u4ee4\u5b22\u30cb\u30a2\u30fb\u30ea\u30b9\u30c8\u30f3"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx206949-4HYI3YuP0eLI.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx206949-4HYI3YuP0eLI.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx206949-4HYI3YuP0eLI.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/206949-c5hfhixdgvy5.jpg",
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 25,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 75,
+            "genres": ["Action", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795523160, "timeUntilAiring": 157000 }
           }
         },
         {
-          "id": 415322,
-          "episode": 99,
-          "airingAt": 1840240800,
-          "timeUntilAiring": 44884452,
+          "episode": 8,
+          "airingAt": 1795525200,
+          "timeUntilAiring": 159040,
           "media": {
-            "id": 213188,
-            "idMal": 64388,
+            "id": 209502,
+            "idMal": 63754,
             "type": "ANIME",
             "title": {
-              "romaji": "Jueshi Zhan Hun 2",
-              "english": null,
-              "native": "绝世战魂 第2季"
+              "romaji": "Shiotaiou no Satou-san ga Ore ni dake Amai",
+              "english": "The Cold Sato-san is Only Sweet to Me",
+              "native": "\u5869\u5bfe\u5fdc\u306e\u4f50\u85e4\u3055\u3093\u304c\u4ffa\u306b\u3060\u3051\u7518\u3044"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx209502-C81oN8M4Smlo.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx209502-C81oN8M4Smlo.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx209502-C81oN8M4Smlo.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/209502-TATgyznMxQOe.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 67,
+            "genres": ["Comedy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795525200, "timeUntilAiring": 159040 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795528800,
+          "timeUntilAiring": 162640,
+          "media": {
+            "id": 200294,
+            "idMal": 62696,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Choujun! Choujou Senpai",
+              "english": "Super Psychic Policeman Chojo",
+              "native": "\u8d85\u5de1\uff01\u8d85\u6761\u5148\u8f29"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx200294-E6KIgkFaJOfG.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx200294-E6KIgkFaJOfG.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx200294-E6KIgkFaJOfG.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/200294-PPEwId1xfGNO.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 66,
+            "genres": ["Comedy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795528800, "timeUntilAiring": 162640 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795528800,
+          "timeUntilAiring": 162640,
+          "media": {
+            "id": 187990,
+            "idMal": 63818,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Battle Spirits [Re] Zekkai no Kuu",
+              "english": "Battle Spirits [Re] Zekkai No Ku",
+              "native": "Battle Spirits [Re] \u7d76\u754c\u306e\u7a7a"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx187990-tNyQPmr9TkYi.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx187990-tNyQPmr9TkYi.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx187990-tNyQPmr9TkYi.png"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/187990-iDUZ4BGtmEct.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 52,
+            "genres": ["Action", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795528800, "timeUntilAiring": 162640 }
+          }
+        },
+        {
+          "episode": 7,
+          "airingAt": 1795528800,
+          "timeUntilAiring": 162640,
+          "media": {
+            "id": 198727,
+            "idMal": 62484,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Chitose-kun wa Ramune Bin no Naka Part 2",
+              "english": "Chitose Is in the Ramune Bottle 2nd Cour",
+              "native": "\u5343\u6b73\u304f\u3093\u306f\u30e9\u30e0\u30cd\u74f6\u306e\u306a\u304b 2\u30af\u30fc\u30eb"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx198727-BL0JTpg0G8tq.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx198727-BL0JTpg0G8tq.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx198727-BL0JTpg0G8tq.jpg"
             },
             "bannerImage": null,
-            "format": "ONA",
-            "status": "RELEASING",
-            "season": null,
-            "seasonYear": null,
-            "episodes": 100,
-            "chapters": null,
-            "meanScore": 78,
-            "genres": ["Action", "Adventure", "Fantasy"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 25,
-              "airingAt": 1795485600,
-              "timeUntilAiring": 129252
-            }
-          }
-        },
-        {
-          "id": 395073,
-          "episode": 2933,
-          "airingAt": 1840095000,
-          "timeUntilAiring": 44738652,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 11,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 80,
+            "genres": ["Comedy", "Romance"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 7, "airingAt": 1795528800, "timeUntilAiring": 162640 }
           }
         },
         {
-          "id": 415321,
-          "episode": 98,
-          "airingAt": 1839636000,
-          "timeUntilAiring": 44279652,
+          "episode": 8,
+          "airingAt": 1795530600,
+          "timeUntilAiring": 164440,
           "media": {
-            "id": 213188,
-            "idMal": 64388,
+            "id": 187316,
+            "idMal": 61140,
             "type": "ANIME",
-            "title": {
-              "romaji": "Jueshi Zhan Hun 2",
-              "english": null,
-              "native": "绝世战魂 第2季"
-            },
+            "title": { "romaji": "Gensou Suikoden", "english": "Suikoden", "native": "\u5e7b\u60f3\u6c34\u6ef8\u4f1d" },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx187316-jucYCojVTjSY.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx187316-jucYCojVTjSY.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx187316-jucYCojVTjSY.jpg"
             },
             "bannerImage": null,
-            "format": "ONA",
-            "status": "RELEASING",
-            "season": null,
-            "seasonYear": null,
-            "episodes": 100,
-            "chapters": null,
-            "meanScore": 78,
-            "genres": ["Action", "Adventure", "Fantasy"],
-            "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 25,
-              "airingAt": 1795485600,
-              "timeUntilAiring": 129252
-            }
-          }
-        },
-        {
-          "id": 395072,
-          "episode": 2932,
-          "airingAt": 1839490200,
-          "timeUntilAiring": 44133852,
-          "media": {
-            "id": 2406,
-            "idMal": 2406,
-            "type": "ANIME",
-            "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
-            },
-            "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
-            },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 23,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 59,
+            "genres": ["Action", "Adventure", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795530600, "timeUntilAiring": 164440 }
           }
         },
         {
-          "id": 380143,
-          "episode": 1015,
-          "airingAt": 1839398400,
-          "timeUntilAiring": 44042052,
+          "episode": 8,
+          "airingAt": 1795532400,
+          "timeUntilAiring": 166240,
           "media": {
-            "id": 8687,
-            "idMal": 8687,
+            "id": 207329,
+            "idMal": 63431,
             "type": "ANIME",
             "title": {
-              "romaji": "Doraemon (2005)",
-              "english": null,
-              "native": "ドラえもん (2005)"
+              "romaji": "Tsuihou Sareta Cheat Fuyo Majutsushi wa Kimama na Second Life wo Ouka Suru.: Ore wa Buki dake ja Naku, Arayuru Mono ni \"Kyouka Point\" wo Fuyo Dekiru shi, Ore no Ishi de Itsudemo Kouka wo Kaijo Dekiru kedo, Nokotta Hitotachi Daijoubu?",
+              "english": "The Laid-Off Cheat-Granting Mage Enjoys a Second Lease on Life",
+              "native": "\u8ffd\u653e\u3055\u308c\u305f\u30c1\u30fc\u30c8\u4ed8\u4e0e\u9b54\u8853\u5e2b\u306f\u6c17\u307e\u307e\u306a\u30bb\u30ab\u30f3\u30c9\u30e9\u30a4\u30d5\u3092\u8b33\u6b4c\u3059\u308b\u3002\u3000\uff5e\u4ffa\u306f\u6b66\u5668\u3060\u3051\u3058\u3083\u306a\u304f\u3001\u3042\u3089\u3086\u308b\u3082\u306e\u306b\u300e\u5f37\u5316\u30dd\u30a4\u30f3\u30c8\u300f\u3092\u4ed8\u4e0e\u3067\u304d\u308b\u3057\u3001\u4ffa\u306e\u610f\u601d\u3067\u3044\u3064\u3067\u3082\u52b9\u679c\u3092\u89e3\u9664\u3067\u304d\u308b\u3051\u3069\u3001\u6b8b\u3063\u305f\u4eba\u305f\u3061\u5927\u4e08\u592b\uff1f\uff5e"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b8687-bBnJMGnih4PT.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b207329-6VPeZIDfF4Sr.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b207329-6VPeZIDfF4Sr.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/b207329-6VPeZIDfF4Sr.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/8687-aa3QbJjGfy3B.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/207329-9IqRSKIsM3TC.jpg",
             "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 74,
+            "genres": ["Adventure", "Comedy", "Fantasy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795532400, "timeUntilAiring": 166240 }
+          }
+        },
+        {
+          "episode": 21,
+          "airingAt": 1795538100,
+          "timeUntilAiring": 171940,
+          "media": {
+            "id": 207809,
+            "idMal": 63489,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sora wa Akai Kawa no Hotori",
+              "english": "Red River",
+              "native": "\u5929\u306f\u8d64\u3044\u6cb3\u306e\u307b\u3068\u308a"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx207809-cpS7CAyjN7iP.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx207809-cpS7CAyjN7iP.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx207809-cpS7CAyjN7iP.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "SUMMER",
+            "seasonYear": 2026,
+            "episodes": 24,
+            "chapters": null,
+            "meanScore": 62,
+            "genres": ["Action", "Adventure", "Drama", "Fantasy", "Romance"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 21, "airingAt": 1795538100, "timeUntilAiring": 171940 }
+          }
+        },
+        {
+          "episode": 7,
+          "airingAt": 1795538700,
+          "timeUntilAiring": 172540,
+          "media": {
+            "id": 179876,
+            "idMal": 59415,
+            "type": "ANIME",
+            "title": {
+              "romaji": "DARK MACHINE: The Animation",
+              "english": "DARK MACHINE THE ANIMATION",
+              "native": "DARK MACHINE -The Animation-"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx179876-Wg62CAzp5WQ1.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx179876-Wg62CAzp5WQ1.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx179876-Wg62CAzp5WQ1.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 11,
+            "chapters": null,
+            "meanScore": 53,
+            "genres": ["Mecha", "Sci-Fi"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 7, "airingAt": 1795538700, "timeUntilAiring": 172540 }
+          }
+        },
+        {
+          "episode": 18,
+          "airingAt": 1795557960,
+          "timeUntilAiring": 191800,
+          "media": {
+            "id": 218008,
+            "idMal": null,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Chibi Godzilla no Gyakushuu Season 4",
+              "english": "Chibi Godzilla Raids Again Season 4",
+              "native": "\u3061\u3073\u30b4\u30b8\u30e9\u306e\u9006\u8972 \u30b7\u30fc\u30ba\u30f34"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b218008-pDrQDUyfAnm6.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b218008-pDrQDUyfAnm6.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/b218008-pDrQDUyfAnm6.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
             "status": "RELEASING",
             "season": "SPRING",
-            "seasonYear": 2005,
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 78,
-            "genres": ["Adventure", "Comedy", "Sci-Fi"],
+            "meanScore": 63,
+            "genres": ["Comedy", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 943,
-              "airingAt": 1795852800,
-              "timeUntilAiring": 496452
-            }
+            "nextAiringEpisode": { "episode": 18, "airingAt": 1795557960, "timeUntilAiring": 191800 }
           }
         },
         {
-          "id": 415320,
-          "episode": 97,
-          "airingAt": 1839031200,
-          "timeUntilAiring": 43674852,
+          "episode": 47,
+          "airingAt": 1795561200,
+          "timeUntilAiring": 195040,
           "media": {
-            "id": 213188,
-            "idMal": 64388,
+            "id": 204656,
+            "idMal": 63151,
+            "type": "ANIME",
+            "title": { "romaji": "mofusand", "english": null, "native": "mofusand" },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b204656-KXjxVB4bBhl8.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b204656-KXjxVB4bBhl8.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/b204656-KXjxVB4bBhl8.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/204656-ECYkRJKBxTLj.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "WINTER",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 73,
+            "genres": ["Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 47, "airingAt": 1795561200, "timeUntilAiring": 195040 }
+          }
+        },
+        {
+          "episode": 21,
+          "airingAt": 1795572000,
+          "timeUntilAiring": 205840,
+          "media": {
+            "id": 199409,
+            "idMal": 62248,
             "type": "ANIME",
             "title": {
-              "romaji": "Jueshi Zhan Hun 2",
+              "romaji": "Yi Nian Yongheng 4",
               "english": null,
-              "native": "绝世战魂 第2季"
+              "native": "\u4e00\u5ff5\u6c38\u6052 \u7b2c\u56db\u5b63"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx199409-tZnVTAQ9P6fY.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx199409-tZnVTAQ9P6fY.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx199409-tZnVTAQ9P6fY.png"
             },
             "bannerImage": null,
             "format": "ONA",
             "status": "RELEASING",
             "season": null,
             "seasonYear": null,
-            "episodes": 100,
+            "episodes": 46,
             "chapters": null,
-            "meanScore": 78,
-            "genres": ["Action", "Adventure", "Fantasy"],
+            "meanScore": 85,
+            "genres": ["Action", "Comedy", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 25,
-              "airingAt": 1795485600,
-              "timeUntilAiring": 129252
-            }
+            "nextAiringEpisode": { "episode": 21, "airingAt": 1795572000, "timeUntilAiring": 205840 }
           }
         },
         {
-          "id": 395071,
-          "episode": 2931,
-          "airingAt": 1838885400,
-          "timeUntilAiring": 43529052,
+          "episode": 19,
+          "airingAt": 1795572000,
+          "timeUntilAiring": 205840,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 214974,
+            "idMal": 62218,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Da Xia Shou Mu Ren",
+              "english": "The Guardian of Daxia",
+              "native": "\u5927\u590f\u5b88\u5893\u4eba"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx214974-fM9q0ki7fCVl.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx214974-fM9q0ki7fCVl.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx214974-fM9q0ki7fCVl.jpg"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/214974-jMZ2CpV2lKip.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 59,
+            "chapters": null,
+            "meanScore": 56,
+            "genres": ["Action", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 19, "airingAt": 1795572000, "timeUntilAiring": 205840 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795609800,
+          "timeUntilAiring": 243640,
+          "media": {
+            "id": 152677,
+            "idMal": 52480,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Tantei wa mou, Shindeiru. Season 2",
+              "english": "The Detective Is Already Dead Season 2",
+              "native": "\u63a2\u5075\u306f\u3082\u3046\u3001\u6b7b\u3093\u3067\u3044\u308b\u3002Season2"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx152677-gtJbgjE94lCN.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx152677-gtJbgjE94lCN.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx152677-gtJbgjE94lCN.png"
+            },
+            "bannerImage": null,
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
-            "episodes": null,
+            "seasonYear": 2026,
+            "episodes": 13,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 71,
+            "genres": ["Comedy", "Drama", "Mystery", "Romance", "Supernatural"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795609800, "timeUntilAiring": 243640 }
           }
         },
         {
-          "id": 380142,
-          "episode": 1014,
-          "airingAt": 1838793600,
-          "timeUntilAiring": 43437252,
+          "episode": 6,
+          "airingAt": 1795611240,
+          "timeUntilAiring": 245080,
           "media": {
-            "id": 8687,
-            "idMal": 8687,
+            "id": 217282,
+            "idMal": 65409,
+            "type": "ANIME",
+            "title": { "romaji": "GelPiyo 2", "english": null, "native": "\u30b2\u30eb\u3074\u3088 2" },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx217282-fRAAhF2b5eIr.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx217282-fRAAhF2b5eIr.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx217282-fRAAhF2b5eIr.png"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 30,
+            "genres": ["Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 6, "airingAt": 1795611240, "timeUntilAiring": 245080 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795611600,
+          "timeUntilAiring": 245440,
+          "media": {
+            "id": 211778,
+            "idMal": 64084,
             "type": "ANIME",
             "title": {
-              "romaji": "Doraemon (2005)",
-              "english": null,
-              "native": "ドラえもん (2005)"
+              "romaji": "Sekai Saikyou no Majo, Hajimemashita",
+              "english": "The World's Strongest Witch",
+              "native": "\u4e16\u754c\u6700\u5f37\u306e\u9b54\u5973\u3001\u59cb\u3081\u307e\u3057\u305f"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b8687-bBnJMGnih4PT.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/b8687-bBnJMGnih4PT.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx211778-0MXK5HqVFBYH.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx211778-0MXK5HqVFBYH.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx211778-0MXK5HqVFBYH.jpg"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/8687-aa3QbJjGfy3B.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/211778-ZbXEhqfFkj62.jpg",
             "format": "TV",
             "status": "RELEASING",
-            "season": "SPRING",
-            "seasonYear": 2005,
+            "season": "FALL",
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 78,
-            "genres": ["Adventure", "Comedy", "Sci-Fi"],
+            "meanScore": 71,
+            "genres": ["Action", "Comedy", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 943,
-              "airingAt": 1795852800,
-              "timeUntilAiring": 496452
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795611600, "timeUntilAiring": 245440 }
           }
         },
         {
-          "id": 415319,
-          "episode": 96,
-          "airingAt": 1838426400,
-          "timeUntilAiring": 43070052,
+          "episode": 8,
+          "airingAt": 1795611600,
+          "timeUntilAiring": 245440,
           "media": {
-            "id": 213188,
-            "idMal": 64388,
+            "id": 176314,
+            "idMal": 58518,
             "type": "ANIME",
             "title": {
-              "romaji": "Jueshi Zhan Hun 2",
-              "english": null,
-              "native": "绝世战魂 第2季"
+              "romaji": "Sasaki to Pii-chan Season 2",
+              "english": "Sasaki and Peeps Season 2",
+              "native": "\u4f50\u3005\u6728\u3068\u30d4\u30fc\u3061\u3083\u3093 \u30b7\u30fc\u30ba\u30f3\uff12"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213188-zwmmMVqqUjh8.png",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx213188-zwmmMVqqUjh8.png",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx213188-zwmmMVqqUjh8.png"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx176314-lpvca6vjmkeO.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx176314-lpvca6vjmkeO.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx176314-lpvca6vjmkeO.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/176314-nj2hmqbGQ9HJ.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 71,
+            "genres": ["Comedy", "Fantasy", "Mahou Shoujo"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795611600, "timeUntilAiring": 245440 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795617960,
+          "timeUntilAiring": 251800,
+          "media": {
+            "id": 178868,
+            "idMal": 59204,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Magic Knight Rayearth (2026)",
+              "english": "Magic Knight Rayearth (2026)",
+              "native": "\u9b54\u6cd5\u9a0e\u58eb\u30ec\u30a4\u30a2\u30fc\u30b9 (2026)"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx178868-mfp0HIHNJNAm.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx178868-mfp0HIHNJNAm.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx178868-mfp0HIHNJNAm.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/178868-l7VyM7j7LRtH.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 70,
+            "genres": ["Adventure", "Fantasy", "Mahou Shoujo", "Mecha"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795617960, "timeUntilAiring": 251800 }
+          }
+        },
+        {
+          "episode": 9,
+          "airingAt": 1795618800,
+          "timeUntilAiring": 252640,
+          "media": {
+            "id": 199068,
+            "idMal": 62534,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Shin Tennis no Ouji-sama: U-17 WORLD CUP Kesshou Member Ketteisen",
+              "english": "The Prince of Tennis II U-17 WORLD CUP: Final Member Selection Match",
+              "native": "\u65b0\u30c6\u30cb\u30b9\u306e\u738b\u5b50\u69d8 U-17 WORLD CUP \u6c7a\u52dd\u30e1\u30f3\u30d0\u30fc\u6c7a\u5b9a\u6226"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx199068-2afNaytl50Ko.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx199068-2afNaytl50Ko.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx199068-2afNaytl50Ko.png"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 64,
+            "genres": ["Action", "Comedy", "Sports"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 9, "airingAt": 1795618800, "timeUntilAiring": 252640 }
+          }
+        },
+        {
+          "episode": 15,
+          "airingAt": 1795618800,
+          "timeUntilAiring": 252640,
+          "media": {
+            "id": 168085,
+            "idMal": 60598,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Dali Si Rizhi 3",
+              "english": "White Cat Legend 3",
+              "native": "\u5927\u7406\u5bfa\u65e5\u5fd7 \u7b2c3\u5b63"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx168085-hPOOODUADp7D.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx168085-hPOOODUADp7D.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx168085-hPOOODUADp7D.png"
             },
             "bannerImage": null,
             "format": "ONA",
             "status": "RELEASING",
             "season": null,
             "seasonYear": null,
-            "episodes": 100,
+            "episodes": null,
             "chapters": null,
-            "meanScore": 78,
-            "genres": ["Action", "Adventure", "Fantasy"],
+            "meanScore": 60,
+            "genres": ["Action", "Adventure", "Comedy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 25,
-              "airingAt": 1795485600,
-              "timeUntilAiring": 129252
-            }
+            "nextAiringEpisode": { "episode": 15, "airingAt": 1795618800, "timeUntilAiring": 252640 }
           }
         },
         {
-          "id": 395070,
-          "episode": 2930,
-          "airingAt": 1838280600,
-          "timeUntilAiring": 42924252,
+          "episode": 9,
+          "airingAt": 1795620600,
+          "timeUntilAiring": 254440,
           "media": {
-            "id": 2406,
-            "idMal": 2406,
+            "id": 159042,
+            "idMal": 53913,
             "type": "ANIME",
             "title": {
-              "romaji": "Sazae-san",
-              "english": null,
-              "native": "サザエさん"
+              "romaji": "Tensei Shitara Ken Deshita 2nd Season",
+              "english": "Reincarnated as a Sword Season 2",
+              "native": "\u8ee2\u751f\u3057\u305f\u3089\u5263\u3067\u3057\u305f \u7b2c2\u671f"
             },
             "coverImage": {
-              "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx2406-nP8NIct9Sci3.jpg",
-              "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx2406-nP8NIct9Sci3.jpg",
-              "medium": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/small/bx2406-nP8NIct9Sci3.jpg"
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx159042-GGFwlDskc5vR.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx159042-GGFwlDskc5vR.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx159042-GGFwlDskc5vR.png"
             },
-            "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/2406-ROqXxejQ5bH9.jpg",
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/159042-X0mqyaUFBkms.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 76,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 9, "airingAt": 1795620600, "timeUntilAiring": 254440 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795620600,
+          "timeUntilAiring": 254440,
+          "media": {
+            "id": 213068,
+            "idMal": 64344,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Juu\u043eu Mujin Dandivine",
+              "english": "Dandivine",
+              "native": "\u7363\u738b\u6b66\u795e\u30c0\u30f3\u30c7\u30f4\u30a1\u30a4\u30f3"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213068-aFSedkY5bQ4m.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213068-aFSedkY5bQ4m.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213068-aFSedkY5bQ4m.png"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213068-EQba2gbIKAy5.jpg",
             "format": "TV",
             "status": "RELEASING",
             "season": "FALL",
-            "seasonYear": 1969,
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 50,
+            "genres": ["Action", "Mecha"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795620600, "timeUntilAiring": 254440 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795621500,
+          "timeUntilAiring": 255340,
+          "media": {
+            "id": 172192,
+            "idMal": 57612,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Kikansha no Mahou wa Tokubetsu desu 2nd Season",
+              "english": "A Returner's Magic Should be Special Season 2",
+              "native": "\u5e30\u9084\u8005\u306e\u9b54\u6cd5\u306f\u7279\u5225\u3067\u3059 \u7b2c2\u671f"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx172192-W7P5xEUaxF3y.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx172192-W7P5xEUaxF3y.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx172192-W7P5xEUaxF3y.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/172192-jibcmb7wdbzk.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
             "episodes": null,
             "chapters": null,
-            "meanScore": 57,
-            "genres": ["Comedy", "Slice of Life"],
+            "meanScore": 70,
+            "genres": ["Action", "Adventure", "Fantasy"],
             "isAdult": false,
-            "nextAiringEpisode": {
-              "episode": 2860,
-              "airingAt": 1795944600,
-              "timeUntilAiring": 588252
-            }
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795621500, "timeUntilAiring": 255340 }
+          }
+        },
+        {
+          "episode": 20,
+          "airingAt": 1795658400,
+          "timeUntilAiring": 292240,
+          "media": {
+            "id": 214974,
+            "idMal": 62218,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Da Xia Shou Mu Ren",
+              "english": "The Guardian of Daxia",
+              "native": "\u5927\u590f\u5b88\u5893\u4eba"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx214974-fM9q0ki7fCVl.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx214974-fM9q0ki7fCVl.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx214974-fM9q0ki7fCVl.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/214974-jMZ2CpV2lKip.jpg",
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 59,
+            "chapters": null,
+            "meanScore": 56,
+            "genres": ["Action", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 19, "airingAt": 1795572000, "timeUntilAiring": 205840 }
+          }
+        },
+        {
+          "episode": 26,
+          "airingAt": 1795658400,
+          "timeUntilAiring": 292240,
+          "media": {
+            "id": 220079,
+            "idMal": null,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Shixiong A Shixiong Final",
+              "english": null,
+              "native": "\u5e08\u5144\u554a\u5e08\u5144 \u6700\u7ec8\u5b63"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx220079-7TiLWUTeqmW8.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx220079-7TiLWUTeqmW8.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx220079-7TiLWUTeqmW8.jpg"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": null,
+            "seasonYear": null,
+            "episodes": 26,
+            "chapters": null,
+            "meanScore": 84,
+            "genres": ["Action", "Adventure", "Fantasy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 26, "airingAt": 1795658400, "timeUntilAiring": 292240 }
+          }
+        },
+        {
+          "episode": 1,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 2,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 3,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 4,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 5,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 6,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 7,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 9,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 10,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 11,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 12,
+          "airingAt": 1795680000,
+          "timeUntilAiring": 313840,
+          "media": {
+            "id": 213457,
+            "idMal": 64459,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Fool Night",
+              "english": "Fool Night",
+              "native": "\u30d5\u30fc\u30eb\u30ca\u30a4\u30c8"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx213457-gN5p1GZjK3zi.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx213457-gN5p1GZjK3zi.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx213457-gN5p1GZjK3zi.jpg"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/213457-xUUdWSFdK8At.jpg",
+            "format": "ONA",
+            "status": "NOT_YET_RELEASED",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": null,
+            "genres": ["Drama", "Psychological", "Sci-Fi", "Thriller"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 1, "airingAt": 1795680000, "timeUntilAiring": 313840 }
+          }
+        },
+        {
+          "episode": 9,
+          "airingAt": 1795685400,
+          "timeUntilAiring": 319240,
+          "media": {
+            "id": 217624,
+            "idMal": 65095,
+            "type": "ANIME",
+            "title": {
+              "romaji": "PetitCure: Precure Fairies Season 4",
+              "english": null,
+              "native": "\u3077\u3061\u304d\u3085\u3042\uff5ePrecure Fairies\uff5e \u30b7\u30fc\u30ba\u30f34"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx217624-Cwkze5dZ5txL.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx217624-Cwkze5dZ5txL.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx217624-Cwkze5dZ5txL.jpg"
+            },
+            "bannerImage": null,
+            "format": "ONA",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": null,
+            "chapters": null,
+            "meanScore": 60,
+            "genres": ["Fantasy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 9, "airingAt": 1795685400, "timeUntilAiring": 319240 }
+          }
+        },
+        {
+          "episode": 9,
+          "airingAt": 1795688340,
+          "timeUntilAiring": 322180,
+          "media": {
+            "id": 218942,
+            "idMal": null,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Sylvanian Families: Freya no Colorful Everyday",
+              "english": null,
+              "native": "\u30b7\u30eb\u30d0\u30cb\u30a2\u30d5\u30a1\u30df\u30ea\u30fc \u30d5\u30ec\u30a2\u306e\u30ab\u30e9\u30d5\u30eb\u30fb\u30a8\u30d6\u30ea\u30c7\u30a4"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b218942-P2vuXzw9knaY.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b218942-P2vuXzw9knaY.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/b218942-P2vuXzw9knaY.png"
+            },
+            "bannerImage": null,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 22,
+            "genres": ["Fantasy", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 9, "airingAt": 1795688340, "timeUntilAiring": 322180 }
+          }
+        },
+        {
+          "episode": 9,
+          "airingAt": 1795696200,
+          "timeUntilAiring": 330040,
+          "media": {
+            "id": 206401,
+            "idMal": 63337,
+            "type": "ANIME",
+            "title": {
+              "romaji": "FX Senshi Kurumi-chan",
+              "english": "FX Fighter Kurumi-chan",
+              "native": "FX\u6226\u58eb\u304f\u308b\u307f\u3061\u3083\u3093"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx206401-8cAebkI0i8BA.png",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx206401-8cAebkI0i8BA.png",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx206401-8cAebkI0i8BA.png"
+            },
+            "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/206401-sKPZQks8FxNL.jpg",
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 67,
+            "genres": ["Drama", "Slice of Life"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 9, "airingAt": 1795696200, "timeUntilAiring": 330040 }
+          }
+        },
+        {
+          "episode": 8,
+          "airingAt": 1795703400,
+          "timeUntilAiring": 337240,
+          "media": {
+            "id": 188034,
+            "idMal": 61227,
+            "type": "ANIME",
+            "title": {
+              "romaji": "Girls und Panzer: Motto Love Love Sakusen desu!",
+              "english": null,
+              "native": "\u30ac\u30fc\u30eb\u30ba\uff06\u30d1\u30f3\u30c4\u30a1\u30fc \u3082\u3063\u3068\u3089\u3076\u3089\u3076\u4f5c\u6226\u3067\u3059\uff01"
+            },
+            "coverImage": {
+              "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx188034-oRwVKBMezOOk.jpg",
+              "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx188034-oRwVKBMezOOk.jpg",
+              "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx188034-oRwVKBMezOOk.jpg"
+            },
+            "bannerImage": null,
+            "format": "TV",
+            "status": "RELEASING",
+            "season": "FALL",
+            "seasonYear": 2026,
+            "episodes": 12,
+            "chapters": null,
+            "meanScore": 77,
+            "genres": ["Comedy"],
+            "isAdult": false,
+            "nextAiringEpisode": { "episode": 8, "airingAt": 1795703400, "timeUntilAiring": 337240 }
           }
         }
       ]

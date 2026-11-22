@@ -35,24 +35,6 @@ impl AiringEpisode {
             time_until_airing: node.time_until_airing,
         })
     }
-
-    /// The media's `nextAiringEpisode`: what the airing-schedule carousel
-    /// shows, with the entry's own data as AniList's fallback.
-    fn from_upcoming(node: ScheduleEntry) -> Option<Self> {
-        let media = node.media?;
-        let (episode, airing_at, time_until_airing) =
-            if let Some(next) = media.next_airing_episode.as_ref() {
-                (count(next.episode)?, next.airing_at, next.time_until_airing)
-            } else {
-                (count(node.episode)?, node.airing_at, node.time_until_airing)
-            };
-        Some(Self {
-            media: MediaSummary::from_airing(media)?,
-            episode,
-            airing_at,
-            time_until_airing,
-        })
-    }
 }
 
 /// What the Home screen loads: Trending Anime, Aired Recently and the
@@ -189,7 +171,7 @@ impl AniList {
             .into_iter()
             .flatten()
             .flatten()
-            .filter_map(AiringEpisode::from_upcoming)
+            .filter_map(AiringEpisode::from_entry)
             .collect())
     }
 
@@ -429,17 +411,8 @@ struct ScheduleEntry {
     media: Option<AiringMedia>,
 }
 
-/// AniList's `AiringSchedule`: one episode's air time.
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(graphql_type = "AiringSchedule")]
-struct NextAiring {
-    episode: i32,
-    airing_at: i32,
-    time_until_airing: i32,
-}
-
-/// The show of a schedule entry: the card fields plus its next episode.
-/// A separate fragment because `MediaCard` has no `nextAiringEpisode`.
+/// The show of a schedule entry. A separate fragment because `MediaCard`'s
+/// conversion is infallible while an airing needs its show to be identifiable.
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(graphql_type = "Media")]
 struct AiringMedia {
@@ -460,7 +433,6 @@ struct AiringMedia {
     mean_score: Option<i32>,
     genres: Option<Vec<Option<String>>>,
     is_adult: Option<bool>,
-    next_airing_episode: Option<NextAiring>,
 }
 
 /// A schedule media is a card plus its next episode.
@@ -640,7 +612,7 @@ struct AiringScheduleQuery {
 #[derive(cynic::QueryFragment, Debug, Default)]
 #[cynic(graphql_type = "Page")]
 struct SchedulePage {
-    #[arguments(notYetAired: true, sort: [TIME_DESC])]
+    #[arguments(notYetAired: true, sort: [TIME])]
     airing_schedules: Option<Vec<Option<ScheduleEntry>>>,
 }
 

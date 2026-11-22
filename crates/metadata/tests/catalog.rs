@@ -217,12 +217,16 @@ async fn airing_schedule_decodes_the_upcoming_episodes() {
     let airing = mock.client.airing_schedule().await.unwrap();
 
     assert_eq!(airing.len(), 50);
-    assert_eq!(airing[0].media.anilist_id, 2_406);
-    assert_eq!(airing[0].media.title.romaji.as_deref(), Some("Sazae-san"));
-    // The media's `nextAiringEpisode` supplies the scheduled episode.
-    assert_eq!(airing[0].episode, 2_860);
-    assert_eq!(airing[0].airing_at, 1_795_944_600);
-    assert_eq!(airing[0].time_until_airing, 588_252);
+    assert_eq!(airing[0].media.anilist_id, 218_217);
+    assert_eq!(
+        airing[0].media.title.romaji.as_deref(),
+        Some("JK Dark Summoner to Deki......Dei Nai!?")
+    );
+    // Each entry keeps its own episode and air time: the fixture was
+    // recorded with sort [TIME], so this is the next episode to air.
+    assert_eq!(airing[0].episode, 8);
+    assert_eq!(airing[0].airing_at, 1_795_370_400);
+    assert_eq!(airing[0].time_until_airing, 4_240);
 }
 
 #[tokio::test]
@@ -318,18 +322,14 @@ async fn catalog_queries_ask_for_the_first_page() {
 }
 
 #[tokio::test]
-async fn airing_schedule_asks_for_not_yet_aired_episodes_with_next_airing() {
+async fn airing_schedule_asks_for_not_yet_aired_episodes_in_airing_order() {
     let mock = MockCatalog::serve().await;
 
     mock.client.airing_schedule().await.unwrap();
 
     let query = query_at(&mock.requests(), 0);
     assert!(
-        query.contains("airingSchedules(notYetAired: true, sort: [TIME_DESC])"),
-        "query: {query}"
-    );
-    assert!(
-        query.contains("nextAiringEpisode { episode airingAt timeUntilAiring }"),
+        query.contains("airingSchedules(notYetAired: true, sort: [TIME])"),
         "query: {query}"
     );
 }
