@@ -1,5 +1,18 @@
 //! The places the route view can show. See ARCHITECTURE §5.
 
+/// A page in Settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the settings screen handles every tab"
+)]
+pub enum SettingsTab {
+    /// Appearance and rail interaction.
+    Appearance,
+    /// Disk cache usage and controls.
+    Storage,
+}
+
 /// One screen the route view can show.
 ///
 /// ARCHITECTURE §5 lists the full set; a variant is added when its screen
@@ -23,11 +36,14 @@ pub enum Route {
     /// Offline snapshots and sync.
     Sync,
     /// App settings.
-    Settings,
+    Settings {
+        /// The selected page.
+        tab: SettingsTab,
+    },
 }
 
 impl Route {
-    /// Every route, in rail order.
+    /// The default destination for each rail item, in rail order.
     pub const ALL: [Self; 7] = [
         Self::Home,
         Self::Discover,
@@ -35,7 +51,9 @@ impl Route {
         Self::Manga,
         Self::Extensions,
         Self::Sync,
-        Self::Settings,
+        Self::Settings {
+            tab: SettingsTab::Appearance,
+        },
     ];
 
     /// A stable name for storing the route in settings. Never change one:
@@ -48,7 +66,7 @@ impl Route {
             Self::Manga => "manga",
             Self::Extensions => "extensions",
             Self::Sync => "sync",
-            Self::Settings => "settings",
+            Self::Settings { .. } => "settings",
         }
     }
 

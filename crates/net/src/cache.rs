@@ -106,6 +106,23 @@ impl PosterCache {
         Ok(bytes)
     }
 
+    /// Read the total size in bytes of the cached posters.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Cache`] if the poster cache cannot be read.
+    pub async fn size_bytes(&self) -> Result<u64, Error> {
+        let posters = self.posters.clone();
+        spawn_blocking(move || {
+            let total = entries(&posters)?
+                .into_iter()
+                .fold(0u64, |sum, entry| sum.saturating_add(entry.len));
+            Ok(total)
+        })
+        .await
+        .map_err(join_error)?
+    }
+
     /// Delete every cached poster. Metadata blobs are left alone.
     ///
     /// # Errors
@@ -193,9 +210,12 @@ fn entries(dir: &Path) -> Result<Vec<Entry>, Error> {
     let mut result = Vec::new();
     for item in listing {
         let item = item.map_err(|source| cache_error(dir, source))?;
-        let metadata = item
-            .metadata()
-            .map_err(|source| cache_error(&item.path(), source))?;
+        let metadata = match item.metadata() {
+            Ok(metadata) => metadata,
+            // An eviction or clear can remove an entry after read_dir saw it.
+            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) => return Err(cache_error(&item.path(), error)),
+        };
         if !metadata.is_file() {
             continue;
         }

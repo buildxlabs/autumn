@@ -13,7 +13,7 @@ use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
-use ui_screens::{AppShell, RailPrefs};
+use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
 use ui_state::fetch_status::FetchStatus;
 
 /// Initial width of the main window in logical pixels; the user can resize it.
@@ -55,6 +55,7 @@ fn main() -> ExitCode {
         async move { fetch_status::observe(&client, events).await }
     });
     let prefs = rail_prefs::from_settings(&started.settings);
+    let storage_request = poster_cache_request(started.poster_cache.clone());
     let save_prefs = rail_prefs::saver(started.db, started.settings);
 
     let http_client =
@@ -75,7 +76,8 @@ fn main() -> ExitCode {
             })
             .detach();
             ui_state::actions::bind_keys(cx);
-            if let Err(err) = open_main_window(prefs, fetch_status, save_prefs, cx) {
+            if let Err(err) = open_main_window(prefs, fetch_status, save_prefs, storage_request, cx)
+            {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
                 cx.quit();
@@ -116,14 +118,39 @@ fn open_main_window(
     prefs: RailPrefs,
     fetch_status: Entity<FetchStatus>,
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+    storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
     let options = main_window_options(bounds);
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| AppShell::new(prefs, fetch_status, save_prefs, window, cx))
+        cx.new(|cx| AppShell::new(prefs, fetch_status, save_prefs, storage_request, window, cx))
     })?;
     Ok(())
+}
+
+fn poster_cache_request(
+    cache: net::PosterCache,
+) -> impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> {
+    move |action, cx| {
+        let cache = cache.clone();
+        let task = ui_state::bridge::run(cx, async move {
+            if action == PosterCacheAction::Clear {
+                cache.clear().await?;
+            }
+            cache.size_bytes().await
+        });
+        cx.background_executor().spawn(async move {
+            let result = task
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result.map_err(Into::into));
+            if let Err(error) = &result {
+                tracing::warn!(?action, %error, "poster cache request failed");
+            }
+            result
+        })
+    }
 }
 
 #[expect(
@@ -150,6 +177,7 @@ mod tests {
                 RailPrefs::default(),
                 fetch_status,
                 |_, _| Task::ready(()),
+                |_, _| Task::ready(Ok(0)),
                 cx,
             )
             .expect("the test platform opens windows");
