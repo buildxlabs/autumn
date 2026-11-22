@@ -10,16 +10,28 @@ version      = "0.1.0"
 
 [workspace.dependencies]
 anyhow             = "1.0"
+axum               = "0.8"
 directories        = "6.0"
 domain             = { path = "crates/domain" }
 flume              = { default-features = false, features = [ "async" ], version = "0.12" }
 gpui-kit           = "=0.10.0"
+httpdate           = "1.0"
+rand               = "0.10"
+reqwest            = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }
+rustls             = { default-features = false, features = [ "ring", "std", "tls12" ], version = "0.23" }
 serde              = { features = [ "derive" ], version = "1.0" }
 serde_json         = "1.0"
 sqlx               = { default-features = false, version = "0.9" }
 tempfile           = "3.27"
-thiserror          = "2.0"
-tokio              = { default-features = false, version = "1.54" }
+thiserror          = "2"
+tokio              = { default-features = false, features = [
+  "macros",
+  "net",
+  "rt",
+  "rt-multi-thread",
+  "sync",
+  "time",
+], version = "1.54" }
 tracing            = "0.1"
 tracing-appender   = "0.2"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3" }
