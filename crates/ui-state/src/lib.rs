@@ -7,6 +7,8 @@ pub mod bridge;
 pub mod events;
 mod route;
 mod router;
+mod scroll;
 
 pub use route::Route;
 pub use router::RouterState;
+pub use scroll::{ContentLoaded, ScrollRestore};

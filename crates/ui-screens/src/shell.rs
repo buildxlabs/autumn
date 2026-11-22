@@ -2,8 +2,8 @@
 
 use gpui_kit::{
     AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
-    MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, TestSupportExt, Window,
+    MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, TestSupportExt, Window,
     assets::IconName,
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
@@ -13,7 +13,7 @@ use gpui_kit::{
 };
 use ui_components::{Rail, RailItem};
 use ui_state::{
-    Route, RouterState,
+    Route, RouterState, ScrollRestore,
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
 };
 
@@ -37,8 +37,10 @@ const RAIL_ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, 
 /// leaving a route saves its offset and coming back restores it. It also
 /// hosts the command palette.
 pub struct AppShell {
-    router: RouterState,
-    scroll: ScrollHandle,
+    router: RouterState<Route>,
+    /// Async screens emit `ContentLoaded`; subscribe the shell to call
+    /// `scroll.content_loaded()` so their saved offset survives the load.
+    scroll: ScrollRestore,
     focus: FocusHandle,
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
@@ -70,7 +72,7 @@ impl AppShell {
         );
         Self {
             router: RouterState::new(Route::Home),
-            scroll: ScrollHandle::new(),
+            scroll: ScrollRestore::new(),
             focus,
             palette,
             _palette_events: palette_events,
@@ -79,7 +81,7 @@ impl AppShell {
 
     /// The route on screen.
     pub fn route(&self) -> Route {
-        self.router.current()
+        *self.router.current()
     }
 
     fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
@@ -129,11 +131,11 @@ impl AppShell {
 
     /// Scrolls the new route to its saved offset, if the route changed.
     ///
-    /// Layout clamps the offset to the content drawn in the next frame, so a
-    /// screen whose content loads asynchronously must reapply it once loaded.
+    /// [`ScrollRestore`] keeps the offset so an async screen's
+    /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
         if let Some(offset) = restore {
-            self.scroll.set_offset(offset);
+            self.scroll.restore(offset);
             cx.notify();
         }
     }
@@ -177,7 +179,7 @@ impl AppShell {
     }
 
     fn render_rail(&self, cx: &mut Context<'_, Self>) -> Rail {
-        let current = self.router.current();
+        let current = *self.router.current();
         let items = RAIL_ROUTES
             .iter()
             .map(|&route| RailItem {
@@ -203,7 +205,7 @@ impl AppShell {
 impl Render for AppShell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let route = self.router.current();
+        let route = *self.router.current();
         div()
             .id("shell")
             .track_focus(&self.focus)
@@ -239,7 +241,7 @@ impl Render for AppShell {
                             .min_w_0()
                             .h_full()
                             .overflow_y_scroll()
-                            .track_scroll(&self.scroll)
+                            .track_scroll(self.scroll.handle())
                             .child(placeholder(
                                 title(route),
                                 rows(route),
