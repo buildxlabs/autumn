@@ -18,7 +18,8 @@ use crate::{Client, Error, HttpError, Method, Request};
 /// Shared cap for `<cache>/posters/` and `<cache>/metadata/`: about 500 MB.
 const DEFAULT_CAP_BYTES: u64 = 500 * 1024 * 1024;
 
-/// A disk cache for poster images, keyed by the requested image URL.
+/// A disk cache for poster images, keyed by the requested image URL, and
+/// for metadata blobs ([`Self::write_metadata`]) under the same cap.
 ///
 /// The key is the requested URL, not the final URL after redirects: reqwest
 /// does not expose the final URL once a response has been consumed.
@@ -94,7 +95,7 @@ impl PosterCache {
 
         let cache = self.clone();
         let bytes = spawn_blocking(move || {
-            cache.store(&name, &bytes)?;
+            cache.store(&cache.posters, &name, &bytes)?;
             if let Err(error) = cache.evict() {
                 warn!(?error, "poster cache eviction failed");
             }
@@ -140,7 +141,48 @@ impl PosterCache {
         .map_err(join_error)?
     }
 
-    fn store(&self, name: &str, bytes: &[u8]) -> Result<(), Error> {
+    /// Read the metadata blob stored under `key`, if any.
+    ///
+    /// `key` is hashed into the file name, so any string works.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Cache`] if the blob exists but cannot be read.
+    pub async fn read_metadata(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
+        let path = self.metadata.join(file_name(key));
+        spawn_blocking(move || match fs::read(&path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(cache_error(&path, error)),
+        })
+        .await
+        .map_err(join_error)?
+    }
+
+    /// Store a metadata blob under `key`, replacing any earlier one, then
+    /// evict the oldest posters and blobs over the shared cap.
+    ///
+    /// If eviction fails after the blob has been stored, the failure is
+    /// logged and the write still succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Cache`] if the blob cannot be written.
+    pub async fn write_metadata(&self, key: &str, bytes: Vec<u8>) -> Result<(), Error> {
+        let name = file_name(key);
+        let cache = self.clone();
+        spawn_blocking(move || {
+            cache.store(&cache.metadata, &name, &bytes)?;
+            if let Err(error) = cache.evict() {
+                warn!(?error, "metadata cache eviction failed");
+            }
+            Ok(())
+        })
+        .await
+        .map_err(join_error)?
+    }
+
+    fn store(&self, dir: &Path, name: &str, bytes: &[u8]) -> Result<(), Error> {
         let mut temp =
             NamedTempFile::new_in(&self.tmp).map_err(|source| cache_error(&self.tmp, source))?;
         temp.write_all(bytes)
@@ -148,7 +190,7 @@ impl PosterCache {
         temp.as_file()
             .sync_all()
             .map_err(|source| cache_error(&self.tmp, source))?;
-        let target = self.posters.join(name);
+        let target = dir.join(name);
         temp.persist(&target)
             .map_err(|source| cache_error(&target, source.error))?;
         Ok(())
