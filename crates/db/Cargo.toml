@@ -1,0 +1,21 @@
+[package]
+name                   = "db"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[lints]
+workspace = true
+
+[dependencies]
+domain.workspace    = true
+sqlx                = { features = [ "macros", "migrate", "runtime-tokio", "sqlite-bundled" ], workspace = true }
+thiserror.workspace = true
+tracing.workspace   = true
+
+[dev-dependencies]
+tempfile.workspace           = true
+tokio                        = { features = [ "macros", "rt", "rt-multi-thread" ], workspace = true }
+tracing-subscriber.workspace = true
