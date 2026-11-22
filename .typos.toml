@@ -8,5 +8,7 @@ extend-exclude = [
   ".vite-hooks/_",
   "node_modules",
   "reference",
+  # Recorded API responses: CDN hashes and foreign names, not prose.
+  "**/tests/fixtures",
   "target",
 ]

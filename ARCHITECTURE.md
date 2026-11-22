@@ -100,6 +100,7 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 
 ```text
 db            → domain
+metadata      → domain, net
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)

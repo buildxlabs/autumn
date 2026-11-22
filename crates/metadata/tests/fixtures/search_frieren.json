@@ -1,0 +1,159 @@
+{
+  "data": {
+    "Page": {
+      "pageInfo": { "hasNextPage": false },
+      "media": [
+        {
+          "id": 154587,
+          "idMal": 52991,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren",
+            "english": "Frieren: Beyond Journey\u2019s End",
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx154587-qQTzQnEJJ3oB.jpg",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx154587-qQTzQnEJJ3oB.jpg",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx154587-qQTzQnEJJ3oB.jpg"
+          },
+          "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/154587-ivXNJ23SM1xB.jpg",
+          "format": "TV",
+          "status": "FINISHED",
+          "season": "FALL",
+          "seasonYear": 2023,
+          "episodes": 28,
+          "chapters": null,
+          "meanScore": 90,
+          "genres": ["Adventure", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 209939,
+          "idMal": 63816,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren 3rd Season",
+            "english": null,
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \u7b2c3\u671f"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx209939-g2Njkml1rheG.jpg",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx209939-g2Njkml1rheG.jpg",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx209939-g2Njkml1rheG.jpg"
+          },
+          "bannerImage": null,
+          "format": "TV",
+          "status": "NOT_YET_RELEASED",
+          "season": "FALL",
+          "seasonYear": 2027,
+          "episodes": null,
+          "chapters": null,
+          "meanScore": null,
+          "genres": ["Adventure", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 182255,
+          "idMal": 59978,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren 2nd Season",
+            "english": "Frieren: Beyond Journey\u2019s End Season 2",
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \u7b2c2\u671f"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx182255-butzrqd4I0aC.jpg",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx182255-butzrqd4I0aC.jpg",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx182255-butzrqd4I0aC.jpg"
+          },
+          "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/182255-wyHvp6zJbWsO.jpg",
+          "format": "TV",
+          "status": "FINISHED",
+          "season": "WINTER",
+          "seasonYear": 2026,
+          "episodes": 10,
+          "chapters": null,
+          "meanScore": 87,
+          "genres": ["Adventure", "Drama", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 170068,
+          "idMal": 56885,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren: \u25cf\u25cf no Mahou",
+            "english": null,
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \uff5e\u25cf\u25cf\u306e\u9b54\u6cd5\uff5e"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx170068-ijY3tCP8KoWP.jpg",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx170068-ijY3tCP8KoWP.jpg",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx170068-ijY3tCP8KoWP.jpg"
+          },
+          "bannerImage": null,
+          "format": "ONA",
+          "status": "FINISHED",
+          "season": "FALL",
+          "seasonYear": 2023,
+          "episodes": 12,
+          "chapters": null,
+          "meanScore": 74,
+          "genres": ["Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 189513,
+          "idMal": null,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren: \u25cf\u25cf no Mahou Part 2",
+            "english": null,
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \uff5e\u25cf\u25cf\u306e\u9b54\u6cd5\uff5e 2\u30af\u30fc\u30eb"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/large\/bx189513-1R9Sryve0K53.png",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/bx189513-1R9Sryve0K53.png",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/bx189513-1R9Sryve0K53.png"
+          },
+          "bannerImage": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/banner\/189513-HjE2qNupgfEe.jpg",
+          "format": "ONA",
+          "status": "FINISHED",
+          "season": "SPRING",
+          "seasonYear": 2025,
+          "episodes": 6,
+          "chapters": null,
+          "meanScore": 72,
+          "genres": ["Comedy", "Fantasy"],
+          "isAdult": false
+        },
+        {
+          "id": 206425,
+          "idMal": null,
+          "type": "ANIME",
+          "title": {
+            "romaji": "Sousou no Frieren: \u25cf\u25cf no Mahou Part 3",
+            "english": null,
+            "native": "\u846c\u9001\u306e\u30d5\u30ea\u30fc\u30ec\u30f3 \uff5e\u25cf\u25cf\u306e\u9b54\u6cd5\uff5e 3\u30af\u30fc\u30eb"
+          },
+          "coverImage": {
+            "extraLarge": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b206425-WOwXsfDbHZwb.jpg",
+            "large": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/medium\/b206425-WOwXsfDbHZwb.jpg",
+            "medium": "https:\/\/s4.anilist.co\/file\/anilistcdn\/media\/anime\/cover\/small\/b206425-WOwXsfDbHZwb.jpg"
+          },
+          "bannerImage": null,
+          "format": "ONA",
+          "status": "FINISHED",
+          "season": "WINTER",
+          "seasonYear": 2026,
+          "episodes": 6,
+          "chapters": null,
+          "meanScore": 72,
+          "genres": ["Comedy", "Fantasy"],
+          "isAdult": false
+        }
+      ]
+    }
+  }
+}

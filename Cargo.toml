@@ -11,12 +11,15 @@ version      = "0.1.0"
 [workspace.dependencies]
 anyhow = "1.0"
 axum = "0.8"
+cynic = { default-features = false, version = "3.14" }
+cynic-codegen = "3.14"
 db = { path = "crates/db" }
 directories = "6.0"
 domain = { path = "crates/domain" }
 flume = { default-features = false, features = [ "async" ], version = "0.12" }
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
+net = { path = "crates/net" }
 rand = "0.10"
 reqwest = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }
 rustls = { default-features = false, features = [ "ring", "std", "tls12" ], version = "0.23" }
