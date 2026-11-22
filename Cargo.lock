@@ -504,9 +504,11 @@ dependencies = [
  "gpui-kit",
  "settings",
  "tempfile",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "ui-state",
 ]
 
 [[package]]
@@ -1514,6 +1516,11 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "downcast-rs"
@@ -7449,6 +7456,13 @@ version = "0.1.0"
 [[package]]
 name = "ui-state"
 version = "0.1.0"
+dependencies = [
+ "domain",
+ "flume",
+ "gpui-kit",
+ "thiserror 2.0.21",
+ "tokio",
+]
 
 [[package]]
 name = "ui-theme"

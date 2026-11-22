@@ -23,8 +23,27 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    gpui_kit::application().run(|cx| {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("autumn-engine")
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            report_fatal(&format_args!("failed to start the Tokio runtime: {err:#}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    let handle = runtime.handle().clone();
+    // The engine takes this sender once it exists (Phase 2). Holding it here
+    // keeps the event pump alive for the whole run.
+    let (_engine_events, ui_events) = ui_state::events::channel();
+
+    gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
+        ui_state::bridge::init(cx, handle);
+        // No store consumes an event yet; the first engine module adds one.
+        ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
         if let Err(err) = open_main_window(cx) {
             // Logging is up, so this also reaches stderr.
             tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");

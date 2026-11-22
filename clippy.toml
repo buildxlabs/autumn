@@ -7,3 +7,6 @@ max-fn-params-bools = 0
 allow-expect-in-tests = true
 allow-print-in-tests  = true
 allow-unwrap-in-tests = true
+
+# Product names that look like identifiers to doc_markdown. ".." keeps clippy's defaults.
+doc-valid-idents = [ "..", "AniDB", "AniList", "MyAnimeList" ]
