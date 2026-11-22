@@ -56,8 +56,26 @@ where
     let Some(TokioHandle(handle)) = cx.try_global::<TokioHandle>() else {
         return Task::ready(Err(BridgeError::NotInitialized));
     };
+    cx.background_executor().spawn(spawn(handle, future))
+}
+
+/// Spawns work from a caller that already has the bridge's Tokio handle.
+/// Dropping the returned future aborts the work.
+///
+/// # Errors
+///
+/// The future resolves to [`BridgeError::Panicked`] if the work panics or
+/// [`BridgeError::Cancelled`] if the runtime shuts down first.
+pub fn spawn<T, F>(
+    handle: &Handle,
+    future: F,
+) -> impl Future<Output = Result<T, BridgeError>> + Send + use<T, F>
+where
+    F: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
     let join = AbortOnDrop(handle.spawn(future));
-    cx.background_executor().spawn(async move {
+    async move {
         let mut join = join;
         (&mut join.0).await.map_err(|err| {
             if err.is_panic() {
@@ -66,7 +84,7 @@ where
                 BridgeError::Cancelled
             }
         })
-    })
+    }
 }
 
 /// Aborts the Tokio task when the GPUI task awaiting it is dropped.

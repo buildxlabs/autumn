@@ -516,8 +516,10 @@ name = "autumn"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "db",
  "gpui-kit",
+ "net",
  "settings",
  "tempfile",
  "tokio",

@@ -13,6 +13,7 @@ workspace = true
 anyhow.workspace             = true
 db                           = { path = "../db" }
 gpui-kit.workspace           = true
+net.workspace                = true
 settings                     = { path = "../settings" }
 tokio                        = { features = [ "rt-multi-thread" ], workspace = true }
 tracing.workspace            = true
@@ -23,6 +24,7 @@ ui-state.workspace           = true
 ui-theme.workspace           = true
 
 [dev-dependencies]
+axum.workspace     = true
 gpui-kit           = { features = [ "test-support" ], workspace = true }
 tempfile.workspace = true
 tokio              = { features = [ "macros", "rt" ], workspace = true }

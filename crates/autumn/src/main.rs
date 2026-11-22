@@ -1,11 +1,12 @@
 //! Autumn, a desktop app for anime and manga.
 
+mod http_client;
 mod logging;
 mod rail_prefs;
 mod settings_store;
 mod startup;
 
-use std::{fmt::Display, process::ExitCode};
+use std::{fmt::Display, process::ExitCode, sync::Arc};
 
 use gpui_kit::{
     App, AppContext, Bounds, Pixels, Task, TitlebarOptions, WindowBounds, WindowDecorations,
@@ -48,8 +49,11 @@ fn main() -> ExitCode {
     let prefs = rail_prefs::from_settings(&started.settings);
     let save_prefs = rail_prefs::saver(started.db, started.settings);
 
+    let http_client =
+        http_client::PosterHttpClient::new(started.client, started.poster_cache, handle.clone());
     gpui_kit::application()
         .with_assets(AllAssets)
+        .with_http_client(Arc::new(http_client))
         .run(move |cx| {
             gpui_kit::init(cx);
             ui_state::bridge::init(cx, handle);

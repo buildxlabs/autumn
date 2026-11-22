@@ -11,7 +11,7 @@ use std::{
 use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use tokio::task::spawn_blocking;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{Client, Error, HttpError, Method, Request};
 
@@ -85,6 +85,7 @@ impl PosterCache {
             .await
             .map_err(join_error)?;
         if let Ok(bytes) = cached {
+            debug!("poster cache hit");
             return Ok(bytes);
         }
 
