@@ -10,3 +10,7 @@ publish                = false
 workspace = true
 
 [dependencies]
+gpui-kit.workspace = true
+
+[dev-dependencies]
+gpui-kit = { features = [ "test-support" ], workspace = true }
