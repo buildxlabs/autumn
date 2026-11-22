@@ -1,5 +1,8 @@
 //! Autumn, a desktop app for anime and manga.
 
+mod logging;
+mod startup;
+
 use std::fmt::Display;
 
 use gpui_kit::{
@@ -13,10 +16,18 @@ const WINDOW_WIDTH: f32 = 1280.;
 const WINDOW_HEIGHT: f32 = 800.;
 
 fn main() {
+    let _started = match startup::run() {
+        Ok(started) => started,
+        Err(err) => {
+            report_fatal(&format_args!("startup failed: {err:#}"));
+            return;
+        }
+    };
     gpui_kit::application().run(|cx| {
         gpui_kit::init(cx);
         if let Err(err) = open_main_window(cx) {
-            report_fatal(&err);
+            tracing::error!(error = %err, "failed to open the main window");
+            report_fatal(&format_args!("failed to open the main window: {err:#}"));
             cx.quit();
         }
     });
@@ -39,10 +50,10 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
 
 #[expect(
     clippy::print_stderr,
-    reason = "no logger exists before the Phase 0 logging work; a failed start must say why"
+    reason = "a start that fails before or while logging is set up must still say why"
 )]
 fn report_fatal(err: &impl Display) {
-    eprintln!("autumn: failed to open the main window: {err:#}");
+    eprintln!("autumn: {err}");
 }
 
 /// Placeholder content until the app shell exists.

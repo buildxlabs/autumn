@@ -10,7 +10,13 @@ publish                = false
 workspace = true
 
 [dependencies]
-gpui-kit.workspace = true
+anyhow.workspace             = true
+gpui-kit.workspace           = true
+settings                     = { path = "../settings" }
+tracing.workspace            = true
+tracing-appender.workspace   = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
-gpui-kit = { features = [ "test-support" ], workspace = true }
+gpui-kit           = { features = [ "test-support" ], workspace = true }
+tempfile.workspace = true
