@@ -148,6 +148,7 @@ mod tests {
         Settings {
             appearance: AppearanceSettings {
                 sidebar_click_pin: true,
+                ..AppearanceSettings::default()
             },
         }
     }

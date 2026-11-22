@@ -25,3 +25,48 @@ pub enum Route {
     /// App settings.
     Settings,
 }
+
+impl Route {
+    /// Every route, in rail order.
+    pub const ALL: [Self; 7] = [
+        Self::Home,
+        Self::Discover,
+        Self::Schedule,
+        Self::Manga,
+        Self::Extensions,
+        Self::Sync,
+        Self::Settings,
+    ];
+
+    /// A stable name for storing the route in settings. Never change one:
+    /// saved settings refer to it.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Home => "home",
+            Self::Discover => "discover",
+            Self::Schedule => "schedule",
+            Self::Manga => "manga",
+            Self::Extensions => "extensions",
+            Self::Sync => "sync",
+            Self::Settings => "settings",
+        }
+    }
+
+    /// The route stored under `key`, if any.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|route| route.key() == key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Route;
+
+    #[test]
+    fn every_route_round_trips_through_its_key() {
+        for route in Route::ALL {
+            assert_eq!(Route::from_key(route.key()), Some(route), "{route:?}");
+        }
+        assert_eq!(Route::from_key("retired"), None, "unknown keys are ignored");
+    }
+}

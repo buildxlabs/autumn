@@ -23,6 +23,9 @@ pub struct AppearanceSettings {
     /// When on, clicking the sidebar rail pins it open and the expanded rail
     /// pushes the content aside instead of drawing over it on hover.
     pub sidebar_click_pin: bool,
+    /// Sidebar items the user moved into the "More" menu, by route key.
+    /// Unknown keys are ignored, so a removed route never breaks loading.
+    pub sidebar_unpinned: Vec<String>,
 }
 
 impl Settings {
