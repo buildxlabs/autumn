@@ -3,7 +3,7 @@
 mod logging;
 mod startup;
 
-use std::fmt::Display;
+use std::{fmt::Display, process::ExitCode};
 
 use gpui_kit::{
     App, AppContext, Bounds, Context, IntoElement, Render, Styled, TitlebarOptions, Window,
@@ -15,22 +15,23 @@ const WINDOW_WIDTH: f32 = 1280.;
 /// Initial height of the main window in logical pixels; the user can resize it.
 const WINDOW_HEIGHT: f32 = 800.;
 
-fn main() {
+fn main() -> ExitCode {
     let _started = match startup::run() {
         Ok(started) => started,
         Err(err) => {
             report_fatal(&format_args!("startup failed: {err:#}"));
-            return;
+            return ExitCode::FAILURE;
         }
     };
     gpui_kit::application().run(|cx| {
         gpui_kit::init(cx);
         if let Err(err) = open_main_window(cx) {
-            tracing::error!(error = %err, "failed to open the main window");
-            report_fatal(&format_args!("failed to open the main window: {err:#}"));
+            // Logging is up, so this also reaches stderr.
+            tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
             cx.quit();
         }
     });
+    ExitCode::SUCCESS
 }
 
 /// Opens the main window, centered on the primary display.

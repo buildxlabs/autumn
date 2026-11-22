@@ -3,10 +3,8 @@
 
 use anyhow::Context as _;
 use settings::{AppPaths, Settings};
-use tracing_appender::non_blocking::WorkerGuard;
 
-/// Everything startup produced. Keep it alive for the whole run: it owns the
-/// log writer's flush guard.
+/// Everything startup produced.
 #[derive(Debug)]
 #[expect(
     dead_code,
@@ -17,7 +15,6 @@ pub(crate) struct Started {
     pub(crate) paths: AppPaths,
     /// The settings loaded from disk, or the defaults.
     pub(crate) settings: Settings,
-    _log_guard: WorkerGuard,
 }
 
 /// Creates the app dirs, installs logging, then loads `settings.json`.
@@ -29,7 +26,7 @@ pub(crate) fn run() -> anyhow::Result<Started> {
     paths
         .create_dirs()
         .context("could not create the app directories")?;
-    let log_guard = crate::logging::init(&paths.log_dir())?;
+    crate::logging::init(&paths.log_dir())?;
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         config = %paths.config_dir().display(),
@@ -39,14 +36,13 @@ pub(crate) fn run() -> anyhow::Result<Started> {
     );
 
     let settings = Settings::load_or_init(&paths.settings_file()).unwrap_or_else(|err| {
-        tracing::error!(error = %anyhow::Error::from(err), "using default settings");
+        let err = anyhow::Error::from(err);
+        tracing::error!(error = %format_args!("{err:#}"), "using default settings");
         Settings::default()
     });
+    // Settings hold no secrets (those live in the keychain), so the whole
+    // struct may be logged. Revisit if a secret-adjacent field is added.
     tracing::debug!(?settings, "settings loaded");
 
-    Ok(Started {
-        paths,
-        settings,
-        _log_guard: log_guard,
-    })
+    Ok(Started { paths, settings })
 }

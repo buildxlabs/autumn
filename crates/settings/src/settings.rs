@@ -1,9 +1,11 @@
 use std::{
-    fs, io,
-    path::{Path, PathBuf},
+    fs,
+    io::{self, Write as _},
+    path::Path,
 };
 
 use serde::{Deserialize, Serialize};
+use tempfile::NamedTempFile;
 
 use crate::SettingsError;
 
@@ -51,8 +53,8 @@ impl Settings {
         }
     }
 
-    /// Writes the settings to `path` atomically: a sibling temporary file is
-    /// written and synced, then renamed over `path`.
+    /// Writes the settings to `path` atomically: a uniquely named sibling
+    /// temporary file is written and synced, then renamed over `path`.
     ///
     /// # Errors
     ///
@@ -61,22 +63,14 @@ impl Settings {
     /// encoded.
     pub fn save(&self, path: &Path) -> Result<(), SettingsError> {
         let json = serde_json::to_vec_pretty(self).map_err(SettingsError::Serialize)?;
-        let tmp = temp_path(path);
-        write_synced(&tmp, &json).map_err(SettingsError::io(&tmp))?;
-        fs::rename(&tmp, path).map_err(SettingsError::io(path))
+        // Same directory, so the rename stays on one filesystem.
+        let dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let mut tmp = NamedTempFile::new_in(dir).map_err(SettingsError::io(dir))?;
+        tmp.write_all(&json)
+            .and_then(|()| tmp.as_file().sync_all())
+            .map_err(SettingsError::io(tmp.path()))?;
+        tmp.persist(path)
+            .map_err(|err| SettingsError::io(path)(err.error))?;
+        Ok(())
     }
-}
-
-/// `settings.json` → `settings.json.tmp`, in the same directory so the rename
-/// stays on one filesystem.
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
-}
-
-fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let file = fs::File::create(path)?;
-    io::Write::write_all(&mut &file, bytes)?;
-    file.sync_all()
 }

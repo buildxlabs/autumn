@@ -5,10 +5,7 @@ use std::{fs, path::Path};
 
 use anyhow::Context as _;
 use tracing::{Subscriber, level_filters::LevelFilter};
-use tracing_appender::{
-    non_blocking::WorkerGuard,
-    rolling::{RollingFileAppender, Rotation},
-};
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
     EnvFilter, Layer as _, layer::SubscriberExt as _, util::SubscriberInitExt as _,
 };
@@ -20,25 +17,26 @@ const FILE_SUFFIX: &str = "log";
 const MAX_LOG_FILES: usize = 7;
 
 /// Installs the global subscriber, and routes `log` records (GPUI logs
-/// through `log`) into it. Keep the returned guard alive until exit: dropping
-/// it flushes the file writer.
+/// through `log`) into it.
 ///
 /// `RUST_LOG`, when set, is the filter for both the file and stderr.
 /// Otherwise the file gets INFO and stderr gets WARN.
-pub(crate) fn init(log_dir: &Path) -> anyhow::Result<WorkerGuard> {
+pub(crate) fn init(log_dir: &Path) -> anyhow::Result<()> {
     let rust_log = std::env::var("RUST_LOG").ok();
-    let (subscriber, guard) = subscriber(log_dir, rust_log.as_deref())?;
-    subscriber
+    subscriber(log_dir, rust_log.as_deref())?
         .try_init()
-        .context("a global logger was already installed")?;
-    Ok(guard)
+        .context("a global logger was already installed")
 }
 
 /// Builds the file + stderr subscriber without installing it.
+///
+/// The file writer is blocking on purpose: on macOS GPUI quits through
+/// `exit()`, so a background writer's queue would never be flushed and the
+/// last lines (often the interesting ones) would be lost.
 fn subscriber(
     log_dir: &Path,
     rust_log: Option<&str>,
-) -> anyhow::Result<(impl Subscriber + Send + Sync + use<>, WorkerGuard)> {
+) -> anyhow::Result<impl Subscriber + Send + Sync + use<>> {
     // The appender prunes old files before its first write and complains on
     // stderr when the directory is missing, so create it first.
     fs::create_dir_all(log_dir)
@@ -50,20 +48,16 @@ fn subscriber(
         .max_log_files(MAX_LOG_FILES)
         .build(log_dir)
         .with_context(|| format!("could not open a log file in {}", log_dir.display()))?;
-    let (file_writer, guard) = tracing_appender::non_blocking(appender);
 
     let file = tracing_subscriber::fmt::layer()
         .with_ansi(false)
-        .with_writer(file_writer)
+        .with_writer(appender)
         .with_filter(filter(rust_log, LevelFilter::INFO));
     let stderr = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_filter(filter(rust_log, LevelFilter::WARN));
 
-    Ok((
-        tracing_subscriber::registry().with(file).with(stderr),
-        guard,
-    ))
+    Ok(tracing_subscriber::registry().with(file).with(stderr))
 }
 
 /// `RUST_LOG` when given (invalid directives are skipped), else `default`.
@@ -85,12 +79,11 @@ mod tests {
     /// names of the files created and the text written.
     fn log_lines(rust_log: Option<&str>) -> (Vec<String>, String) {
         let dir = tempfile::tempdir().unwrap();
-        let (subscriber, guard) = subscriber(dir.path(), rust_log).unwrap();
+        let subscriber = subscriber(dir.path(), rust_log).unwrap();
         tracing::subscriber::with_default(subscriber, || {
             tracing::info!("info line");
             tracing::debug!("debug line");
         });
-        drop(guard);
 
         let names: Vec<String> = fs::read_dir(dir.path())
             .unwrap()
@@ -133,7 +126,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let dir = root.path().join("logs");
 
-        let (_subscriber, _guard) = subscriber(&dir, None).unwrap();
+        let _subscriber = subscriber(&dir, None).unwrap();
 
         assert!(Path::new(&dir).is_dir(), "the appender creates logs/");
     }
