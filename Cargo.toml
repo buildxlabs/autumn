@@ -9,12 +9,14 @@ rust-version = "1.100"
 version      = "0.1.0"
 
 [workspace.dependencies]
-domain    = { path = "crates/domain" }
-flume     = { default-features = false, features = [ "async" ], version = "0.12" }
-gpui-kit  = "=0.10.0"
-thiserror = "2"
-tokio     = { default-features = false, version = "1.54" }
-ui-state  = { path = "crates/ui-state" }
+domain     = { path = "crates/domain" }
+flume      = { default-features = false, features = [ "async" ], version = "0.12" }
+gpui-kit   = "=0.10.0"
+serde      = { features = [ "derive" ], version = "1.0" }
+serde_json = "1.0"
+thiserror  = "2.0"
+tokio      = { default-features = false, version = "1.54" }
+ui-state   = { path = "crates/ui-state" }
 
 [profile.dev.package."*"]
 opt-level = 2
