@@ -1,6 +1,9 @@
 //! Autumn, a desktop app for anime and manga.
 
-use std::fmt::Display;
+mod logging;
+mod startup;
+
+use std::{fmt::Display, process::ExitCode};
 
 use gpui_kit::{
     App, AppContext, Bounds, Context, IntoElement, Render, Styled, TitlebarOptions, Window,
@@ -12,7 +15,14 @@ const WINDOW_WIDTH: f32 = 1280.;
 /// Initial height of the main window in logical pixels; the user can resize it.
 const WINDOW_HEIGHT: f32 = 800.;
 
-fn main() {
+fn main() -> ExitCode {
+    let _started = match startup::run() {
+        Ok(started) => started,
+        Err(err) => {
+            report_fatal(&format_args!("startup failed: {err:#}"));
+            return ExitCode::FAILURE;
+        }
+    };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_name("autumn-engine")
@@ -20,8 +30,8 @@ fn main() {
     {
         Ok(runtime) => runtime,
         Err(err) => {
-            report_fatal("failed to start the Tokio runtime", &err);
-            return;
+            report_fatal(&format_args!("failed to start the Tokio runtime: {err:#}"));
+            return ExitCode::FAILURE;
         }
     };
     let handle = runtime.handle().clone();
@@ -35,10 +45,12 @@ fn main() {
         // No store consumes an event yet; the first engine module adds one.
         ui_state::events::start_pump(cx, ui_events, |_event, _cx| {}).detach();
         if let Err(err) = open_main_window(cx) {
-            report_fatal("failed to open the main window", &err);
+            // Logging is up, so this also reaches stderr.
+            tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
             cx.quit();
         }
     });
+    ExitCode::SUCCESS
 }
 
 /// Opens the main window, centered on the primary display.
@@ -58,10 +70,10 @@ fn open_main_window(cx: &mut App) -> gpui_kit::Result<()> {
 
 #[expect(
     clippy::print_stderr,
-    reason = "no logger exists before the Phase 0 logging work; a failed start must say why"
+    reason = "a start that fails before or while logging is set up must still say why"
 )]
-fn report_fatal(context: &str, err: &impl Display) {
-    eprintln!("autumn: {context}: {err:#}");
+fn report_fatal(err: &impl Display) {
+    eprintln!("autumn: {err}");
 }
 
 /// Placeholder content until the app shell exists.
