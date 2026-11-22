@@ -3,7 +3,7 @@
 use db::Db;
 use domain::{AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaKind, Score};
 use support::{entry, fresh, mint, names};
-use tracker::{List, ListName, Local, Platform, TrackerError};
+use tracker::{List, ListName, Local, Platform, PlatformError};
 
 #[tokio::test]
 async fn an_added_entry_is_fetched_back_with_every_field() {
@@ -268,7 +268,7 @@ async fn saving_an_unknown_media_fails() {
     let error = local.save_entry(&entry(unknown)).await.unwrap_err();
 
     assert!(
-        matches!(error, TrackerError::UnknownMedia(media) if media == unknown),
+        matches!(error, PlatformError::UnknownMedia(media) if media == unknown),
         "{error:?}"
     );
 }

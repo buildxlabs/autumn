@@ -80,13 +80,7 @@ impl<'a> LocalListRepo<'a> {
     pub async fn save(&self, entry: &ListEntry) -> Result<ListEntry, DbError> {
         let media = entry.media;
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
-        let known: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM media WHERE id = ?)")
-            .bind(media.get())
-            .fetch_one(&mut *tx)
-            .await?;
-        if !known {
-            return Err(DbError::UnknownMedia(media));
-        }
+        ensure_media(&mut tx, media).await?;
         let started = date_columns(entry.started_at);
         let completed = date_columns(entry.completed_at);
         let scores = entry.advanced_scores;
@@ -166,6 +160,39 @@ impl<'a> LocalListRepo<'a> {
         Ok(saved)
     }
 
+    /// Sets the progress of `media`'s entry and returns the entry, in one
+    /// transaction. A media without an entry gets a new Current entry with
+    /// nothing else set.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::UnknownMedia`], [`DbError::Sqlx`] when a query fails, or
+    /// [`DbError::InvalidRow`].
+    pub async fn set_progress(&self, media: MediaId, progress: u32) -> Result<ListEntry, DbError> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        ensure_media(&mut tx, media).await?;
+        sqlx::query(
+            "INSERT INTO local_list_entry (
+                media_id, status, score, progress, progress_volumes, repeat, notes, private,
+                priority, score_story, score_characters, score_visuals, score_audio,
+                score_enjoyment, hidden_from_status_lists, created_at, updated_at
+             ) VALUES (?, 'current', 0, ?, 0, 0, '', 0, 0, 0, 0, 0, 0, 0, 0,
+                       unixepoch(), unixepoch())
+             ON CONFLICT (media_id) DO UPDATE SET
+                progress = excluded.progress,
+                updated_at = excluded.updated_at",
+        )
+        .bind(media.get())
+        .bind(progress)
+        .execute(&mut *tx)
+        .await?;
+        let saved = entry_in(&mut tx, media)
+            .await?
+            .ok_or(DbError::UnknownMedia(media))?;
+        tx.commit().await?;
+        Ok(saved)
+    }
+
     /// Removes the entry for `media` and its custom-list membership. Returns
     /// whether there was one.
     ///
@@ -178,6 +205,18 @@ impl<'a> LocalListRepo<'a> {
             .execute(self.pool)
             .await?;
         Ok(done.rows_affected() > 0)
+    }
+}
+
+async fn ensure_media(conn: &mut SqliteConnection, media: MediaId) -> Result<(), DbError> {
+    let known: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM media WHERE id = ?)")
+        .bind(media.get())
+        .fetch_one(conn)
+        .await?;
+    if known {
+        Ok(())
+    } else {
+        Err(DbError::UnknownMedia(media))
     }
 }
 
@@ -241,7 +280,7 @@ impl EntryRow {
             repeat: int(self.repeat, "repeat")?,
             started_at: date(
                 (self.started_year, self.started_month, self.started_day),
-                "started_at",
+                "started_year, started_month, started_day",
             )?,
             completed_at: date(
                 (
@@ -249,7 +288,7 @@ impl EntryRow {
                     self.completed_month,
                     self.completed_day,
                 ),
-                "completed_at",
+                "completed_year, completed_month, completed_day",
             )?,
             notes: self.notes,
             private: self.private,

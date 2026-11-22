@@ -10,7 +10,7 @@ publish                = false
 workspace = true
 
 [dependencies]
-db                  = { path = "../db" }
+db.workspace        = true
 domain.workspace    = true
 thiserror.workspace = true
 

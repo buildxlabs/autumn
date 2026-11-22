@@ -35,7 +35,7 @@ pub enum DbError {
     #[error("unsupported list status {0:?}")]
     UnsupportedStatus(ListStatus),
     /// A stored row holds a value its type can't take, so the database was
-    /// changed outside Autumn. Names the column.
+    /// changed outside Autumn. Names the column, or the columns of a date.
     #[error("invalid value in column {0}")]
     InvalidRow(&'static str),
 }

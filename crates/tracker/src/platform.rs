@@ -2,7 +2,7 @@ use std::future::Future;
 
 use domain::{ListEntry, MediaId, MediaKind};
 
-use crate::{Collection, TrackerError};
+use crate::{Collection, PlatformError};
 
 /// Where a user's list entries live: the account-free [`Local`](crate::Local)
 /// platform, or a tracking service account such as AniList.
@@ -16,11 +16,11 @@ pub trait Platform {
     ///
     /// # Errors
     ///
-    /// [`TrackerError`] when the list can't be read.
+    /// [`PlatformError`] when the list can't be read.
     fn collection(
         &self,
         kind: MediaKind,
-    ) -> impl Future<Output = Result<Collection, TrackerError>> + Send;
+    ) -> impl Future<Output = Result<Collection, PlatformError>> + Send;
 
     /// Adds `entry` to the list, or replaces the entry for its media, and
     /// returns it as stored. The platform sets `created_at` and `updated_at`;
@@ -28,12 +28,12 @@ pub trait Platform {
     ///
     /// # Errors
     ///
-    /// [`TrackerError::UnknownMedia`], or [`TrackerError`] when the entry
+    /// [`PlatformError::UnknownMedia`], or [`PlatformError`] when the entry
     /// can't be saved.
     fn save_entry(
         &self,
         entry: &ListEntry,
-    ) -> impl Future<Output = Result<ListEntry, TrackerError>> + Send;
+    ) -> impl Future<Output = Result<ListEntry, PlatformError>> + Send;
 
     /// Sets the episodes watched or chapters read for `media` and returns
     /// the entry. A media not in the list is added as
@@ -41,20 +41,22 @@ pub trait Platform {
     ///
     /// # Errors
     ///
-    /// [`TrackerError::UnknownMedia`], or [`TrackerError`] when the entry
+    /// [`PlatformError::UnknownMedia`], or [`PlatformError`] when the entry
     /// can't be saved.
     fn update_progress(
         &self,
         media: MediaId,
         progress: u32,
-    ) -> impl Future<Output = Result<ListEntry, TrackerError>> + Send;
+    ) -> impl Future<Output = Result<ListEntry, PlatformError>> + Send;
 
     /// Removes the entry for `media` from the list. Removing a media that is
     /// not in the list does nothing.
     ///
     /// # Errors
     ///
-    /// [`TrackerError`] when the entry can't be removed.
-    fn delete_entry(&self, media: MediaId)
-    -> impl Future<Output = Result<(), TrackerError>> + Send;
+    /// [`PlatformError`] when the entry can't be removed.
+    fn delete_entry(
+        &self,
+        media: MediaId,
+    ) -> impl Future<Output = Result<(), PlatformError>> + Send;
 }

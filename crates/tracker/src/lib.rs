@@ -10,6 +10,6 @@ mod local;
 mod platform;
 
 pub use collection::{Collection, List, ListName};
-pub use error::TrackerError;
+pub use error::PlatformError;
 pub use local::Local;
 pub use platform::Platform;
