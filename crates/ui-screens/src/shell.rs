@@ -2,6 +2,7 @@
 
 use std::{rc::Rc, time::Duration};
 
+use db::Db;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
@@ -13,6 +14,7 @@ use gpui_kit::{
     },
     div, px,
 };
+use metadata::AniList;
 use ui_components::{
     RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
@@ -186,6 +188,29 @@ impl AppShell {
             rail_menus: 0,
             badges,
         }
+    }
+
+    /// A shell whose command palette can search the Local platform's list
+    /// entries and the AniList catalog. Startup supplies both sources.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "composition-root constructor: shell state plus the two palette sources"
+    )]
+    pub fn new_with_palette_sources(
+        prefs: RailPrefs,
+        fetch_status: Entity<FetchStatus>,
+        save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+        poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+        db: Db,
+        anilist: AniList,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Self {
+        let shell = Self::new(prefs, fetch_status, save_prefs, poster_cache, window, cx);
+        shell
+            .palette
+            .update(cx, |palette, _| palette.attach_sources(db, anilist));
+        shell
     }
 
     /// The route on screen.

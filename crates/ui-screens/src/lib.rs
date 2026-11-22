@@ -3,6 +3,7 @@
 //! See ARCHITECTURE §2 and §5.
 
 mod palette;
+mod palette_search;
 mod placeholder;
 mod shell;
 

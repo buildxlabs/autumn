@@ -9,10 +9,12 @@ mod startup;
 
 use std::{fmt::Display, process::ExitCode, sync::Arc};
 
+use db::Db;
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
+use metadata::AniList;
 use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
 use ui_state::fetch_status::FetchStatus;
 
@@ -48,6 +50,9 @@ fn main() -> ExitCode {
     // The one shared client: posters, the fetch-status feed and (in debug
     // builds) the fetch-status debug actions all go through it.
     let client = started.client;
+    // The palette searches the Local platform's list and the public AniList
+    // catalog through the shared HTTP client.
+    let anilist = AniList::new(client.clone());
     let (engine_events, ui_events) = ui_state::events::channel();
     handle.spawn({
         let client = client.clone();
@@ -56,7 +61,7 @@ fn main() -> ExitCode {
     });
     let prefs = rail_prefs::from_settings(&started.settings);
     let storage_request = poster_cache_request(started.poster_cache.clone());
-    let save_prefs = rail_prefs::saver(started.db, started.settings);
+    let save_prefs = rail_prefs::saver(started.db.clone(), started.settings);
 
     let http_client =
         http_client::PosterHttpClient::new(client.clone(), started.poster_cache, handle.clone());
@@ -76,8 +81,15 @@ fn main() -> ExitCode {
             })
             .detach();
             ui_state::actions::bind_keys(cx);
-            if let Err(err) = open_main_window(prefs, fetch_status, save_prefs, storage_request, cx)
-            {
+            if let Err(err) = open_main_window(
+                prefs,
+                fetch_status,
+                save_prefs,
+                storage_request,
+                started.db.clone(),
+                anilist,
+                cx,
+            ) {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
                 cx.quit();
@@ -119,12 +131,25 @@ fn open_main_window(
     fetch_status: Entity<FetchStatus>,
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+    db: Db,
+    anilist: AniList,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
     let options = main_window_options(bounds);
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| AppShell::new(prefs, fetch_status, save_prefs, storage_request, window, cx))
+        cx.new(|cx| {
+            AppShell::new_with_palette_sources(
+                prefs,
+                fetch_status,
+                save_prefs,
+                storage_request,
+                db,
+                anilist,
+                window,
+                cx,
+            )
+        })
     })?;
     Ok(())
 }
@@ -163,13 +188,24 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
+    use db::Db;
     use gpui_kit::{AppContext, Task, TestAppContext};
+    use metadata::AniList;
     use ui_screens::RailPrefs;
 
     use super::{FetchStatus, open_main_window};
 
     #[gpui_kit::test]
     fn opens_one_window(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("a temp directory");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let db = runtime
+            .block_on(Db::open(&dir.path().join("palette.db")))
+            .expect("a test database");
+        let anilist = AniList::new(net::Client::new().expect("a test HTTP client"));
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
@@ -178,6 +214,8 @@ mod tests {
                 fetch_status,
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
+                db,
+                anilist,
                 cx,
             )
             .expect("the test platform opens windows");
