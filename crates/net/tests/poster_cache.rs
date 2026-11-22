@@ -128,9 +128,19 @@ async fn clearing_empties_posters_but_keeps_metadata() {
     assert!(poster.exists());
     let blob = dir.path().join("metadata").join("blob");
     fs::write(&blob, b"meta").unwrap();
+    assert_eq!(
+        cache.size_bytes().await.unwrap(),
+        6,
+        "the size counts the poster's bytes"
+    );
 
     cache.clear().await.unwrap();
 
+    assert_eq!(
+        cache.size_bytes().await.unwrap(),
+        0,
+        "no poster bytes remain"
+    );
     assert!(!poster.exists());
     assert_eq!(
         fs::read_dir(dir.path().join("posters")).unwrap().count(),

@@ -10,7 +10,6 @@ use gpui_kit::{
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
-        switch::Switch,
     },
     div, px,
 };
@@ -21,7 +20,7 @@ use ui_components::{
     },
 };
 use ui_state::{
-    RailBadges, Route, RouterState, ScrollRestore,
+    RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
 };
@@ -31,6 +30,11 @@ use ui_state::{
     actions::{DebugAniListUnavailable, DebugRateLimited, DebugSlowFetch},
     fetch_status::DebugFetch,
 };
+
+pub use settings::PosterCacheAction;
+use settings::{PosterCacheRequest, StorageStatus};
+
+mod settings;
 
 use crate::{
     palette::{CommandPalette, Mode, PaletteEvent},
@@ -50,7 +54,13 @@ pub(crate) const HOVER_OPEN_DELAY: Duration = Duration::from_millis(150);
 const RAIL_ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
 /// The system group at the rail's bottom, top to bottom.
 /// The rail's system group, which never folds into "More".
-pub const SYSTEM_ROUTES: [Route; 3] = [Route::Extensions, Route::Sync, Route::Settings];
+pub const SYSTEM_ROUTES: [Route; 3] = [
+    Route::Extensions,
+    Route::Sync,
+    Route::Settings {
+        tab: SettingsTab::Appearance,
+    },
+];
 
 /// The rail preferences the user can change, loaded at start and saved on
 /// every change.
@@ -101,6 +111,9 @@ pub struct AppShell {
     fetch_status: Entity<FetchStatus>,
     prefs: RailPrefs,
     save_prefs: SavePrefs,
+    poster_cache: PosterCacheRequest,
+    storage_status: StorageStatus,
+    storage_task: Option<Task<()>>,
     /// The latest save, if it is still running.
     saving: Option<Task<()>>,
     /// Whether the rail is expanded, by hover or by the click-pin toggle.
@@ -128,11 +141,13 @@ impl std::fmt::Debug for AppShell {
 
 impl AppShell {
     /// A shell showing the home route, focused so its key bindings apply.
-    /// `save_prefs` runs whenever the user changes `prefs`.
+    /// `save_prefs` persists preference changes and `poster_cache` handles
+    /// Storage requests.
     pub fn new(
         prefs: RailPrefs,
         fetch_status: Entity<FetchStatus>,
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+        poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -161,6 +176,9 @@ impl AppShell {
             fetch_status,
             prefs,
             save_prefs: Rc::new(save_prefs),
+            poster_cache: Box::new(poster_cache),
+            storage_status: StorageStatus::Measuring,
+            storage_task: None,
             saving: None,
             rail_open: false,
             hover_open: None,
@@ -227,6 +245,14 @@ impl AppShell {
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
         if let Some(offset) = restore {
             self.scroll.restore(offset);
+            if matches!(
+                self.route(),
+                Route::Settings {
+                    tab: SettingsTab::Storage
+                }
+            ) {
+                self.request_poster_cache(PosterCacheAction::Measure, cx);
+            }
             cx.notify();
         }
     }
@@ -364,7 +390,11 @@ impl AppShell {
             id: rail_id(route).into(),
             label: title(route),
             icon: icon(route),
-            active: route == current,
+            active: route == current
+                || matches!(
+                    (route, current),
+                    (Route::Settings { .. }, Route::Settings { .. })
+                ),
             badge: badges.count(route),
             pinned: !self.prefs.unpinned.contains(&route),
         };
@@ -423,29 +453,18 @@ impl AppShell {
 
     fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let route = self.router.current();
-        let content = div()
-            .child(placeholder(
-                title(*route),
-                rows(*route),
-                colors.muted_foreground,
-            ))
-            .children((*route == Route::Home).then(|| self.render_home_posters(cx)))
-            .children((*route == Route::Settings).then(|| {
-                div().px_8().child(
-                    Switch::new("setting-click-pin")
-                        .label("Pin the sidebar on click instead of opening it on hover")
-                        .checked(self.prefs.mode == RailMode::ClickPin)
-                        .on_click(cx.listener(|shell, checked: &bool, _, cx| {
-                            let mode = if *checked {
-                                RailMode::ClickPin
-                            } else {
-                                RailMode::Hover
-                            };
-                            shell.set_rail_mode(mode, cx);
-                        })),
-                )
-            }));
+        let route = self.route();
+        let content = match route {
+            Route::Settings { tab } => self.render_settings(tab, cx).into_any_element(),
+            route => div()
+                .child(placeholder(
+                    title(route),
+                    rows(route),
+                    colors.muted_foreground,
+                ))
+                .children((route == Route::Home).then(|| self.render_home_posters(cx)))
+                .into_any_element(),
+        };
         div()
             .id("route-view")
             .flex_1()
@@ -595,7 +614,7 @@ pub(crate) fn title(route: Route) -> SharedString {
         Route::Manga => "Manga",
         Route::Extensions => "Extensions",
         Route::Sync => "Offline / Sync",
-        Route::Settings => "Settings",
+        Route::Settings { .. } => "Settings",
     }
     .into()
 }
@@ -609,7 +628,7 @@ fn rows(route: Route) -> usize {
         | Route::Manga
         | Route::Extensions
         | Route::Sync
-        | Route::Settings => 0,
+        | Route::Settings { .. } => 0,
     }
 }
 
@@ -621,13 +640,17 @@ pub(crate) fn icon(route: Route) -> IconName {
         Route::Manga => IconName::BookOpen,
         Route::Extensions => IconName::Puzzle,
         Route::Sync => IconName::FolderSync,
-        Route::Settings => IconName::Settings,
+        Route::Settings { .. } => IconName::Settings,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc, time::Duration};
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+        time::Duration,
+    };
 
     use domain::{AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
@@ -645,7 +668,7 @@ mod tests {
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
     };
 
-    use super::{AppShell, HOVER_OPEN_DELAY, RailMode, RailPrefs};
+    use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs};
     use crate::palette::Mode;
 
     // Must match `NAVIGATION_KEYS` in ui-state's actions.rs.
@@ -704,6 +727,15 @@ mod tests {
                             move |prefs: &RailPrefs, _: &mut gpui_kit::App| {
                                 log.borrow_mut().push(prefs.clone());
                                 Task::ready(())
+                            },
+                            {
+                                let bytes = Cell::new(42);
+                                move |action, _| {
+                                    if action == PosterCacheAction::Clear {
+                                        bytes.set(0);
+                                    }
+                                    Task::ready(Ok(bytes.get()))
+                                }
                             },
                             window,
                             cx,
@@ -1210,6 +1242,41 @@ mod tests {
             COLLAPSED,
             "leaving the mode collapses"
         );
+    }
+
+    #[gpui_kit::test]
+    fn storage_tab_shows_the_poster_cache_and_clears_it(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-storage");
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                gpui_kit::base::test_support::texts(window)
+                    .iter()
+                    .any(|text| text.visible() && text.text() == "42 bytes"),
+                "Storage should display the current poster cache size"
+            );
+        });
+
+        shell.click(cx, "clear-poster-cache");
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                gpui_kit::base::test_support::texts(window)
+                    .iter()
+                    .any(|text| text.visible() && text.text() == "0 bytes"),
+                "Storage should display the size after clear"
+            );
+        });
+
+        shell.click(cx, "back");
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("setting-click-pin").is_some(),
+                "the settings tab is part of navigation history"
+            );
+        });
     }
 
     #[gpui_kit::test]

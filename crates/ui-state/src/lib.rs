@@ -12,6 +12,6 @@ mod router;
 mod scroll;
 
 pub use badges::RailBadges;
-pub use route::Route;
+pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};
