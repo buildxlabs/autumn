@@ -3,6 +3,7 @@
 //! See ARCHITECTURE §2 and §6, and ADR 0001 for media identity.
 
 mod error;
+mod local_list;
 mod media;
 mod settings;
 
@@ -14,6 +15,7 @@ use sqlx::{
 };
 
 pub use error::DbError;
+pub use local_list::LocalListRepo;
 pub use media::{LinkConflict, MediaRepo, Minted};
 pub use settings::SettingsRepo;
 
@@ -52,6 +54,11 @@ impl Db {
     /// Media identity and cross-references.
     pub fn media(&self) -> MediaRepo<'_> {
         MediaRepo::new(&self.pool)
+    }
+
+    /// The Local platform's list entries.
+    pub fn local_list(&self) -> LocalListRepo<'_> {
+        LocalListRepo::new(&self.pool)
     }
 
     /// Settings rows, one per settings tab.

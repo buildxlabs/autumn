@@ -1,4 +1,4 @@
-use domain::{ExternalId, MediaId, MediaKind};
+use domain::{ExternalId, ListStatus, MediaId, MediaKind};
 
 /// Why a database operation failed.
 #[derive(Debug, thiserror::Error)]
@@ -31,4 +31,11 @@ pub enum DbError {
     /// only AniList ids and `idMal`.
     #[error("unsupported external id {0:?}")]
     UnsupportedExternalId(ExternalId),
+    /// This build does not store that list status.
+    #[error("unsupported list status {0:?}")]
+    UnsupportedStatus(ListStatus),
+    /// A stored row holds a value its type can't take, so the database was
+    /// changed outside Autumn. Names the column, or the columns of a date.
+    #[error("invalid value in column {0}")]
+    InvalidRow(&'static str),
 }
