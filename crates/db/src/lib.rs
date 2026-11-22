@@ -5,6 +5,7 @@
 mod error;
 mod local_list;
 mod media;
+mod palette;
 mod settings;
 
 use std::{path::Path, time::Duration};
@@ -17,6 +18,7 @@ use sqlx::{
 pub use error::DbError;
 pub use local_list::LocalListRepo;
 pub use media::{LinkConflict, MediaRepo, Minted};
+pub use palette::{CatalogTitle, PaletteRepo};
 pub use settings::SettingsRepo;
 
 /// How long a write waits for another connection's lock before failing.
@@ -59,6 +61,11 @@ impl Db {
     /// The Local platform's list entries.
     pub fn local_list(&self) -> LocalListRepo<'_> {
         LocalListRepo::new(&self.pool)
+    }
+
+    /// The palette's cached titles, recent searches and recent views.
+    pub fn palette(&self) -> PaletteRepo<'_> {
+        PaletteRepo::new(&self.pool)
     }
 
     /// Settings rows, one per settings tab.

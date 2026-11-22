@@ -2,6 +2,7 @@
 
 use std::{rc::Rc, time::Duration};
 
+use db::Db;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
@@ -37,7 +38,7 @@ use settings::{PosterCacheRequest, StorageStatus};
 mod settings;
 
 use crate::{
-    palette::{CommandPalette, Mode, PaletteEvent},
+    palette::{AniListCatalog, CommandPalette, Mode, PaletteEvent},
     placeholder::{placeholder, poster_grid},
 };
 
@@ -147,20 +148,33 @@ impl AppShell {
         prefs: RailPrefs,
         fetch_status: Entity<FetchStatus>,
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+        db: Db,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
-        let palette = cx.new(|cx| CommandPalette::new(window, cx));
+        let palette =
+            cx.new(|cx| CommandPalette::new(window, cx, db, Rc::new(AniListCatalog::new())));
+        palette.update(cx, CommandPalette::load);
         let palette_events = cx.subscribe_in(
             &palette,
             window,
-            |shell, _, event: &PaletteEvent, window, cx| match *event {
+            |shell, _, event: &PaletteEvent, window, cx| match event {
                 PaletteEvent::Navigate(route) => {
                     window.close_dialog(cx);
-                    shell.navigate(route, cx);
+                    shell.navigate(*route, cx);
+                }
+                PaletteEvent::Viewed {
+                    anilist_id,
+                    kind,
+                    title,
+                } => {
+                    shell.palette.update(cx, |palette, cx| {
+                        palette.record_view(*anilist_id, *kind, title.clone(), cx);
+                    });
+                    window.close_dialog(cx);
                 }
             },
         );
@@ -652,6 +666,7 @@ mod tests {
         time::Duration,
     };
 
+    use db::Db;
     use domain::{AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
@@ -670,6 +685,17 @@ mod tests {
 
     use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs};
     use crate::palette::Mode;
+
+    fn fresh_db() -> Db {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        runtime
+            .block_on(Db::open(&dir.path().join("autumn.db")))
+            .unwrap()
+    }
 
     // Must match `NAVIGATION_KEYS` in ui-state's actions.rs.
     #[cfg(target_os = "macos")]
@@ -728,6 +754,7 @@ mod tests {
                                 log.borrow_mut().push(prefs.clone());
                                 Task::ready(())
                             },
+                            fresh_db(),
                             {
                                 let bytes = Cell::new(42);
                                 move |action, _| {

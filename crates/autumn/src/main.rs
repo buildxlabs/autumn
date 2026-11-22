@@ -55,6 +55,7 @@ fn main() -> ExitCode {
         async move { fetch_status::observe(&client, events).await }
     });
     let prefs = rail_prefs::from_settings(&started.settings);
+    let db = started.db.clone();
     let storage_request = poster_cache_request(started.poster_cache.clone());
     let save_prefs = rail_prefs::saver(started.db, started.settings);
 
@@ -76,7 +77,8 @@ fn main() -> ExitCode {
             })
             .detach();
             ui_state::actions::bind_keys(cx);
-            if let Err(err) = open_main_window(prefs, fetch_status, save_prefs, storage_request, cx)
+            if let Err(err) =
+                open_main_window(prefs, fetch_status, db, save_prefs, storage_request, cx)
             {
                 // Logging is up, so this also reaches stderr.
                 tracing::error!(error = %format_args!("{err:#}"), "failed to open the main window");
@@ -117,6 +119,7 @@ fn main_window_decorations() -> Option<WindowDecorations> {
 fn open_main_window(
     prefs: RailPrefs,
     fetch_status: Entity<FetchStatus>,
+    db: db::Db,
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     cx: &mut App,
@@ -124,7 +127,17 @@ fn open_main_window(
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
     let options = main_window_options(bounds);
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| AppShell::new(prefs, fetch_status, save_prefs, storage_request, window, cx))
+        cx.new(|cx| {
+            AppShell::new(
+                prefs,
+                fetch_status,
+                save_prefs,
+                db,
+                storage_request,
+                window,
+                cx,
+            )
+        })
     })?;
     Ok(())
 }
@@ -170,12 +183,21 @@ mod tests {
 
     #[gpui_kit::test]
     fn opens_one_window(cx: &mut TestAppContext) {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let db = runtime
+            .block_on(db::Db::open(&dir.path().join("autumn.db")))
+            .unwrap();
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             open_main_window(
                 RailPrefs::default(),
                 fetch_status,
+                db,
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
                 cx,

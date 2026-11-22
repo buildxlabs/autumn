@@ -19,7 +19,9 @@ domain = { path = "crates/domain" }
 flume = { default-features = false, features = [ "async" ], version = "0.12" }
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
+metadata = { path = "crates/metadata" }
 net = { path = "crates/net" }
+nucleo-matcher = "0.3"
 rand = "0.10"
 reqwest = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }
 rustls = { default-features = false, features = [ "ring", "std", "tls12" ], version = "0.23" }

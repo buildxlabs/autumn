@@ -25,6 +25,18 @@ impl AniList {
         Self::with_endpoint(http, ANILIST_ENDPOINT)
     }
 
+    /// A client using `net`'s shared transport and AniList limiter.
+    ///
+    /// Callers that only need the public catalog can use this instead of
+    /// depending on `net` themselves.
+    ///
+    /// # Errors
+    ///
+    /// [`net::Error::Build`] when the HTTP client cannot be initialized.
+    pub fn with_default_client() -> Result<Self, Error> {
+        Ok(Self::new(net::Client::new()?))
+    }
+
     /// A client for another endpoint, such as a loopback mock in tests.
     #[must_use]
     pub fn with_endpoint(http: net::Client, endpoint: impl Into<String>) -> Self {
