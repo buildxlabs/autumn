@@ -375,7 +375,18 @@ impl AppShell {
             SearchEvent::Filters(filters) => {
                 shell.navigate(Route::Search(filters.clone()), cx);
             }
-            SearchEvent::Loaded => shell.scroll.content_loaded(),
+            SearchEvent::Loaded => {
+                shell.scroll.content_loaded();
+                if let Some(search) = &shell.search {
+                    let search = search.clone();
+                    // Defer: a cache hit emits this while the screen is being
+                    // updated from `show`, and re-entering it would panic.
+                    cx.spawn(async move |_, cx| {
+                        search.update(cx, SearchScreen::content_loaded);
+                    })
+                    .detach();
+                }
+            }
         });
         cx.observe(&search, |_, _, cx| cx.notify()).detach();
         shell.search = Some(search);
@@ -390,8 +401,19 @@ impl AppShell {
 
     /// Opens `route`, saving the current route's scroll offset.
     pub(crate) fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
-        let restore = self.router.push(route, self.scroll.offset());
+        let offset = self.leaving_scroll(cx);
+        let restore = self.router.push(route, offset);
         self.show(restore, cx);
+    }
+
+    /// The offset to save for the route being left. Search scrolls inside its
+    /// own poster grid, not the route view.
+    fn leaving_scroll(&self, cx: &mut Context<'_, Self>) -> Point<Pixels> {
+        if let (Route::Search(_), Some(search)) = (&self.route(), &self.search) {
+            search.read_with(cx, SearchScreen::scroll_offset)
+        } else {
+            self.scroll.offset()
+        }
     }
 
     /// Runs one account command. A newer command cancels the older one; the
@@ -442,12 +464,14 @@ impl AppShell {
     }
 
     fn go_back(&mut self, _: &GoBack, _: &mut Window, cx: &mut Context<'_, Self>) {
-        let restore = self.router.back(self.scroll.offset());
+        let offset = self.leaving_scroll(cx);
+        let restore = self.router.back(offset);
         self.show(restore, cx);
     }
 
     fn go_forward(&mut self, _: &GoForward, _: &mut Window, cx: &mut Context<'_, Self>) {
-        let restore = self.router.forward(self.scroll.offset());
+        let offset = self.leaving_scroll(cx);
+        let restore = self.router.forward(offset);
         self.show(restore, cx);
     }
 
@@ -482,7 +506,10 @@ impl AppShell {
                 lists.update(cx, |lists, cx| lists.set_tab(status, cx));
             }
             if let (Route::Search(filters), Some(search)) = (self.route(), &self.search) {
-                search.update(cx, |search, cx| search.set_filters(filters, cx));
+                search.update(cx, |search, cx| {
+                    search.restore_scroll(offset, cx);
+                    search.set_filters(filters, cx);
+                });
             }
             cx.notify();
         }
@@ -1048,15 +1075,25 @@ pub(crate) fn icon(route: &Route) -> IconName {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::indexing_slicing,
+        reason = "test fixtures are indexed by fixed JSON keys"
+    )]
+
     use std::{
         cell::{Cell, RefCell},
         rc::Rc,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
         time::Duration,
     };
 
     use crate::discover::{
         DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
     };
+    use axum::{Json, Router, extract::State, routing::post};
     use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
@@ -1066,11 +1103,13 @@ mod tests {
         point, px, size,
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
+    use serde_json::{Value, json};
+    use tokio::net::TcpListener;
     use ui_state::entry_store::EntryStore;
     use ui_state::home_store::HomeStore;
     use ui_state::test_support::pending_services;
     use ui_state::{
-        Route, SettingsTab,
+        Route, SearchFilters, SettingsTab,
         account::AccountStore,
         actions::OpenCommandPalette,
         bridge::BridgeError,
@@ -1078,7 +1117,7 @@ mod tests {
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
     };
 
-    use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs};
+    use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs, SearchScreen};
     use crate::palette::Mode;
 
     // Must match `NAVIGATION_KEYS` in ui-state's actions.rs.
@@ -2213,5 +2252,342 @@ mod tests {
             3,
             "each account change reloads exactly once"
         );
+    }
+
+    /// A shell whose Search screen talks to a loopback AniList that records
+    /// every request and returns enough cards to scroll.
+    struct SearchShell {
+        window: WindowHandle<Root>,
+        view: Entity<AppShell>,
+        requests: Arc<AtomicUsize>,
+        _runtime: tokio::runtime::Runtime,
+        _dir: tempfile::TempDir,
+    }
+
+    impl SearchShell {
+        fn open(cx: &mut TestAppContext) -> Self {
+            Self::open_with_pages(cx, 1)
+        }
+
+        #[expect(
+            clippy::too_many_lines,
+            reason = "one test harness builds a mock AniList server and its window"
+        )]
+        fn open_with_pages(cx: &mut TestAppContext, pages: u32) -> Self {
+            let dir = tempfile::tempdir().expect("temp dir");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(1)
+                .build()
+                .expect("runtime");
+
+            let fixture: Value = serde_json::from_str(
+                &std::fs::read_to_string(format!(
+                    "{}/../metadata/tests/fixtures/search_frieren.json",
+                    env!("CARGO_MANIFEST_DIR")
+                ))
+                .expect("fixture"),
+            )
+            .expect("valid JSON");
+            let first = fixture["data"]["Page"]["media"][0].clone();
+
+            let requests = Arc::new(AtomicUsize::new(0));
+            let app = Router::new()
+                .route(
+                    "/",
+                    post(
+                        move |State((hits, pages)): State<(Arc<AtomicUsize>, u32)>,
+                              Json(request): Json<Value>| {
+                            hits.fetch_add(1, Ordering::SeqCst);
+                            let page = request["variables"]["page"].as_u64().unwrap_or(1);
+                            let media: Vec<Value> = (0..120)
+                                .map(|i| {
+                                    let mut card = first.clone();
+                                    card["id"] = json!(page * 10_000 + i);
+                                    card
+                                })
+                                .collect();
+                            let response = json!({
+                                "data": {"Page": {
+                                    "pageInfo": {"hasNextPage": page < u64::from(pages)},
+                                    "media": media,
+                                }}
+                            });
+                            async move { Json(response) }
+                        },
+                    ),
+                )
+                .with_state((Arc::clone(&requests), pages));
+            let listener = runtime
+                .block_on(TcpListener::bind("127.0.0.1:0"))
+                .expect("bind");
+            let address = listener.local_addr().expect("address");
+            runtime.spawn(async move { axum::serve(listener, app).await.expect("serve") });
+
+            let db = runtime
+                .block_on(db::Db::open(&dir.path().join("autumn.db")))
+                .expect("db");
+            let http = net::Client::builder()
+                .max_retries(0)
+                .build()
+                .expect("client");
+            let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
+            let catalog = metadata::CatalogCache::new(
+                anilist.clone(),
+                net::PosterCache::new(dir.path()).expect("poster cache"),
+            );
+            let (window, view) = cx.update(|cx| {
+                gpui_kit::init(cx);
+                ui_theme::init(cx);
+                ui_state::actions::bind_keys(cx);
+                cx.set_reduce_motion(true);
+                ui_state::bridge::init(cx, runtime.handle().clone());
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: point(px(0.), px(0.)),
+                        size: size(px(1280.), px(800.)),
+                    })),
+                    ..WindowOptions::default()
+                };
+                gpui_kit::open_window(options, cx, |window, cx| {
+                    let fetch_status = cx.new(|_| FetchStatus::default());
+                    let account = cx.new(|_| AccountStore::default());
+                    cx.new(|cx| {
+                        AppShell::new_with_palette_sources(
+                            RailPrefs::default(),
+                            fetch_status,
+                            account,
+                            "https://example.test/login".to_owned(),
+                            |_, _| Task::ready(()),
+                            |_, _| Task::ready(Ok(42)),
+                            |_, _| Task::ready(()),
+                            Rc::new(|_: Option<String>, _: &App| {
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
+                            }),
+                            db,
+                            anilist,
+                            catalog,
+                            window,
+                            cx,
+                        )
+                    })
+                })
+                .expect("open window")
+            });
+            Self {
+                window: window.downcast::<Root>().expect("root window"),
+                view,
+                requests,
+                _runtime: runtime,
+                _dir: dir,
+            }
+        }
+
+        fn act(
+            &self,
+            cx: &mut TestAppContext,
+            action: impl FnOnce(&mut gpui_kit::Window, &mut gpui_kit::App),
+        ) {
+            cx.update_window(self.window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                action(window, cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+        }
+
+        fn settle(&self, cx: &mut TestAppContext) {
+            cx.executor().allow_parking();
+            for _ in 0..20 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                cx.run_until_parked();
+                self.act(cx, |_, _| {});
+            }
+        }
+
+        fn click(&self, cx: &mut TestAppContext, id: &'static str) {
+            self.act(cx, |window, cx| window.click(id, cx));
+        }
+
+        fn press(&self, cx: &mut TestAppContext, key: &'static str) {
+            self.act(cx, |window, cx| window.press(key, cx));
+        }
+
+        fn grid_offset(&self, cx: &mut TestAppContext) -> Point<Pixels> {
+            self.view.read_with(cx, |shell, cx| {
+                shell.search.as_ref().map_or(Point::default(), |search| {
+                    search.read_with(cx, SearchScreen::scroll_offset)
+                })
+            })
+        }
+
+        fn query_text(&self, cx: &mut TestAppContext) -> String {
+            self.view.read_with(cx, |shell, cx| {
+                shell.search.as_ref().map_or_else(String::new, |search| {
+                    search.read_with(cx, SearchScreen::query_text)
+                })
+            })
+        }
+
+        fn set_query(&self, cx: &mut TestAppContext, text: &str) {
+            self.view.update(cx, |shell, cx| {
+                if let Some(search) = &shell.search {
+                    search.update(cx, |search, cx| search.set_query_text(text, cx));
+                }
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn opening_the_shell_makes_no_search_request(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            0,
+            "creating the screen must not spend an AniList request"
+        );
+        assert_eq!(
+            shell.view.read_with(cx, |shell, _| shell.route()),
+            Route::Home,
+            "startup must not jump to Search"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn back_restores_the_search_grid_offset_and_text(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        let first = SearchFilters {
+            query: Some("frieren".to_owned()),
+            ..SearchFilters::default()
+        };
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(first.clone()), cx);
+        });
+        shell.settle(cx);
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            1,
+            "first page fetched"
+        );
+        assert_eq!(
+            shell.query_text(cx),
+            "frieren",
+            "the route's query is shown"
+        );
+
+        let saved = point(px(0.), px(-600.));
+        shell.view.update(cx, |shell, cx| {
+            if let Some(search) = &shell.search {
+                search.update(cx, |search, cx| {
+                    search.restore_scroll(saved, cx);
+                });
+            }
+        });
+        shell.settle(cx);
+        assert_eq!(shell.grid_offset(cx), saved, "the grid is scrolled");
+
+        // A filter button commits a second route, saving the grid offset.
+        shell.click(cx, "search-sort");
+        shell.settle(cx);
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            2,
+            "one request per change"
+        );
+        let second = shell.view.read_with(cx, |shell, _| shell.route());
+        assert_ne!(
+            second,
+            Route::Search(first.clone()),
+            "a new route was pushed"
+        );
+
+        // Typing a newer query commits a third route; its text is what Back
+        // must replace with the older route's text.
+        shell.set_query(cx, "vinland");
+        shell.settle(cx);
+        assert_eq!(shell.query_text(cx), "vinland");
+
+        shell.press(cx, BACK_KEY);
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.view.read_with(cx, |shell, _| shell.route()),
+            Route::Search(first.clone()),
+            "Back restores the earlier filters"
+        );
+        assert_eq!(shell.grid_offset(cx), saved, "the grid offset comes back");
+        assert_eq!(
+            shell.query_text(cx),
+            "frieren",
+            "the old query is written back"
+        );
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            2,
+            "Back restores cached results without another request"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn scrolling_near_the_end_pages_without_a_button(cx: &mut TestAppContext) {
+        let shell = SearchShell::open_with_pages(cx, 3);
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(SearchFilters::default()), cx);
+        });
+        shell.settle(cx);
+        assert_eq!(shell.requests.load(Ordering::SeqCst), 1, "first page only");
+
+        shell.act(cx, |window, cx| {
+            assert!(
+                window.try_find("search-more").is_none(),
+                "paging is driven by scrolling, not a button"
+            );
+            window.scroll(
+                "poster-grid",
+                ScrollDelta::Pixels(point(px(0.), px(-5_200.))),
+                cx,
+            );
+        });
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            2,
+            "scrolling to the end fetched exactly one more page"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_filter_button_folds_in_text_that_is_not_committed_yet(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(SearchFilters::default()), cx);
+        });
+        shell.settle(cx);
+
+        // Text sitting in the input but not yet committed must survive the
+        // next button click instead of being dropped when it replaces the task.
+        shell.set_query(cx, "frieren");
+        shell.click(cx, "search-sort");
+        shell.settle(cx);
+
+        let route = shell.view.read_with(cx, |shell, _| shell.route());
+        assert!(
+            matches!(route, Route::Search(_)),
+            "the shell stayed on Search"
+        );
+        if let Route::Search(filters) = route {
+            assert_eq!(
+                filters.query.as_deref(),
+                Some("frieren"),
+                "the pending query is part of the committed filters"
+            );
+            assert!(
+                filters.sort.is_some(),
+                "the button's change was applied too"
+            );
+        }
     }
 }
