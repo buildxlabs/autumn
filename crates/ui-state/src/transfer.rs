@@ -75,6 +75,7 @@ impl TransferStore {
             AppEvent::TransferError(message) => {
                 self.error = Some(message);
                 self.preview = None;
+                self.progress = None;
                 cx.emit(TransferEvent::Finished);
                 cx.notify();
             }
@@ -86,5 +87,32 @@ impl TransferStore {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::{AppEvent, TransferProgress};
+    use gpui_kit::{AppContext, TestAppContext};
+
+    use super::TransferStore;
+
+    #[gpui_kit::test]
+    fn a_failed_transfer_clears_the_stale_progress_line(cx: &mut TestAppContext) {
+        let store = cx.new(|_| TransferStore::default());
+        let step = TransferProgress { done: 1, total: 2 };
+        store.update(cx, |store, cx| {
+            store.apply(AppEvent::TransferProgress(step), cx);
+        });
+        assert_eq!(store.read_with(cx, |store, _| store.progress()), Some(step));
+
+        store.update(cx, |store, cx| {
+            store.apply(AppEvent::TransferError("write failed".to_owned()), cx);
+        });
+        assert_eq!(store.read_with(cx, |store, _| store.progress()), None);
+        assert_eq!(
+            store.read_with(cx, |store, _| store.error().map(str::to_owned)),
+            Some("write failed".to_owned())
+        );
     }
 }

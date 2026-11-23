@@ -93,6 +93,16 @@ pub async fn run_transfer<P: Platform>(
     if pending.is_empty() {
         return Ok(());
     }
+    // AniList decides create-vs-update from the list-entry id it caches when
+    // reading a collection. Without a warm cache a Replace would be sent as
+    // a create and fail for an entry that already exists. The runner owns
+    // the write, so it warms the cache whoever built the preview.
+    if pending
+        .iter()
+        .any(|line| line.action == TransferAction::Replace)
+    {
+        destination.collection(preview.kind).await?;
+    }
     if !preview.custom_lists.is_empty()
         && pending
             .iter()

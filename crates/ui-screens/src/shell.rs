@@ -229,6 +229,10 @@ impl AppShell {
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
         cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
         cx.observe(&account, |_, _, cx| cx.notify()).detach();
+        // A running transfer keeps writing progress after its dialog closes;
+        // the shell must redraw the Account tab for each step and for the
+        // final clear (ticket #67).
+        cx.observe(&transfer, |_, _, cx| cx.notify()).detach();
         let account_events = cx.subscribe_in(
             &account,
             window,
@@ -239,12 +243,13 @@ impl AppShell {
         let transfer_events = cx.subscribe_in(
             &transfer,
             window,
-            |shell, _, event: &TransferEvent, window, cx| match event {
-                TransferEvent::Preview(preview) => {
+            |shell, _, event: &TransferEvent, window, cx| {
+                if let TransferEvent::Preview(preview) = event {
                     shell.open_transfer_preview(preview.clone(), window, cx);
                 }
-                TransferEvent::Finished => window.close_dialog(cx),
-                _ => {}
+                // A confirmed preview closes its own dialog. A finished
+                // transfer must not dismiss whatever the user opened while
+                // it ran in the background.
             },
         );
         cx.subscribe_in(
@@ -1052,7 +1057,7 @@ mod tests {
 
     use domain::{
         AniListAccountState, AniListWait, AppEvent, MediaKind, SectionFetch, TransferDirection,
-        TransferPreview,
+        TransferPreview, TransferProgress,
     };
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
@@ -2031,6 +2036,22 @@ mod tests {
         assert!(!shell.palette_open(cx), "escape closes it");
     }
 
+    /// A background transfer finishing must not dismiss the user's dialog
+    /// (ticket #67).
+    #[gpui_kit::test]
+    fn a_finished_transfer_leaves_an_unrelated_dialog_open(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.press(cx, PALETTE_KEY);
+        assert!(shell.palette_open(cx), "the palette is open");
+
+        let transfer = shell.view.read_with(cx, |shell, _| shell.transfer.clone());
+        cx.update(|cx| {
+            transfer.update(cx, |store, cx| store.apply(AppEvent::TransferFinished, cx));
+        });
+
+        assert!(shell.palette_open(cx), "the palette is still open");
+    }
+
     #[gpui_kit::test]
     fn q_s_and_the_search_pill_open_the_palette(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
@@ -2200,5 +2221,46 @@ mod tests {
 
         assert!(shell.palette_open(cx), "the preview dialog is open");
         assert!(shell.shows(cx, "transfer-confirm"), "with a confirm button");
+    }
+
+    /// A background run keeps updating the Account tab after its dialog is
+    /// gone, and the final event clears the progress line (ticket #67).
+    #[gpui_kit::test]
+    fn transfer_progress_shows_and_clears_after_the_dialog_closes(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-account");
+        let transfer = shell.view.read_with(cx, |shell, _| shell.transfer.clone());
+
+        cx.update(|cx| {
+            transfer.update(cx, |store, cx| {
+                store.apply(
+                    AppEvent::TransferProgress(TransferProgress { done: 1, total: 2 }),
+                    cx,
+                );
+            });
+        });
+        shell.act(cx, |window, _| {
+            let texts = gpui_kit::base::test_support::texts(window);
+            assert!(
+                texts
+                    .iter()
+                    .any(|text| { text.visible() && text.text() == "Transferring 1 of 2 entries" }),
+                "progress is visible while the transfer runs"
+            );
+        });
+
+        cx.update(|cx| {
+            transfer.update(cx, |store, cx| store.apply(AppEvent::TransferFinished, cx));
+        });
+        shell.act(cx, |window, _| {
+            let texts = gpui_kit::base::test_support::texts(window);
+            assert!(
+                !texts
+                    .iter()
+                    .any(|text| text.visible() && text.text().contains("Transferring")),
+                "completion clears the progress line"
+            );
+        });
     }
 }

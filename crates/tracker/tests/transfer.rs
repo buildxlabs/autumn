@@ -28,6 +28,10 @@ struct State {
     saves: usize,
     deletes: usize,
     fail_on_save: Option<usize>,
+    /// How many times the platform's collection was read; reading it warms
+    /// the entry ids a Replace needs, as it does on AniList.
+    collections: usize,
+    ids_loaded: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -57,6 +61,8 @@ impl FakePlatform {
             saves: state.saves,
             deletes: state.deletes,
             fail_on_save: state.fail_on_save,
+            collections: state.collections,
+            ids_loaded: state.ids_loaded,
         }
     }
 
@@ -75,11 +81,21 @@ impl FakePlatform {
 
 impl Platform for FakePlatform {
     async fn collection(&self, _kind: MediaKind) -> Result<Collection, PlatformError> {
+        {
+            let mut state = self.state.lock().unwrap();
+            state.collections += 1;
+            state.ids_loaded = true;
+        }
         Ok(self.collection())
     }
 
     async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, PlatformError> {
         let mut state = self.state.lock().unwrap();
+        if state.entries.contains_key(&entry.media) && !state.ids_loaded {
+            // Like AniList, this fake needs the collection's entry id to
+            // update an existing media; a bare save would create a duplicate.
+            return Err(PlatformError::NotConnected);
+        }
         state.saves += 1;
         if state.fail_on_save == Some(state.saves) {
             return Err(PlatformError::NotConnected);
@@ -276,4 +292,33 @@ async fn transfer_never_deletes_destination_entries() {
     assert_eq!(state.entries[&media(8)].notes, "only here");
     assert_eq!(state.entries[&media(8)].custom_lists, ["Old"]);
     assert_eq!(state.custom_lists, ["New", "Old"]);
+}
+
+#[tokio::test]
+async fn a_replace_warms_the_destinations_entry_id_cache() {
+    let existing = entry(2, "kept", &[]);
+    let destination = FakePlatform::with(vec![existing.clone()]);
+    let mut preview = plan_transfer(
+        MediaKind::Anime,
+        TransferDirection::LocalToAniList,
+        &[entry(2, "source", &[])],
+        &[existing],
+    );
+    if let Some(line) = preview.entries.first_mut() {
+        line.action = TransferAction::Replace;
+    }
+    assert!(
+        destination
+            .save_entry(&entry(2, "source", &[]))
+            .await
+            .is_err(),
+        "an existing media cannot be replaced from a cold cache"
+    );
+
+    run_transfer(&preview, &destination, |_| {}).await.unwrap();
+
+    let state = destination.snapshot();
+    assert_eq!(state.collections, 1, "the runner read the destination once");
+    assert!(state.ids_loaded, "the runner warmed the entry ids");
+    assert_eq!(state.entries[&media(2)].notes, "source");
 }
