@@ -10,7 +10,6 @@ use std::future::Future;
 
 use domain::{ListEntry, ListStatus, MediaId, Score};
 
-/// The order status tabs appear in, matching the tracking platform.
 /// The order status tabs appear in, matching the tracking platform. Exposed
 /// so screens can offer the same cycle without a second copy.
 pub const STATUS_ORDER: [ListStatus; 6] = [

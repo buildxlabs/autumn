@@ -105,10 +105,10 @@ db            → domain
 auth           → domain, net
 metadata      → domain, net
 tracker       → domain, db
-ui-state      → domain
+ui-state      → domain, tracker (the one active platform is exposed to screens through ui-state)
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain (ui-theme as a dev-dependency only)
-autumn        → settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
+autumn        → settings, db, domain, metadata, net, auth, tracker, ui-state, ui-screens, ui-theme (the composition root builds the active platform)
 ```
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.

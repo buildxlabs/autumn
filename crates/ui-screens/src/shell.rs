@@ -279,6 +279,7 @@ impl AppShell {
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
+        gateway: ui_state::PlatformGateway,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -293,10 +294,10 @@ impl AppShell {
             window,
             cx,
         );
-        shell
-            .palette
-            .update(cx, |palette, _| palette.attach_sources(db.clone(), anilist));
-        let lists = ListsScreen::new(db, catalog, window, cx);
+        shell.palette.update(cx, |palette, _| {
+            palette.attach_sources(db.clone(), anilist, gateway.clone());
+        });
+        let lists = ListsScreen::new(gateway, db, catalog, window, cx);
         let events = cx.subscribe(&lists, |shell, _, event: &ListsEvent, cx| {
             let ListsEvent::SelectTab(status) = event;
             shell.navigate(

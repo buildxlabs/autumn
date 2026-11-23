@@ -12,13 +12,15 @@ use std::{fmt::Display, process::ExitCode, sync::Arc, time::SystemTime};
 
 use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
-use domain::AppEvent;
+use domain::{AniListAccountState, AppEvent};
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use metadata::{AniList, CatalogCache};
+use tracker::{AniListPlatform, Local};
 use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
+use ui_state::PlatformGateway;
 use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
 
@@ -60,12 +62,30 @@ fn main() -> ExitCode {
     // My Lists reads card text from the stale-first cache only, so it makes
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), started.poster_cache.clone());
+    let gateway = PlatformGateway::new(Local::new(started.db.clone()));
     let (engine_events, ui_events) = ui_state::events::channel();
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
     let restored = handle.block_on(session.restore(SystemTime::now()));
+    if !matches!(restored, AniListAccountState::LoggedOut) {
+        let name = account::name(&restored);
+        if let Ok(Some(token)) = handle.block_on(session.token()) {
+            gateway.connect_anilist(AniListPlatform::new(
+                started.db.clone(),
+                anilist.clone(),
+                token,
+                name,
+            ));
+        }
+    }
     let _ = engine_events.send(AppEvent::AccountChanged(restored));
-    let account_request = account::request(session, engine_events.clone());
+    let account_request = account::request(
+        session,
+        gateway.clone(),
+        started.db.clone(),
+        anilist.clone(),
+        engine_events.clone(),
+    );
     handle.spawn({
         let client = client.clone();
         let events = engine_events.clone();
@@ -109,6 +129,7 @@ fn main() -> ExitCode {
                 started.db.clone(),
                 anilist,
                 catalog,
+                gateway,
                 cx,
             ) {
                 // Logging is up, so this also reaches stderr.
@@ -162,6 +183,7 @@ fn open_main_window(
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
+    gateway: PlatformGateway,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
@@ -179,6 +201,7 @@ fn open_main_window(
                 db,
                 anilist,
                 catalog,
+                gateway,
                 window,
                 cx,
             )
@@ -224,7 +247,9 @@ mod tests {
     use db::Db;
     use gpui_kit::{AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
+    use tracker::Local;
     use ui_screens::RailPrefs;
+    use ui_state::PlatformGateway;
     use ui_state::account::AccountStore;
 
     use super::{FetchStatus, open_main_window};
@@ -256,9 +281,10 @@ mod tests {
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
                 |_, _| Task::ready(()),
-                db,
+                db.clone(),
                 anilist,
                 catalog,
+                PlatformGateway::new(Local::new(db)),
                 cx,
             )
             .expect("the test platform opens windows");

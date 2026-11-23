@@ -22,6 +22,7 @@ tokio                        = { features = [ "io-util", "rt-multi-thread" ], wo
 tracing.workspace            = true
 tracing-appender.workspace   = true
 tracing-subscriber.workspace = true
+tracker.workspace            = true
 ui-screens.workspace         = true
 ui-state.workspace           = true
 ui-theme.workspace           = true

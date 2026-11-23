@@ -569,6 +569,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "tracker",
  "ui-screens",
  "ui-state",
  "ui-theme",
@@ -8443,6 +8444,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tracker",
  "ui-components",
  "ui-state",
  "ui-theme",
@@ -8452,11 +8454,16 @@ dependencies = [
 name = "ui-state"
 version = "0.1.0"
 dependencies = [
+ "db",
  "domain",
  "flume",
  "gpui-kit",
+ "metadata",
+ "net",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tracker",
 ]
 
 [[package]]

@@ -25,4 +25,5 @@ net.workspace        = true
 serde_json.workspace = true
 tempfile.workspace   = true
 tokio.workspace      = true
+tracker.workspace    = true
 ui-theme.workspace   = true
