@@ -18,10 +18,12 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    ACCOUNT_ID, LruImageCache, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
+    RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
+    hero::{HeroBannerData, hero_banner},
 };
 use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
@@ -49,6 +51,12 @@ use crate::{
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
 const TITLEBAR_HEIGHT: f32 = 40.;
+
+/// A known-good AniList image standing in for a `bannerImage` until Discover
+/// loads real catalog data. It is loaded through the same net-backed cache as
+/// a poster.
+const MOCK_BANNER: &str =
+    "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-qQTzQnEJJ3oB.jpg";
 
 /// Width of the command palette dialog.
 const PALETTE_WIDTH: f32 = 560.;
@@ -148,6 +156,8 @@ pub struct AppShell {
     /// My Lists is built only when startup supplied a catalog cache.
     lists: Option<Entity<ListsScreen>>,
     lists_events: Option<Subscription>,
+    /// Bounded decoded-image cache shared by the banner and, later, posters.
+    banner_cache: Entity<LruImageCache>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -193,6 +203,7 @@ impl AppShell {
             },
         );
         let badges = cx.new(|_| RailBadges::placeholder());
+        let banner_cache = LruImageCache::new(POSTER_IMAGE_CAPACITY, cx);
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
         cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
         cx.observe(&account, |_, _, cx| cx.notify()).detach();
@@ -234,6 +245,7 @@ impl AppShell {
             home_grid,
             lists: None,
             lists_events: None,
+            banner_cache,
         }
     }
 
@@ -622,6 +634,7 @@ impl AppShell {
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
+                .children((route == Route::Discover).then(|| self.render_discover_heroes(cx)))
                 .child(placeholder(
                     title(route),
                     rows(route),
@@ -671,6 +684,62 @@ impl AppShell {
                 .size_full()
                 .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
         }
+    }
+
+    /// Mock heroes on the placeholder route: one with a `bannerImage`, one
+    /// without, so both states can be checked by hand until #62 replaces it.
+    fn render_discover_heroes(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let mock = |banner: Option<String>| HeroBannerData {
+            title: "Frieren: Beyond Journey's End".into(),
+            synopsis: "After the hero party defeats the Demon King, the elf mage Frieren \
+                       sets out on a new journey to understand the people she once travelled \
+                       with &amp; the <i>time</i> they shared. Along the way she meets a \
+                       young mage &amp; learns what it means to remember."
+                .into(),
+            banner,
+        };
+        let actions = || {
+            div()
+                .flex()
+                .gap_2()
+                .child(Button::new("hero-watch").label("Watch now"))
+                .child(Button::new("hero-details").label("Details"))
+        };
+        div()
+            .px_8()
+            .pb_6()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child("With a banner image"),
+            )
+            .child(hero_banner(
+                "hero-with",
+                &mock(Some(MOCK_BANNER.to_owned())),
+                &self.banner_cache,
+                colors.accent,
+                colors.background,
+                actions(),
+            ))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child("Without a banner image"),
+            )
+            .child(hero_banner(
+                "hero-without",
+                &mock(None),
+                &self.banner_cache,
+                colors.accent,
+                colors.background,
+                actions(),
+            ))
     }
 }
 
@@ -1932,5 +2001,30 @@ mod tests {
 
         shell.press(cx, ALT_FORWARD_KEY);
         assert_eq!(shell.route(cx), Route::Home, "alt+right goes forward");
+    }
+
+    #[gpui_kit::test]
+    fn the_discover_placeholder_shows_a_hero_with_and_without_a_banner(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        assert!(!shell.shows(cx, "hero-with-banner"), "Home has no hero");
+
+        shell.click(cx, "rail-discover");
+
+        assert!(
+            shell.shows(cx, "hero-with-banner"),
+            "the banner render exists"
+        );
+        assert!(
+            shell.shows(cx, "hero-with-image"),
+            "a media with a bannerImage loads it through the image cache"
+        );
+        assert!(
+            shell.shows(cx, "hero-without-banner"),
+            "the fallback render exists too"
+        );
+        assert!(
+            !shell.shows(cx, "hero-without-image"),
+            "a media without a bannerImage gets the gradient, not an img"
+        );
     }
 }

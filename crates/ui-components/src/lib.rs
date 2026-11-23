@@ -4,6 +4,7 @@
 
 pub mod carousel;
 pub mod fetch_status;
+pub mod hero;
 mod image_cache;
 mod media_card;
 mod poster_grid;
