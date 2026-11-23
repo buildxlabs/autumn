@@ -171,6 +171,18 @@ impl Platform for AniListPlatform {
         Ok(Collection::group(&entries))
     }
 
+    async fn ensure_custom_lists(
+        &self,
+        kind: MediaKind,
+        names: &[String],
+    ) -> Result<(), PlatformError> {
+        // UpdateUser owns the whole name set for a kind; pass the union.
+        self.client
+            .update_custom_lists(&self.token, kind, names)
+            .await?;
+        Ok(())
+    }
+
     async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, PlatformError> {
         let media_id = self.anilist_id(entry.media).await?;
         let input = ListEntryInput {

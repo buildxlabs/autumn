@@ -7,6 +7,7 @@ mod logging;
 mod rail_prefs;
 mod settings_store;
 mod startup;
+mod transfer;
 
 use std::{fmt::Display, process::ExitCode, sync::Arc, time::SystemTime};
 
@@ -23,6 +24,7 @@ use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
 use ui_state::PlatformGateway;
 use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
+use ui_state::transfer::{TransferCommand, TransferStore};
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
@@ -79,13 +81,24 @@ fn main() -> ExitCode {
         }
     }
     let _ = engine_events.send(AppEvent::AccountChanged(restored));
+    let transfer_service = transfer::Transfers::new(
+        started.db.clone(),
+        anilist.clone(),
+        session.clone(),
+        engine_events.clone(),
+    );
     let account_request = account::request(
         session,
         gateway.clone(),
         started.db.clone(),
         anilist.clone(),
         engine_events.clone(),
+        transfer_service.clone(),
     );
+    let transfer_request = {
+        let service = transfer_service;
+        move |command: TransferCommand, cx: &mut App| service.request(command, cx)
+    };
     handle.spawn({
         let client = client.clone();
         let events = engine_events.clone();
@@ -106,14 +119,17 @@ fn main() -> ExitCode {
             ui_theme::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let transfer_store = cx.new(|_| TransferStore::default());
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
                 let store = fetch_status.clone();
                 let account = account.clone();
+                let transfer = transfer_store.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
-                    account.update(cx, |store, cx| store.apply(event, cx));
+                    account.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    transfer.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
             .detach();
@@ -126,6 +142,8 @@ fn main() -> ExitCode {
                 save_prefs,
                 storage_request,
                 account_request,
+                transfer_store,
+                transfer_request,
                 started.db.clone(),
                 anilist,
                 catalog,
@@ -180,6 +198,8 @@ fn open_main_window(
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+    transfer_store: Entity<TransferStore>,
+    transfer_request: impl Fn(TransferCommand, &mut App) -> Task<()> + 'static,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -198,6 +218,8 @@ fn open_main_window(
                 save_prefs,
                 storage_request,
                 account_request,
+                transfer_store,
+                transfer_request,
                 db,
                 anilist,
                 catalog,
@@ -251,6 +273,7 @@ mod tests {
     use ui_screens::RailPrefs;
     use ui_state::PlatformGateway;
     use ui_state::account::AccountStore;
+    use ui_state::transfer::TransferStore;
 
     use super::{FetchStatus, open_main_window};
 
@@ -273,6 +296,7 @@ mod tests {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let transfer = cx.new(|_| TransferStore::default());
             open_main_window(
                 RailPrefs::default(),
                 fetch_status,
@@ -280,6 +304,8 @@ mod tests {
                 "https://example.test/login".to_owned(),
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
+                |_, _| Task::ready(()),
+                transfer,
                 |_, _| Task::ready(()),
                 db.clone(),
                 anilist,

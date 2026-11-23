@@ -106,4 +106,18 @@ impl Platform for ActivePlatform {
             },
         }
     }
+
+    async fn ensure_custom_lists(
+        &self,
+        kind: MediaKind,
+        names: &[String],
+    ) -> Result<(), PlatformError> {
+        match self.active {
+            ActiveKind::Local => self.local.ensure_custom_lists(kind, names).await,
+            ActiveKind::AniList => match &self.anilist {
+                Some(anilist) => anilist.ensure_custom_lists(kind, names).await,
+                None => Err(PlatformError::NotConnected),
+            },
+        }
+    }
 }

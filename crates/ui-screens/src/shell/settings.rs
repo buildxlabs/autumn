@@ -19,6 +19,7 @@ use gpui_kit::{
 use ui_state::{
     Route, SettingsTab,
     account::{AccountCommand, AccountStore},
+    transfer::{TransferCommand, TransferStore},
 };
 
 use super::{AppShell, RailMode};
@@ -150,9 +151,12 @@ impl AppShell {
             SettingsTab::Account => {
                 let account = self.account.clone();
                 let signout_account = self.account.clone();
+                let transfer_store = self.transfer.clone();
                 let token_input = self.token_input.clone();
                 let login_url = self.login_url.clone();
                 let busy = self.account_busy;
+                let transfer_progress = self.transfer.read(cx).progress();
+                let transfer_error = self.transfer.read(cx).error().map(str::to_owned);
                 let logged_in = self.account.read(cx).is_logged_in();
                 let expired = self.account.read(cx).expired();
                 let avatar = self.account.read(cx).avatar().map(SharedString::from);
@@ -173,6 +177,7 @@ impl AppShell {
                     "Account",
                     SettingItem::render(move |_, _, _| {
                         let account = account.clone();
+                        let transfer_store = transfer_store.clone();
                         let token = token_input.clone();
                         let login_url = login_url.clone();
                         div()
@@ -220,6 +225,18 @@ impl AppShell {
                             .when_some(error.clone(), |column, message| {
                                 column.child(Label::new(message).text_sm())
                             })
+                            .when_some(transfer_progress, |column, step| {
+                                column.child(
+                                    Label::new(format!(
+                                        "Transferring {} of {} entries",
+                                        step.done, step.total
+                                    ))
+                                    .text_sm(),
+                                )
+                            })
+                            .when_some(transfer_error.clone(), |column, message| {
+                                column.child(Label::new(message).text_sm())
+                            })
                             .child(
                                 Input::new(&token).aria_label("AniList token"),
                             )
@@ -248,19 +265,36 @@ impl AppShell {
                                     )
                                     .when(logged_in, |buttons| {
                                         let account = signout_account.clone();
-                                        buttons.child(
-                                            Button::new("sign-out-anilist")
-                                                .label("Sign out")
-                                                .disabled(busy)
-                                                .on_click(move |_, _, cx| {
-                                                    account.update(cx, |_, cx| {
-                                                        AccountStore::request(
-                                                            AccountCommand::SignOut,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }),
-                                        )
+                                        let transfer = transfer_store.clone();
+                                        buttons
+                                            .child(
+                                                Button::new("sign-out-anilist")
+                                                    .label("Sign out")
+                                                    .disabled(busy)
+                                                    .on_click(move |_, _, cx| {
+                                                        account.update(cx, |_, cx| {
+                                                            AccountStore::request(
+                                                                AccountCommand::SignOut,
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }),
+                                            )
+                                            .child(
+                                                Button::new("start-transfer")
+                                                    .label("Start transfer to AniList")
+                                                    .disabled(busy)
+                                                    .on_click(move |_, _, cx| {
+                                                        transfer.update(cx, |_, cx| {
+                                                            TransferStore::request(
+                                                                TransferCommand::Preview(
+                                                                    domain::TransferDirection::LocalToAniList,
+                                                                ),
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }),
+                                            )
                                     }),
                             )
                     }),

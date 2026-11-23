@@ -59,4 +59,21 @@ pub trait Platform {
         &self,
         media: MediaId,
     ) -> impl Future<Output = Result<(), PlatformError>> + Send;
+
+    /// Creates any custom-list names on this platform that are missing.
+    ///
+    /// The default does nothing: the Local platform stores names on entries.
+    /// AniList replaces all names for a kind, so callers pass the union of
+    /// existing and new names; a subset would delete the others.
+    ///
+    /// # Errors
+    ///
+    /// [`PlatformError`] when the names cannot be stored.
+    fn ensure_custom_lists(
+        &self,
+        _kind: MediaKind,
+        _names: &[String],
+    ) -> impl Future<Output = Result<(), PlatformError>> + Send {
+        async { Ok(()) }
+    }
 }

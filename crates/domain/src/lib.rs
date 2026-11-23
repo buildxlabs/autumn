@@ -9,12 +9,16 @@ mod fuzzy_date;
 mod list_entry;
 mod media;
 mod score;
+mod transfer;
 
 pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
 pub use score::{Score, ScoreError};
+pub use transfer::{
+    TransferAction, TransferDirection, TransferEntry, TransferPreview, TransferProgress,
+};
 
 /// An event the engine publishes for the UI to apply to its stores.
 ///
@@ -40,6 +44,14 @@ pub enum AppEvent {
     AccountChanged(AniListAccountState),
     /// An account action failed. The message is suitable for display.
     AccountError(String),
+    /// A reviewed list transfer is ready for the user to confirm or cancel.
+    TransferPreview(TransferPreview),
+    /// A background list transfer has written another entry.
+    TransferProgress(TransferProgress),
+    /// A list transfer failed. The message is suitable for display.
+    TransferError(String),
+    /// A background list transfer finished; pending progress can be cleared.
+    TransferFinished,
 }
 
 /// The next opportunity to start an AniList request.

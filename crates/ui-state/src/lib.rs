@@ -13,6 +13,7 @@ pub mod platform;
 mod route;
 mod router;
 mod scroll;
+pub mod transfer;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;

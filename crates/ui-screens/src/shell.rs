@@ -3,6 +3,7 @@
 use std::{rc::Rc, time::Duration};
 
 use db::Db;
+use domain::TransferPreview;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
@@ -31,6 +32,7 @@ use ui_state::{
     account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
+    transfer::{TransferCommand, TransferEvent, TransferStore},
 };
 
 #[cfg(debug_assertions)]
@@ -43,6 +45,7 @@ pub use settings::PosterCacheAction;
 use settings::{PosterCacheRequest, StorageStatus};
 
 mod settings;
+mod transfer;
 
 use crate::{
     lists::{ListsEvent, ListsScreen},
@@ -113,6 +116,9 @@ type SavePrefs = Rc<dyn Fn(&RailPrefs, &mut App) -> Task<()>>;
 /// Sends an account command to the owner of the token.
 type AccountRequest = Box<dyn Fn(AccountCommand, &mut App) -> Task<()>>;
 
+/// Sends a list-transfer command to the engine. Shared with the dialog view.
+pub(super) type TransferRequest = Rc<dyn Fn(TransferCommand, &mut App) -> Task<()>>;
+
 /// The shell around every route: titlebar on top, rail on the left.
 ///
 /// It owns the navigation history and the route view's scroll handle, so
@@ -136,6 +142,13 @@ pub struct AppShell {
     account_request: AccountRequest,
     account_busy: bool,
     account_task: Option<Task<()>>,
+    transfer: Entity<TransferStore>,
+    transfer_request: TransferRequest,
+    /// Planning and running are independent: asking for a new preview must
+    /// not cancel a transfer that is already writing entries.
+    preview_task: Option<Task<()>>,
+    transfer_task: Option<Task<()>>,
+    _transfer_events: Subscription,
     poster_cache: PosterCacheRequest,
     storage_status: StorageStatus,
     storage_task: Option<Task<()>>,
@@ -193,6 +206,8 @@ impl AppShell {
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+        transfer: Entity<TransferStore>,
+        transfer_request: impl Fn(TransferCommand, &mut App) -> Task<()> + 'static,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -221,6 +236,25 @@ impl AppShell {
                 shell.request_account(command.clone(), cx);
             },
         );
+        let transfer_events = cx.subscribe_in(
+            &transfer,
+            window,
+            |shell, _, event: &TransferEvent, window, cx| match event {
+                TransferEvent::Preview(preview) => {
+                    shell.open_transfer_preview(preview.clone(), window, cx);
+                }
+                TransferEvent::Finished => window.close_dialog(cx),
+                _ => {}
+            },
+        );
+        cx.subscribe_in(
+            &transfer,
+            window,
+            |shell, _, command: &TransferCommand, _, cx| {
+                shell.request_transfer(command.clone(), cx);
+            },
+        )
+        .detach();
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let home_grid = PosterGrid::new(mock_media_views(), cx);
@@ -243,6 +277,11 @@ impl AppShell {
             account_request: Box::new(account_request),
             account_busy: false,
             account_task: None,
+            transfer,
+            transfer_request: Rc::new(transfer_request),
+            preview_task: None,
+            transfer_task: None,
+            _transfer_events: transfer_events,
             poster_cache: Box::new(poster_cache),
             storage_status: StorageStatus::Measuring,
             storage_task: None,
@@ -276,6 +315,8 @@ impl AppShell {
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+        transfer: Entity<TransferStore>,
+        transfer_request: impl Fn(TransferCommand, &mut App) -> Task<()> + 'static,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -291,6 +332,8 @@ impl AppShell {
             save_prefs,
             poster_cache,
             account_request,
+            transfer,
+            transfer_request,
             window,
             cx,
         );
@@ -338,6 +381,46 @@ impl AppShell {
             });
         }));
         cx.notify();
+    }
+
+    /// Runs one transfer command. A newer request cancels the older request
+    /// of the same kind, but planning never interrupts a running transfer.
+    fn request_transfer(&mut self, command: TransferCommand, cx: &mut Context<'_, Self>) {
+        let is_preview = matches!(command, TransferCommand::Preview(_));
+        let task = (self.transfer_request)(command, cx);
+        let wrapper = cx.spawn(async move |shell, cx| {
+            task.await;
+            let _ = shell.update(cx, |shell, cx| {
+                if is_preview {
+                    shell.preview_task = None;
+                } else {
+                    shell.transfer_task = None;
+                }
+                cx.notify();
+            });
+        });
+        if is_preview {
+            self.preview_task = Some(wrapper);
+        } else {
+            self.transfer_task = Some(wrapper);
+        }
+        cx.notify();
+    }
+
+    /// Shows the reviewed preview, unless another dialog is already up.
+    fn open_transfer_preview(
+        &mut self,
+        preview: TransferPreview,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let view = cx.new(|_| transfer::TransferPreviewView::new(preview, self.transfer.clone()));
+        window.open_dialog(cx, move |dialog, _, _| {
+            dialog.title("Transfer list entries").child(view.clone())
+        });
     }
 
     /// Opens the command palette in `mode`, unless a dialog is already up.
@@ -967,7 +1050,10 @@ mod tests {
         time::Duration,
     };
 
-    use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
+    use domain::{
+        AniListAccountState, AniListWait, AppEvent, MediaKind, SectionFetch, TransferDirection,
+        TransferPreview,
+    };
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
         Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -982,6 +1068,7 @@ mod tests {
         actions::OpenCommandPalette,
         events::{Sender, channel, start_pump},
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
+        transfer::TransferStore,
     };
 
     use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs};
@@ -1051,6 +1138,7 @@ mod tests {
                     let account = cx.new(|_| {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
+                    let transfer = cx.new(|_| TransferStore::default());
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
@@ -1070,6 +1158,8 @@ mod tests {
                                     Task::ready(Ok(bytes.get()))
                                 }
                             },
+                            |_, _| Task::ready(()),
+                            transfer,
                             |_, _| Task::ready(()),
                             window,
                             cx,
@@ -2089,5 +2179,26 @@ mod tests {
         assert_eq!(selected(cx), Some(1), "the next arrow paged one card");
         shell.click(cx, "discover-carousel-previous");
         assert_eq!(selected(cx), Some(0), "the previous arrow paged back");
+    }
+
+    /// A fresh preview opens a dialog before anything is written (ticket #67).
+    #[gpui_kit::test]
+    fn a_preview_event_opens_the_review_dialog(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        let preview = TransferPreview {
+            direction: TransferDirection::LocalToAniList,
+            kind: MediaKind::Anime,
+            entries: Vec::new(),
+            custom_lists: Vec::new(),
+        };
+        let transfer = shell.view.read_with(cx, |shell, _| shell.transfer.clone());
+        cx.update(|cx| {
+            transfer.update(cx, |store, cx| {
+                store.apply(AppEvent::TransferPreview(preview), cx);
+            });
+        });
+
+        assert!(shell.palette_open(cx), "the preview dialog is open");
+        assert!(shell.shows(cx, "transfer-confirm"), "with a confirm button");
     }
 }
