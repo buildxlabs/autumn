@@ -1,5 +1,6 @@
 //! Autumn, a desktop app for anime and manga.
 
+mod account;
 mod fetch_status;
 mod http_client;
 mod logging;
@@ -7,15 +8,18 @@ mod rail_prefs;
 mod settings_store;
 mod startup;
 
-use std::{fmt::Display, process::ExitCode, sync::Arc};
+use std::{fmt::Display, process::ExitCode, sync::Arc, time::SystemTime};
 
+use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
+use domain::AppEvent;
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use metadata::AniList;
 use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
+use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
 
 /// Initial width of the main window in logical pixels; the user can resize it.
@@ -54,6 +58,11 @@ fn main() -> ExitCode {
     // catalog through the shared HTTP client.
     let anilist = AniList::new(client.clone());
     let (engine_events, ui_events) = ui_state::events::channel();
+    let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
+    // Restore before the pump starts, so the first account event is seen.
+    let restored = handle.block_on(session.restore(SystemTime::now()));
+    let _ = engine_events.send(AppEvent::AccountChanged(restored));
+    let account_request = account::request(session, engine_events.clone());
     handle.spawn({
         let client = client.clone();
         let events = engine_events.clone();
@@ -73,19 +82,27 @@ fn main() -> ExitCode {
             ui_state::bridge::init(cx, handle);
             ui_theme::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
+            let account = cx.new(|_| AccountStore::default());
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
                 let store = fetch_status.clone();
-                move |event, cx| store.update(cx, |store, cx| store.apply(event, cx))
+                let account = account.clone();
+                move |event, cx| {
+                    store.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    account.update(cx, |store, cx| store.apply(event, cx));
+                }
             })
             .detach();
             ui_state::actions::bind_keys(cx);
             if let Err(err) = open_main_window(
                 prefs,
                 fetch_status,
+                account,
+                login_url(),
                 save_prefs,
                 storage_request,
+                account_request,
                 started.db.clone(),
                 anilist,
                 cx,
@@ -126,11 +143,18 @@ fn main_window_decorations() -> Option<WindowDecorations> {
 
 /// Opens the main window, centered on the primary display. The shell starts
 /// with `prefs` and calls `save_prefs` when the user changes them.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the window receives its engine collaborators once, at construction"
+)]
 fn open_main_window(
     prefs: RailPrefs,
     fetch_status: Entity<FetchStatus>,
+    account: Entity<AccountStore>,
+    login_url: String,
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+    account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     db: Db,
     anilist: AniList,
     cx: &mut App,
@@ -142,8 +166,11 @@ fn open_main_window(
             AppShell::new_with_palette_sources(
                 prefs,
                 fetch_status,
+                account,
+                login_url,
                 save_prefs,
                 storage_request,
+                account_request,
                 db,
                 anilist,
                 window,
@@ -192,6 +219,7 @@ mod tests {
     use gpui_kit::{AppContext, Task, TestAppContext};
     use metadata::AniList;
     use ui_screens::RailPrefs;
+    use ui_state::account::AccountStore;
 
     use super::{FetchStatus, open_main_window};
 
@@ -209,11 +237,15 @@ mod tests {
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
+            let account = cx.new(|_| AccountStore::default());
             open_main_window(
                 RailPrefs::default(),
                 fetch_status,
+                account,
+                "https://example.test/login".to_owned(),
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
+                |_, _| Task::ready(()),
                 db,
                 anilist,
                 cx,

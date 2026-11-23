@@ -11,18 +11,21 @@ use gpui_kit::{
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
+        input::InputState,
+        label::Label,
     },
     div, px,
 };
 use metadata::AniList;
 use ui_components::{
-    RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    ACCOUNT_ID, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
 };
 use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
+    account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
 };
@@ -97,6 +100,9 @@ pub enum RailMode {
 /// save drops an older one still running.
 type SavePrefs = Rc<dyn Fn(&RailPrefs, &mut App) -> Task<()>>;
 
+/// Sends an account command to the owner of the token.
+type AccountRequest = Box<dyn Fn(AccountCommand, &mut App) -> Task<()>>;
+
 /// The shell around every route: titlebar on top, rail on the left.
 ///
 /// It owns the navigation history and the route view's scroll handle, so
@@ -111,8 +117,15 @@ pub struct AppShell {
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
     fetch_status: Entity<FetchStatus>,
+    account: Entity<AccountStore>,
+    token_input: Entity<InputState>,
+    login_url: SharedString,
+    _account_events: Subscription,
     prefs: RailPrefs,
     save_prefs: SavePrefs,
+    account_request: AccountRequest,
+    account_busy: bool,
+    account_task: Option<Task<()>>,
     poster_cache: PosterCacheRequest,
     storage_status: StorageStatus,
     storage_task: Option<Task<()>>,
@@ -145,11 +158,18 @@ impl AppShell {
     /// A shell showing the home route, focused so its key bindings apply.
     /// `save_prefs` persists preference changes and `poster_cache` handles
     /// Storage requests.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the shell receives its engine-side collaborators once, at construction"
+    )]
     pub fn new(
         prefs: RailPrefs,
         fetch_status: Entity<FetchStatus>,
+        account: Entity<AccountStore>,
+        login_url: impl Into<SharedString>,
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+        account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -169,6 +189,16 @@ impl AppShell {
         let badges = cx.new(|_| RailBadges::placeholder());
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
         cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
+        cx.observe(&account, |_, _, cx| cx.notify()).detach();
+        let account_events = cx.subscribe_in(
+            &account,
+            window,
+            |shell, _, command: &AccountCommand, _, cx| {
+                shell.request_account(command.clone(), cx);
+            },
+        );
+        let token_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -176,8 +206,15 @@ impl AppShell {
             palette,
             _palette_events: palette_events,
             fetch_status,
+            account,
+            token_input,
+            login_url: login_url.into(),
+            _account_events: account_events,
             prefs,
             save_prefs: Rc::new(save_prefs),
+            account_request: Box::new(account_request),
+            account_busy: false,
+            account_task: None,
             poster_cache: Box::new(poster_cache),
             storage_status: StorageStatus::Measuring,
             storage_task: None,
@@ -199,14 +236,27 @@ impl AppShell {
     pub fn new_with_palette_sources(
         prefs: RailPrefs,
         fetch_status: Entity<FetchStatus>,
+        account: Entity<AccountStore>,
+        login_url: impl Into<SharedString>,
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+        account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         db: Db,
         anilist: AniList,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
-        let shell = Self::new(prefs, fetch_status, save_prefs, poster_cache, window, cx);
+        let shell = Self::new(
+            prefs,
+            fetch_status,
+            account,
+            login_url,
+            save_prefs,
+            poster_cache,
+            account_request,
+            window,
+            cx,
+        );
         shell
             .palette
             .update(cx, |palette, _| palette.attach_sources(db, anilist));
@@ -221,6 +271,23 @@ impl AppShell {
     fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
         let restore = self.router.push(route, self.scroll.offset());
         self.show(restore, cx);
+    }
+
+    /// Runs one account command. A newer command cancels the older one; the
+    /// engine publishes the resulting account event.
+    fn request_account(&mut self, command: AccountCommand, cx: &mut Context<'_, Self>) {
+        // Replacing the task drops and cancels an older command in flight.
+        self.account_busy = true;
+        let task = (self.account_request)(command, cx);
+        self.account_task = Some(cx.spawn(async move |shell, cx| {
+            task.await;
+            let _ = shell.update(cx, |shell, cx| {
+                shell.account_busy = false;
+                shell.account_task = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
     }
 
     /// Opens the command palette in `mode`, unless a dialog is already up.
@@ -428,7 +495,19 @@ impl AppShell {
         let shell = cx.entity().downgrade();
         let pin_shell = shell.clone();
         let menu_shell = shell.clone();
-        let rail = Rail::new(items, system, "Guest", move |id, _, cx| {
+        let account_name = self.account.read(cx).name().unwrap_or("Guest").to_owned();
+        let rail = Rail::new(items, system, account_name, move |id, _, cx| {
+            if id.as_ref() == ACCOUNT_ID {
+                let _ = shell.update(cx, |shell, cx| {
+                    shell.navigate(
+                        Route::Settings {
+                            tab: SettingsTab::Account,
+                        },
+                        cx,
+                    );
+                });
+                return;
+            }
             if let Some(route) = route_for(id) {
                 // The shell outlives its rail, so the update fails only
                 // while the window is closing.
@@ -541,6 +620,13 @@ impl AppShell {
 impl Render for AppShell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let expiring = self.account.read(cx).expiring();
+        let expired = self.account.read(cx).expired();
+        let prompt = if expired {
+            Some(AccountPrompt::Expired)
+        } else {
+            expiring.then_some(AccountPrompt::Expiring)
+        };
         let rail = self.render_rail(cx);
         let body = div().flex_1().min_h_0().relative().flex();
         // Pushed, the rail is in the layout. Otherwise its slot stays
@@ -576,6 +662,7 @@ impl Render for AppShell {
             .text_color(colors.foreground)
             .child(self.render_titlebar(cx))
             .children(self.fetch_status.read(cx).loading().then(fetch_loader))
+            .children(prompt.map(|prompt| account_banner(cx, prompt)))
             .child(body);
         #[cfg(debug_assertions)]
         let shell = shell
@@ -619,6 +706,50 @@ fn search_pill(cx: &mut Context<'_, AppShell>) -> impl IntoElement {
             shell.open_palette(Mode::Navigate, window, cx);
         }))
         .test_support()
+}
+
+/// Urgency of the account's re-login prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccountPrompt {
+    /// The token still works, but is close to expiry.
+    Expiring,
+    /// The token has expired and AniList is read-only.
+    Expired,
+}
+
+/// A shell-wide re-login prompt while the token is expiring or expired.
+fn account_banner(cx: &mut Context<'_, AppShell>, prompt: AccountPrompt) -> impl IntoElement {
+    let shell = cx.entity().downgrade();
+    let colors = cx.theme().colors;
+    div()
+        .id("account-banner")
+        .test_support()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .px_8()
+        .py_2()
+        .bg(colors.accent)
+        .text_color(colors.accent_foreground)
+        .child(Label::new(match prompt {
+            AccountPrompt::Expired => "AniList is read-only until you log in again",
+            AccountPrompt::Expiring => "AniList token expires soon — log in again to keep syncing",
+        }))
+        .child(
+            Button::new("account-banner-open")
+                .label("Log in again")
+                .on_click(move |_, _, cx| {
+                    let _ = shell.update(cx, |shell, cx| {
+                        shell.navigate(
+                            Route::Settings {
+                                tab: SettingsTab::Account,
+                            },
+                            cx,
+                        );
+                    });
+                }),
+        )
 }
 
 /// The route whose rail item has the element id `id`.
@@ -677,7 +808,7 @@ mod tests {
         time::Duration,
     };
 
-    use domain::{AniListWait, AppEvent, SectionFetch};
+    use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
         Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -687,7 +818,8 @@ mod tests {
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
     use ui_state::{
-        Route,
+        Route, SettingsTab,
+        account::AccountStore,
         actions::OpenCommandPalette,
         events::{Sender, channel, start_pump},
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
@@ -727,6 +859,18 @@ mod tests {
         }
 
         fn open_with(cx: &mut TestAppContext, prefs: RailPrefs) -> Self {
+            Self::open_state(cx, prefs, None)
+        }
+
+        fn open_with_account(cx: &mut TestAppContext, session: AniListAccountState) -> Self {
+            Self::open_state(cx, RailPrefs::default(), Some(session))
+        }
+
+        fn open_state(
+            cx: &mut TestAppContext,
+            prefs: RailPrefs,
+            session: Option<AniListAccountState>,
+        ) -> Self {
             let saved = Rc::new(RefCell::new(Vec::new()));
             let log = Rc::clone(&saved);
             let (window, view) = cx.update(|cx| {
@@ -745,10 +889,15 @@ mod tests {
                 };
                 gpui_kit::open_window(options, cx, |window, cx| {
                     let fetch_status = cx.new(|_| FetchStatus::default());
+                    let account = cx.new(|_| {
+                        session.map_or_else(AccountStore::default, AccountStore::from_state)
+                    });
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
                             fetch_status,
+                            account,
+                            "https://example.test/login".to_owned(),
                             move |prefs: &RailPrefs, _: &mut gpui_kit::App| {
                                 log.borrow_mut().push(prefs.clone());
                                 Task::ready(())
@@ -762,6 +911,7 @@ mod tests {
                                     Task::ready(Ok(bytes.get()))
                                 }
                             },
+                            |_, _| Task::ready(()),
                             window,
                             cx,
                         )
@@ -1302,6 +1452,111 @@ mod tests {
                 "the settings tab is part of navigation history"
             );
         });
+    }
+
+    #[gpui_kit::test]
+    fn clicking_the_account_row_opens_the_account_tab(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+
+        shell.click(cx, "rail-account");
+
+        assert_eq!(
+            shell.route(cx),
+            Route::Settings {
+                tab: SettingsTab::Account
+            }
+        );
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("settings-account").is_some(),
+                "the Account tab is selected"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn account_tab_shows_the_name_and_relogin_banner(cx: &mut TestAppContext) {
+        let shell = Shell::open_with_account(
+            cx,
+            AniListAccountState::Active {
+                name: "FrierenFan".to_owned(),
+                avatar: None,
+                expires_at: std::time::UNIX_EPOCH + std::time::Duration::from_hours(500_000),
+                expiring: true,
+            },
+        );
+
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-account");
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            let texts = gpui_kit::base::test_support::texts(window);
+            assert!(
+                texts
+                    .iter()
+                    .any(|text| text.visible() && text.text() == "FrierenFan"),
+                "the AniList name is shown"
+            );
+            assert!(
+                texts
+                    .iter()
+                    .any(|text| text.visible() && text.text().contains("expires soon")),
+                "the re-login prompt is shown"
+            );
+            assert!(
+                !texts
+                    .iter()
+                    .any(|text| text.visible() && text.text().contains("read-only")),
+                "a still-valid token is not described as read-only"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_account_tab_renders_the_avatar(cx: &mut TestAppContext) {
+        let shell = Shell::open_with_account(
+            cx,
+            AniListAccountState::Active {
+                name: "FrierenFan".to_owned(),
+                avatar: Some("https://example.test/avatar.gif".to_owned()),
+                expires_at: std::time::UNIX_EPOCH + std::time::Duration::from_hours(500_000),
+                expiring: false,
+            },
+        );
+
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-account");
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("account-avatar").is_some(),
+                "the animated avatar URL is rendered"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn an_expired_token_shows_a_shell_wide_relogin_banner(cx: &mut TestAppContext) {
+        let shell = Shell::open_with_account(
+            cx,
+            AniListAccountState::Expired {
+                name: None,
+                avatar: None,
+            },
+        );
+
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("account-banner-open").is_some(),
+                "the re-login banner is visible outside Settings"
+            );
+        });
+        shell.click(cx, "account-banner-open");
+        assert_eq!(
+            shell.route(cx),
+            Route::Settings {
+                tab: SettingsTab::Account
+            }
+        );
     }
 
     #[gpui_kit::test]

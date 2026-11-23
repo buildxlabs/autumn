@@ -50,6 +50,7 @@ Every crate lives at `crates/<crate-name>/` and is picked up by the `crates/*` m
 | Pure logic   | `release-parser` | Anime release filename parser (title, group, season, episode, range, resolution, codec, audio, batch tags). Pure functions, large test corpus.                                                                                              |
 |              | `mkv`            | Matroska/EBML reader: duration, chapters, tracks, attachments (fonts). Used for skip markers and track pickers.                                                                                                                             |
 | Integrations | `metadata`       | AniList GraphQL (catalog, search, schedule, user collection), AniZip/animap episode metadata, anime-offline-database, filler lists, MangaUpdates.                                                                                           |
+|              | `auth`           | AniList token lifecycle: keychain-only storage, PIN login URL, JWT expiry, Viewer account state and sign out. Tokens never reach settings, the DB or logs (ADR 0002).                                                                       |
 |              | `tracker`        | `Platform` trait + AniList, MyAnimeList, and **local** (account-free) platforms. Offline platform wraps cached snapshots.                                                                                                                   |
 |              | `library`        | Folder scanner, matcher (title normalization + similarity), file watcher, auto-scan, shelving of offline drives, scan summaries, library explorer ops.                                                                                      |
 |              | `torrent`        | Embedded `librqbit` session, head+tail piece priority, file selection in batches, stream reader, disk handoff; qBittorrent/Transmission/rqbit clients.                                                                                      |
@@ -94,18 +95,20 @@ manga          → extensions, metadata
 autodownloader → search, torrent, debrid, tracker
 tracker        → metadata
 relay          → torrent
+auth           → metadata (the authenticated Viewer account lookup)
 ```
 
 Foundation, UI and binary edges in use (rules 1–3 already allow them; they're listed so a new one shows up in review):
 
 ```text
 db            → domain
+auth           → domain, net
 metadata      → domain, net
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain (ui-theme as a dev-dependency only)
-autumn        → settings, db, domain, metadata, net, ui-state, ui-screens, ui-theme
+autumn        → settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
 ```
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.

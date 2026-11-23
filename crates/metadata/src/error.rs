@@ -21,6 +21,10 @@ pub enum Error {
     #[error("AniList returned media with an invalid id")]
     InvalidMediaId,
 
+    /// The token did not identify an account.
+    #[error("AniList did not return an account for this token")]
+    Unauthorized,
+
     /// AniList answered with a GraphQL error.
     #[error("AniList returned an error: {message}")]
     Api {

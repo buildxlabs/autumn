@@ -7,4 +7,4 @@ mod image_cache;
 mod rail;
 
 pub use image_cache::{LruImageCache, POSTER_IMAGE_CAPACITY};
-pub use rail::{RAIL_EXPANDED_WIDTH, RAIL_WIDTH, Rail, RailExpansion, RailItem};
+pub use rail::{ACCOUNT_ID, RAIL_EXPANDED_WIDTH, RAIL_WIDTH, Rail, RailExpansion, RailItem};

@@ -4,11 +4,13 @@
 
 use std::time::{Instant, SystemTime};
 
+mod account;
 mod fuzzy_date;
 mod list_entry;
 mod media;
 mod score;
 
+pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
@@ -34,6 +36,10 @@ pub enum AppEvent {
         /// The outcome to render for that section.
         state: SectionFetch,
     },
+    /// The account state changed; stores replace what they show.
+    AccountChanged(AniListAccountState),
+    /// An account action failed. The message is suitable for display.
+    AccountError(String),
 }
 
 /// The next opportunity to start an AniList request.

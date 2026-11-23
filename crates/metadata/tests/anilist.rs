@@ -13,7 +13,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    routing::post,
+};
 use domain::{ExternalId, FuzzyDate, MediaKind};
 use metadata::{
     AniList, CharacterRole, Error, MediaFormat, MediaRelation, MediaSeason, MediaSort, MediaStatus,
@@ -27,6 +32,7 @@ use tokio::net::TcpListener;
 struct Mock {
     client: AniList,
     requests: Arc<Mutex<Vec<Value>>>,
+    auth: Arc<Mutex<Vec<String>>>,
 }
 
 #[expect(
@@ -42,13 +48,22 @@ impl Mock {
 
     async fn serve_json(status: StatusCode, body: Value) -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let auth = Arc::new(Mutex::new(Vec::new()));
+        let seen_auth = Arc::clone(&auth);
         let app = Router::new()
             .route(
                 "/",
                 post(
                     move |State(seen): State<Arc<Mutex<Vec<Value>>>>,
+                          headers: HeaderMap,
                           Json(request): Json<Value>| async move {
                         seen.lock().unwrap().push(request);
+                        if let Some(value) = headers
+                            .get("authorization")
+                            .and_then(|value| value.to_str().ok())
+                        {
+                            seen_auth.lock().unwrap().push(value.to_owned());
+                        }
                         (status, Json(body))
                     },
                 ),
@@ -66,7 +81,11 @@ impl Mock {
             .build()
             .unwrap();
         let client = AniList::with_endpoint(http, format!("http://{address}/"));
-        Self { client, requests }
+        Self {
+            client,
+            requests,
+            auth,
+        }
     }
 
     fn variables(&self) -> Value {
@@ -467,4 +486,44 @@ async fn cards_with_an_invalid_anilist_id_are_dropped() {
         "only the card with a valid id survives"
     );
     assert_eq!(page.media[0].anilist_id, 154_587);
+}
+
+#[tokio::test]
+async fn viewer_sends_the_bearer_token_and_decodes_the_account() {
+    let mock = Mock::serve(StatusCode::OK, "viewer.json").await;
+
+    let viewer = mock.client.viewer("test-token").await.unwrap();
+
+    assert_eq!(viewer.id, 123_456);
+    assert_eq!(viewer.name, "TestUser");
+    assert_eq!(
+        viewer.avatar.large.as_deref(),
+        Some("https://s4.anilist.co/file/anilistcdn/user/avatar/large/u123456-abc.jpg")
+    );
+    let auth = mock.auth.lock().unwrap();
+    assert_eq!(
+        auth.as_slice(),
+        ["Bearer test-token"],
+        "the token is a header"
+    );
+}
+
+#[tokio::test]
+async fn viewer_reports_a_missing_account() {
+    let body =
+        json!({"errors": [{"message": "Unauthorized.", "status": 401}], "data": {"Viewer": null}});
+    let mock = Mock::serve_json(StatusCode::OK, body).await;
+
+    let error = mock.client.viewer("bad-token").await.unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            Error::Api {
+                status: Some(401),
+                ..
+            }
+        ),
+        "got {error:?}"
+    );
 }
