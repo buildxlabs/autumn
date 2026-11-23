@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cynic::QueryBuilder;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     AniList, Error, MediaFormat, MediaRelation, MediaSeason, MediaStatus, MediaSummary,
@@ -13,7 +14,7 @@ use crate::{
 };
 
 /// One episode in an airing schedule: the show and the episode's air time.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiringEpisode {
     /// The show the episode belongs to.
     pub media: MediaSummary,
@@ -39,7 +40,7 @@ impl AiringEpisode {
 
 /// What the Home screen loads: Trending Anime, Aired Recently and the
 /// anime carousel.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HomeLoad {
     /// The Trending Anime hero (Home's `discover-header` widget).
     pub trending: Vec<MediaSummary>,
@@ -51,7 +52,7 @@ pub struct HomeLoad {
 }
 
 /// What the Discover screen loads: its eight carousels (#23).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscoverLoad {
     /// Trending Anime (the hero carousel).
     pub trending: Vec<MediaSummary>,
@@ -74,7 +75,7 @@ pub struct DiscoverLoad {
 
 /// Trending Anime by country of origin: Discover's "Trending by Country"
 /// carousels, for JP, KR and CN (#23).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CountryTrends {
     /// The Japan (`JP`) carousel.
     pub japan: Vec<MediaSummary>,

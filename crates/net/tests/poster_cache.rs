@@ -313,3 +313,57 @@ async fn concurrent_gets_of_the_same_url_are_safe() {
     assert_eq!(fs::read_dir(dir.path().join("tmp")).unwrap().count(), 0);
     server.abort();
 }
+
+#[tokio::test]
+async fn a_metadata_blob_reads_back_what_was_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PosterCache::new(dir.path()).unwrap();
+
+    assert_eq!(cache.read_metadata("home").await.unwrap(), None);
+    cache
+        .write_metadata("home", b"blob".to_vec())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        cache.read_metadata("home").await.unwrap(),
+        Some(b"blob".to_vec())
+    );
+    assert_eq!(
+        fs::read_dir(dir.path().join("metadata")).unwrap().count(),
+        1,
+        "the blob lives under metadata/"
+    );
+}
+
+#[tokio::test]
+async fn writing_a_metadata_blob_evicts_the_oldest_file_over_the_cap() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PosterCache::with_cap(dir.path(), 20).unwrap();
+    let (base, _hits, server) = serve().await;
+    let client = Client::builder().build().unwrap();
+    let url = format!("{base}/poster");
+    cache.get(&client, &url).await.unwrap();
+    let poster = poster_path(dir.path(), &url);
+    set_mtime(&poster, 50);
+
+    cache.write_metadata("entry", vec![0u8; 16]).await.unwrap();
+
+    assert!(!poster.exists(), "the older poster is evicted for the blob");
+    assert!(cache.read_metadata("entry").await.unwrap().is_some());
+    server.abort();
+}
+
+#[tokio::test]
+async fn clearing_posters_keeps_metadata_blobs() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PosterCache::new(dir.path()).unwrap();
+    cache
+        .write_metadata("home", b"blob".to_vec())
+        .await
+        .unwrap();
+
+    cache.clear().await.unwrap();
+
+    assert!(cache.read_metadata("home").await.unwrap().is_some());
+}
