@@ -10,11 +10,18 @@ publish                = false
 workspace = true
 
 [dependencies]
-gpui-kit.workspace      = true
-ui-components.workspace = true
-ui-state.workspace      = true
+db.workspace             = true
+domain.workspace         = true
+gpui-kit.workspace       = true
+metadata.workspace       = true
+nucleo-matcher.workspace = true
+ui-components.workspace  = true
+ui-state.workspace       = true
 
 [dev-dependencies]
-domain.workspace   = true
-gpui-kit           = { features = [ "test-support" ], workspace = true }
-ui-theme.workspace = true
+axum.workspace       = true
+gpui-kit             = { features = [ "test-support" ], workspace = true }
+net.workspace        = true
+serde_json.workspace = true
+tokio.workspace      = true
+ui-theme.workspace   = true

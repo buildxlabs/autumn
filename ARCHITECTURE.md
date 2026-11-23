@@ -104,8 +104,8 @@ metadata      → domain, net
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)
-ui-screens    → ui-components, ui-state (domain and ui-theme as dev-dependencies only)
-autumn        → settings, db, domain, net, ui-state, ui-screens, ui-theme
+ui-screens    → ui-components, ui-state, db, metadata, domain (ui-theme as a dev-dependency only)
+autumn        → settings, db, domain, metadata, net, ui-state, ui-screens, ui-theme
 ```
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.

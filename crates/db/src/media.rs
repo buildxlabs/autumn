@@ -67,6 +67,31 @@ impl<'a> MediaRepo<'a> {
         find_in(&mut conn, kind, ids).await
     }
 
+    /// The external ids naming this media, AniList first. Used by the palette
+    /// to key local list entries against AniList search results (ADR 0001).
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails.
+    pub async fn external_ids(&self, media: MediaId) -> Result<Vec<ExternalId>, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT provider, external_id FROM media_external_id
+             WHERE media_id = ? ORDER BY provider, external_id",
+        )
+        .bind(media.get())
+        .fetch_all(&mut *conn)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(provider, key)| match provider.as_str() {
+                ANILIST => key.parse::<u32>().ok().map(ExternalId::AniList),
+                "mal_anime" | "mal_manga" => key.parse::<u32>().ok().map(ExternalId::Mal),
+                _ => None,
+            })
+            .collect())
+    }
+
     /// Finds the media one of `ids` names, or mints a new one, then links the
     /// rest of `ids` to it. Call it when the user first records something
     /// about a media.
