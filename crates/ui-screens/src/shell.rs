@@ -30,6 +30,7 @@ use ui_state::{
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
+    home_store::HomeStore,
 };
 
 #[cfg(debug_assertions)]
@@ -128,6 +129,8 @@ pub struct AppShell {
     entry_editor: Entity<EntryEditor>,
     /// Keeps the editor sync subscribed to Entry store notifications.
     _entry_events: Subscription,
+    /// The Home screen's store; `show` opens Home's sections.
+    home_store: Entity<HomeStore>,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -192,6 +195,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        home_store: Entity<HomeStore>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -249,6 +253,7 @@ impl AppShell {
             entry_store,
             entry_editor,
             _entry_events: entry_events,
+            home_store,
             account,
             token_input,
             login_url: login_url.into(),
@@ -291,6 +296,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        home_store: Entity<HomeStore>,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -307,6 +313,7 @@ impl AppShell {
             account_request,
             discover_loader,
             entry_store,
+            home_store,
             window,
             cx,
         );
@@ -402,8 +409,14 @@ impl AppShell {
     /// [`ScrollRestore`] keeps the offset so an async screen's
     /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
-        if let Route::Entry { id } = self.route() {
-            self.entry_store.update(cx, |store, cx| store.open(id, cx));
+        match self.route() {
+            Route::Entry { id } => {
+                self.entry_store.update(cx, |store, cx| store.open(id, cx));
+            }
+            Route::Home => {
+                self.home_store.update(cx, HomeStore::open);
+            }
+            _ => {}
         }
         if let Some(offset) = restore {
             self.scroll.restore(offset);
@@ -971,6 +984,7 @@ mod tests {
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
     use ui_state::entry_store::EntryStore;
+    use ui_state::home_store::HomeStore;
     use ui_state::test_support::pending_services;
     use ui_state::{
         Route, SettingsTab,
@@ -1053,6 +1067,7 @@ mod tests {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
                     let entry_store = cx.new(|_| EntryStore::new(pending_services()));
+                    let home_store = cx.new(|_| HomeStore::new(pending_services()));
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
@@ -1083,6 +1098,7 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
                             entry_store,
+                            home_store,
                             window,
                             cx,
                         )

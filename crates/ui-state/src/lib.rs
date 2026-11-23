@@ -9,6 +9,7 @@ pub mod bridge;
 pub mod entry_store;
 pub mod events;
 pub mod fetch_status;
+pub mod home_store;
 pub mod lists;
 mod route;
 mod router;

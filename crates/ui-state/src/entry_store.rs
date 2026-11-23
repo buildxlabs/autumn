@@ -337,7 +337,7 @@ fn blank_entry(media: MediaId) -> ListEntry {
 /// Both the bridge task and the service's own result are `Result`s; the
 /// service's wins when the bridge task succeeded. Failures return the
 /// message to show.
-async fn call<T>(
+pub(crate) async fn call<T>(
     cx: &mut gpui_kit::AsyncApp,
     future: BoxFuture<Result<T, EngineError>>,
 ) -> Result<T, String>
