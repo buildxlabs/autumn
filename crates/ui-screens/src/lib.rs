@@ -2,6 +2,8 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+mod lists;
+mod lists_source;
 mod palette;
 mod palette_search;
 mod placeholder;

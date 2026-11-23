@@ -8437,6 +8437,7 @@ dependencies = [
  "net",
  "nucleo-matcher",
  "serde_json",
+ "tempfile",
  "tokio",
  "ui-components",
  "ui-state",

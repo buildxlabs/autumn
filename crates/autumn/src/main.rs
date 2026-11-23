@@ -17,7 +17,7 @@ use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
-use metadata::AniList;
+use metadata::{AniList, CatalogCache};
 use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
 use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
@@ -57,6 +57,9 @@ fn main() -> ExitCode {
     // The palette searches the Local platform's list and the public AniList
     // catalog through the shared HTTP client.
     let anilist = AniList::new(client.clone());
+    // My Lists reads card text from the stale-first cache only, so it makes
+    // no network requests while the Local platform is active.
+    let catalog = CatalogCache::new(anilist.clone(), started.poster_cache.clone());
     let (engine_events, ui_events) = ui_state::events::channel();
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
@@ -105,6 +108,7 @@ fn main() -> ExitCode {
                 account_request,
                 started.db.clone(),
                 anilist,
+                catalog,
                 cx,
             ) {
                 // Logging is up, so this also reaches stderr.
@@ -157,6 +161,7 @@ fn open_main_window(
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     db: Db,
     anilist: AniList,
+    catalog: CatalogCache,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
@@ -173,6 +178,7 @@ fn open_main_window(
                 account_request,
                 db,
                 anilist,
+                catalog,
                 window,
                 cx,
             )
@@ -217,7 +223,7 @@ fn report_fatal(err: &impl Display) {
 mod tests {
     use db::Db;
     use gpui_kit::{AppContext, Task, TestAppContext};
-    use metadata::AniList;
+    use metadata::{AniList, CatalogCache};
     use ui_screens::RailPrefs;
     use ui_state::account::AccountStore;
 
@@ -234,6 +240,10 @@ mod tests {
             .block_on(Db::open(&dir.path().join("palette.db")))
             .expect("a test database");
         let anilist = AniList::new(net::Client::new().expect("a test HTTP client"));
+        let catalog = CatalogCache::new(
+            anilist.clone(),
+            net::PosterCache::new(dir.path()).expect("a test poster cache"),
+        );
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
@@ -248,6 +258,7 @@ mod tests {
                 |_, _| Task::ready(()),
                 db,
                 anilist,
+                catalog,
                 cx,
             )
             .expect("the test platform opens windows");

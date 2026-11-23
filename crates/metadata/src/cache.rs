@@ -136,6 +136,15 @@ impl CatalogCache {
         .await
     }
 
+    /// The cached Entry value for `anilist_id`, without fetching or
+    /// refreshing. A miss returns `None`, so callers that must make no
+    /// network requests (the account-free My Lists screen) can still show
+    /// posters and titles the app already has.
+    pub async fn cached_media(&self, anilist_id: u32) -> Option<Cached<MediaDetail>> {
+        self.read::<MediaDetail>(&format!("v{KEY_VERSION}:media:{anilist_id}"))
+            .await
+    }
+
     /// [`AniList::media`] for the Entry page, fresh for 24 hours.
     ///
     /// # Errors

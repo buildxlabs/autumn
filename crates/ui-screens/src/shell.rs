@@ -16,7 +16,7 @@ use gpui_kit::{
     },
     div, px,
 };
-use metadata::AniList;
+use metadata::{AniList, CatalogCache};
 use ui_components::{
     ACCOUNT_ID, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
@@ -42,6 +42,7 @@ use settings::{PosterCacheRequest, StorageStatus};
 mod settings;
 
 use crate::{
+    lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
 };
@@ -144,6 +145,9 @@ pub struct AppShell {
     badges: Entity<RailBadges>,
     /// The virtualized mock media grid on Home.
     home_grid: Entity<PosterGrid>,
+    /// My Lists is built only when startup supplied a catalog cache.
+    lists: Option<Entity<ListsScreen>>,
+    lists_events: Option<Subscription>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -181,10 +185,10 @@ impl AppShell {
         let palette_events = cx.subscribe_in(
             &palette,
             window,
-            |shell, _, event: &PaletteEvent, window, cx| match *event {
+            |shell, _, event: &PaletteEvent, window, cx| match event {
                 PaletteEvent::Navigate(route) => {
                     window.close_dialog(cx);
-                    shell.navigate(route, cx);
+                    shell.navigate(route.clone(), cx);
                 }
             },
         );
@@ -228,6 +232,8 @@ impl AppShell {
             rail_menus: 0,
             badges,
             home_grid,
+            lists: None,
+            lists_events: None,
         }
     }
 
@@ -247,10 +253,11 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         db: Db,
         anilist: AniList,
+        catalog: CatalogCache,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
-        let shell = Self::new(
+        let mut shell = Self::new(
             prefs,
             fetch_status,
             account,
@@ -263,13 +270,26 @@ impl AppShell {
         );
         shell
             .palette
-            .update(cx, |palette, _| palette.attach_sources(db, anilist));
+            .update(cx, |palette, _| palette.attach_sources(db.clone(), anilist));
+        let lists = ListsScreen::new(db, catalog, window, cx);
+        let events = cx.subscribe(&lists, |shell, _, event: &ListsEvent, cx| {
+            let ListsEvent::SelectTab(status) = event;
+            shell.navigate(
+                Route::Lists {
+                    status: status.clone(),
+                },
+                cx,
+            );
+        });
+        cx.observe(&lists, |_, _, cx| cx.notify()).detach();
+        shell.lists = Some(lists);
+        shell.lists_events = Some(events);
         shell
     }
 
     /// The route on screen.
     pub fn route(&self) -> Route {
-        *self.router.current()
+        self.router.current().clone()
     }
 
     fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
@@ -349,6 +369,9 @@ impl AppShell {
             ) {
                 self.request_poster_cache(PosterCacheAction::Measure, cx);
             }
+            if let (Route::Lists { status }, Some(lists)) = (self.route(), &self.lists) {
+                lists.update(cx, |lists, cx| lists.set_tab(status, cx));
+            }
             cx.notify();
         }
     }
@@ -422,7 +445,7 @@ impl AppShell {
 
     /// Moves `route` into "More", or back onto the rail, and saves that.
     fn toggle_pinned(&mut self, route: Route, cx: &mut Context<'_, Self>) {
-        if let Some(at) = self.prefs.unpinned.iter().position(|&r| r == route) {
+        if let Some(at) = self.prefs.unpinned.iter().position(|r| r == &route) {
             self.prefs.unpinned.remove(at);
         } else {
             self.prefs.unpinned.push(route);
@@ -480,22 +503,22 @@ impl AppShell {
     }
 
     fn render_rail(&self, cx: &mut Context<'_, Self>) -> Rail {
-        let current = *self.router.current();
+        let current = self.router.current().clone();
         let badges = self.badges.read(cx);
-        let item = |route: Route| RailItem {
+        let item = |route: &Route| RailItem {
             id: rail_id(route).into(),
             label: title(route),
             icon: icon(route),
-            active: route == current
+            active: route == &current
                 || matches!(
-                    (route, current),
+                    (route, &current),
                     (Route::Settings { .. }, Route::Settings { .. })
                 ),
             badge: badges.count(route),
-            pinned: !self.prefs.unpinned.contains(&route),
+            pinned: !self.prefs.unpinned.contains(route),
         };
-        let items = RAIL_ROUTES.map(item).into();
-        let system = SYSTEM_ROUTES.map(item).into();
+        let items = RAIL_ROUTES.iter().map(&item).collect();
+        let system = SYSTEM_ROUTES.iter().map(&item).collect();
         let shell = cx.entity().downgrade();
         let pin_shell = shell.clone();
         let menu_shell = shell.clone();
@@ -568,22 +591,34 @@ impl AppShell {
             .min_w_0()
             .h_full()
             .test_support();
-        match route {
+        match &route {
             Route::Settings { tab } => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
-                .child(self.render_settings(tab, cx))
+                .child(self.render_settings(*tab, cx))
                 .into_any_element(),
             Route::Home => route_view
                 .flex()
                 .flex_col()
                 .child(div().flex_none().child(placeholder(
-                    title(route),
-                    rows(route),
+                    title(&route),
+                    rows(&route),
                     colors.muted_foreground,
                 )))
                 .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
                 .into_any_element(),
+            Route::Lists { .. } => match &self.lists {
+                Some(lists) => route_view.child(lists.clone()).into_any_element(),
+                None => route_view
+                    .overflow_y_scroll()
+                    .track_scroll(self.scroll.handle())
+                    .child(placeholder(
+                        title(&route),
+                        rows(&route),
+                        colors.muted_foreground,
+                    ))
+                    .into_any_element(),
+            },
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
@@ -776,18 +811,22 @@ fn account_banner(cx: &mut Context<'_, AppShell>, prompt: AccountPrompt) -> impl
 
 /// The route whose rail item has the element id `id`.
 fn route_for(id: &str) -> Option<Route> {
-    Route::ALL.into_iter().find(|&route| rail_id(route) == id)
+    Route::ALL
+        .iter()
+        .find(|route| rail_id(route) == id)
+        .cloned()
 }
 
 /// The element id of `route`'s rail item.
-fn rail_id(route: Route) -> String {
+fn rail_id(route: &Route) -> String {
     format!("rail-{}", route.key())
 }
 
-pub(crate) fn title(route: Route) -> SharedString {
+pub(crate) fn title(route: &Route) -> SharedString {
     match route {
         Route::Home => "Home",
         Route::Discover => "Discover",
+        Route::Lists { .. } => "My Lists",
         Route::Schedule => "Schedule",
         Route::Manga => "Manga",
         Route::Extensions => "Extensions",
@@ -798,10 +837,11 @@ pub(crate) fn title(route: Route) -> SharedString {
 }
 
 /// Discover gets a long list so scroll restore can be tried by hand.
-fn rows(route: Route) -> usize {
+fn rows(route: &Route) -> usize {
     match route {
         Route::Discover => 100,
         Route::Home
+        | Route::Lists { .. }
         | Route::Schedule
         | Route::Manga
         | Route::Extensions
@@ -810,10 +850,11 @@ fn rows(route: Route) -> usize {
     }
 }
 
-pub(crate) fn icon(route: Route) -> IconName {
+pub(crate) fn icon(route: &Route) -> IconName {
     match route {
         Route::Home => IconName::House,
         Route::Discover => IconName::Compass,
+        Route::Lists { .. } => IconName::List,
         Route::Schedule => IconName::Calendar,
         Route::Manga => IconName::BookOpen,
         Route::Extensions => IconName::Puzzle,

@@ -6,7 +6,7 @@ use std::{cell::Cell, ops::Range, rc::Rc};
 
 use gpui_kit::{
     App, AppContext, Context, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
-    Render, Size, Styled, TestSupportExt, Window, canvas,
+    Render, SharedString, Size, Styled, TestSupportExt, Window, canvas,
     component::{VirtualListScrollHandle, v_virtual_list},
     div, image_cache, px,
 };
@@ -53,6 +53,7 @@ pub struct PosterGrid {
     scroll_handle: VirtualListScrollHandle,
     on_open: Option<GridAction>,
     on_add_to_list: Option<GridAction>,
+    add_label: Option<SharedString>,
 }
 
 impl std::fmt::Debug for PosterGrid {
@@ -76,6 +77,7 @@ impl PosterGrid {
             scroll_handle: VirtualListScrollHandle::new(),
             on_open: None,
             on_add_to_list: None,
+            add_label: None,
         })
     }
 
@@ -101,6 +103,12 @@ impl PosterGrid {
         self.on_add_to_list = Some(Rc::new(on_add_to_list));
     }
 
+    /// Renames the context-menu action on every card, for screens whose
+    /// entries are already on a list.
+    pub fn set_add_label(&mut self, label: impl Into<SharedString>) {
+        self.add_label = Some(label.into());
+    }
+
     /// Builds one card, forwarding the grid's actions with the item's index.
     fn card(&self, index: usize, view: &MediaCardView, card_width: f32) -> MediaCard {
         let mut card =
@@ -108,6 +116,9 @@ impl PosterGrid {
         if let Some(on_open) = &self.on_open {
             let on_open = Rc::clone(on_open);
             card = card.on_open(move |window, cx| on_open(index, window, cx));
+        }
+        if let Some(label) = &self.add_label {
+            card = card.add_to_list_label(label.clone());
         }
         if let Some(on_add_to_list) = &self.on_add_to_list {
             let on_add_to_list = Rc::clone(on_add_to_list);
