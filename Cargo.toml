@@ -19,6 +19,7 @@ db = { path = "crates/db" }
 directories = "6.0"
 domain = { path = "crates/domain" }
 flume = { default-features = false, features = [ "async" ], version = "0.12" }
+futures = "0.3"
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
 keyring = { features = [ "v1" ], version = "4" }

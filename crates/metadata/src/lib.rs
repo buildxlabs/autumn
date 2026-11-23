@@ -17,8 +17,8 @@ mod model;
 mod search;
 mod viewer;
 
-pub use cache::{Cached, CatalogCache, Load, Refresh};
-pub use catalog::{AiringEpisode, CountryTrends, DiscoverLoad, HomeLoad};
+pub use cache::{AIRING_TTL, CATALOG_TTL, Cached, CatalogCache, Load, Lookup, Refresh};
+pub use catalog::{AiringEpisode, CountryTrends, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
 pub use model::{

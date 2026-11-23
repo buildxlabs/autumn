@@ -8432,6 +8432,7 @@ dependencies = [
  "axum",
  "db",
  "domain",
+ "futures",
  "gpui-kit",
  "metadata",
  "net",

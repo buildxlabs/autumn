@@ -51,28 +51,6 @@ pub struct HomeLoad {
     pub anime_carousel: Vec<MediaSummary>,
 }
 
-/// What the Discover screen loads: its eight carousels (#23).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DiscoverLoad {
-    /// Trending Anime (the hero carousel).
-    pub trending: Vec<MediaSummary>,
-    /// Popular Anime.
-    pub popular: Vec<MediaSummary>,
-    /// Upcoming Season.
-    pub upcoming_season: Vec<MediaSummary>,
-    /// Trending Movies.
-    pub trending_movies: Vec<MediaSummary>,
-    /// Airing Schedule: upcoming episode releases.
-    pub airing_schedule: Vec<AiringEpisode>,
-    /// Missed Sequels: sequels of the user's completed anime entries that
-    /// aren't on their collection yet.
-    pub missed_sequels: Vec<MediaSummary>,
-    /// Trending Manga (All).
-    pub trending_manga: Vec<MediaSummary>,
-    /// Trending by Country: the Japan, South Korea and China carousels.
-    pub trending_by_country: CountryTrends,
-}
-
 /// Trending Anime by country of origin: Discover's "Trending by Country"
 /// carousels, for JP, KR and CN (#23).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -276,34 +254,6 @@ impl AniList {
             trending: self.trending().await?,
             aired_recently: self.aired_recently().await?,
             anime_carousel: self.popular().await?,
-        })
-    }
-
-    /// What the Discover screen loads: its eight carousels (#23): 11
-    /// requests — Trending Anime, Popular, Upcoming Season, Trending
-    /// Movies, Airing Schedule, Missed Sequels (2), Trending Manga and
-    /// Trending by Country (JP, KR, CN).
-    ///
-    /// `missed_sequels_user` is the AniList username whose collection feeds
-    /// the Missed Sequels carousel.
-    ///
-    /// # Errors
-    ///
-    /// Any of the requests failing; see the individual queries.
-    pub async fn discover_load(&self, missed_sequels_user: &str) -> Result<DiscoverLoad, Error> {
-        Ok(DiscoverLoad {
-            trending: self.trending().await?,
-            popular: self.popular().await?,
-            upcoming_season: self.upcoming_season().await?,
-            trending_movies: self.trending_movies().await?,
-            airing_schedule: self.airing_schedule().await?,
-            missed_sequels: self.missed_sequels(missed_sequels_user).await?,
-            trending_manga: self.trending_manga().await?,
-            trending_by_country: CountryTrends {
-                japan: self.trending_by_country("JP").await?,
-                korea: self.trending_by_country("KR").await?,
-                china: self.trending_by_country("CN").await?,
-            },
         })
     }
 }

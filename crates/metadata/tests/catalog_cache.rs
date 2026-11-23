@@ -1,13 +1,16 @@
 //! The stale-first catalog cache through its public API, against a
 //! recorded response served from a loopback mock.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{Json, Router, extract::State, routing::post};
-use metadata::{AniList, CatalogCache};
+use metadata::{AniList, CATALOG_TTL, CatalogCache};
 use serde_json::Value;
 use tokio::net::TcpListener;
 
@@ -74,6 +77,52 @@ async fn the_cache_survives_a_restart() {
 
     assert_eq!(hits.load(Ordering::SeqCst), 0);
     assert_eq!(again.cached.value, first.cached.value);
+}
+
+/// Writes a blob at `age`, as the real cache would have stored it then.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test harness: a missing fixture or failed write cannot be recovered"
+)]
+async fn seed_section(dir: &std::path::Path, key: &str, age: Duration, value: &str) {
+    let seconds = (SystemTime::now() - age)
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let bytes = rmp_serde::to_vec_named(&(seconds, value)).unwrap();
+    net::PosterCache::new(dir)
+        .unwrap()
+        .write_metadata(key, bytes)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_discover_section_refreshes_only_after_six_hours() {
+    let dir = tempfile::tempdir().unwrap();
+    let (cache, _) = serve(dir.path()).await;
+    let key = "discover-section:trending";
+    let disk_key = format!("v1:{key}");
+
+    seed_section(dir.path(), &disk_key, Duration::from_hours(5), "cached").await;
+    let fresh = cache
+        .section(key.to_owned(), CATALOG_TTL, async { Ok("new".to_owned()) })
+        .await
+        .unwrap();
+    assert_eq!(fresh.cached.value, "cached");
+    assert!(fresh.refresh.is_none(), "five hours is still fresh");
+
+    seed_section(dir.path(), &disk_key, Duration::from_hours(7), "cached").await;
+    let stale = cache
+        .section(key.to_owned(), CATALOG_TTL, async { Ok("new".to_owned()) })
+        .await
+        .unwrap();
+    assert_eq!(
+        stale.cached.value, "cached",
+        "the stale value is served at once"
+    );
+    let refreshed = stale.refresh.unwrap().await.unwrap();
+    assert_eq!(refreshed.value, "new", "the refresh lands afterwards");
 }
 
 #[tokio::test]

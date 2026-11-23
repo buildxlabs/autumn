@@ -3,8 +3,10 @@
 //! Each response is a `MessagePack` blob in `<cache>/metadata/`, written
 //! through [`net::PosterCache`] so blobs and posters share one size cap.
 //! A cached value is returned at once; when it is older than its time to
-//! live, a [`Refresh`] comes with it. Only what the user views is cached:
-//! AniList's terms forbid crawling.
+//! live, a [`Refresh`] comes with it. A caller showing several independent
+//! values can use [`Lookup`] to leave a miss pending instead of awaiting the
+//! fetch inline. Only what the user views is cached: AniList's terms forbid
+//! crawling.
 
 use std::{
     fmt,
@@ -17,12 +19,12 @@ use std::{
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::warn;
 
-use crate::{AiringEpisode, AniList, DiscoverLoad, Error, HomeLoad, MediaDetail};
+use crate::{AiringEpisode, AniList, Error, HomeLoad, MediaDetail};
 
 /// How long an airing schedule stays fresh.
-const AIRING_TTL: Duration = Duration::from_hours(1);
+pub const AIRING_TTL: Duration = Duration::from_hours(1);
 /// How long Home and Discover stay fresh.
-const CATALOG_TTL: Duration = Duration::from_hours(6);
+pub const CATALOG_TTL: Duration = Duration::from_hours(6);
 /// How long an Entry page stays fresh.
 const ENTRY_TTL: Duration = Duration::from_hours(24);
 
@@ -62,11 +64,29 @@ pub struct Load<T> {
     pub refresh: Option<Refresh<T>>,
 }
 
-/// A pending refresh of a stale value.
+/// What a cached query can show at once, with any fetch still pending.
+#[derive(Debug)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "a lookup is either cached or a miss; callers handle both shapes"
+)]
+pub enum Lookup<T> {
+    /// A cached value, with a refresh when it is stale.
+    Cached {
+        /// The value to show now.
+        cached: Cached<T>,
+        /// A refresh to await for a newer value, when the value is stale.
+        refresh: Option<Refresh<T>>,
+    },
+    /// No cached value: the fetch resolves to the first value.
+    Miss(Refresh<T>),
+}
+
+/// A pending fetch of a missing value, or refresh of a stale one.
 ///
 /// It resolves to the new value, now stored on disk, or, when AniList
-/// can't be reached ([`Error::Net`]), to the stale value marked
-/// [`Cached::offline`].
+/// can't be reached ([`Error::Net`]) and a stale value exists, to that value
+/// marked [`Cached::offline`].
 ///
 /// # Errors
 ///
@@ -102,23 +122,8 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn home(&self) -> Result<Load<HomeLoad>, Error> {
         let anilist = self.anilist.clone();
-        self.load("home".to_owned(), CATALOG_TTL, async move {
+        self.section("home".to_owned(), CATALOG_TTL, async move {
             anilist.home_load().await
-        })
-        .await
-    }
-
-    /// [`AniList::discover_load`], fresh for 6 hours.
-    ///
-    /// # Errors
-    ///
-    /// Only on a cache miss: the fetch's error.
-    pub async fn discover(&self, missed_sequels_user: &str) -> Result<Load<DiscoverLoad>, Error> {
-        let anilist = self.anilist.clone();
-        let user = missed_sequels_user.to_owned();
-        let key = format!("discover:{user}");
-        self.load(key, CATALOG_TTL, async move {
-            anilist.discover_load(&user).await
         })
         .await
     }
@@ -130,7 +135,7 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn airing_schedule(&self) -> Result<Load<Vec<AiringEpisode>>, Error> {
         let anilist = self.anilist.clone();
-        self.load("airing_schedule".to_owned(), AIRING_TTL, async move {
+        self.section("airing_schedule".to_owned(), AIRING_TTL, async move {
             anilist.airing_schedule().await
         })
         .await
@@ -152,7 +157,7 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn media(&self, anilist_id: u32) -> Result<Load<MediaDetail>, Error> {
         let anilist = self.anilist.clone();
-        self.load(format!("media:{anilist_id}"), ENTRY_TTL, async move {
+        self.section(format!("media:{anilist_id}"), ENTRY_TTL, async move {
             anilist.media(anilist_id).await
         })
         .await
@@ -160,46 +165,86 @@ impl CatalogCache {
 
     /// Serve `key` from disk, fetching with `fetch` on a miss and
     /// refreshing with it once the entry is older than `ttl`.
-    async fn load<T, Fut>(&self, key: String, ttl: Duration, fetch: Fut) -> Result<Load<T>, Error>
+    ///
+    /// Callers that show several independent values should give each one
+    /// its own key, so a failing fetch leaves the others renderable.
+    ///
+    /// # Errors
+    ///
+    /// On a cache miss: the fetch's error. On a stale hit, a failed refresh
+    /// is reported by the returned [`Refresh`] instead.
+    pub async fn section<T, Fut>(
+        &self,
+        key: String,
+        ttl: Duration,
+        fetch: Fut,
+    ) -> Result<Load<T>, Error>
+    where
+        T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+    {
+        match self.lookup(key, ttl, fetch).await {
+            Lookup::Cached { cached, refresh } => Ok(Load { cached, refresh }),
+            Lookup::Miss(fetch) => Ok(Load {
+                cached: fetch.await?,
+                refresh: None,
+            }),
+        }
+    }
+
+    /// Serve `key` from disk at once, leaving a miss or a stale refresh as a
+    /// pending future. Callers with several independent values can start all
+    /// the fetches together and apply each as it lands.
+    ///
+    /// # Errors
+    ///
+    /// Never: a failed fetch is reported by the returned pending future.
+    pub async fn lookup<T, Fut>(&self, key: String, ttl: Duration, fetch: Fut) -> Lookup<T>
     where
         T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
     {
         let key = format!("v{KEY_VERSION}:{key}");
         let Some(stale) = self.read::<T>(&key).await else {
-            let value = fetch.await?;
-            return Ok(Load {
-                cached: self.store(&key, value).await,
-                refresh: None,
-            });
+            return Lookup::Miss(self.pending(&key, None, fetch));
         };
         if !is_stale(stale.updated_at, ttl) {
-            return Ok(Load {
+            return Lookup::Cached {
                 cached: stale,
                 refresh: None,
-            });
+            };
         }
-        let cache = self.clone();
-        let refresh = Refresh(Box::pin({
-            let stale = stale.clone();
-            async move {
-                match fetch.await {
-                    Ok(value) => Ok(cache.store(&key, value).await),
-                    Err(Error::Net(error)) if unreachable(&error) => {
-                        warn!(%error, "AniList unreachable; serving the cached value");
-                        Ok(Cached {
-                            offline: true,
-                            ..stale
-                        })
-                    }
-                    Err(error) => Err(error),
-                }
-            }
-        }));
-        Ok(Load {
+        Lookup::Cached {
+            refresh: Some(self.pending(&key, Some(stale.clone()), fetch)),
             cached: stale,
-            refresh: Some(refresh),
-        })
+        }
+    }
+
+    /// Fetch and store a value, falling back to a stale one when AniList is
+    /// unreachable. A miss with no stale value returns the network error.
+    fn pending<T, Fut>(&self, key: &str, stale: Option<Cached<T>>, fetch: Fut) -> Refresh<T>
+    where
+        T: Serialize + Send + Sync + 'static,
+        Fut: Future<Output = Result<T, Error>> + Send + 'static,
+    {
+        let cache = self.clone();
+        let key = key.to_owned();
+        Refresh(Box::pin(async move {
+            match fetch.await {
+                Ok(value) => Ok(cache.store(&key, value).await),
+                Err(Error::Net(error)) if unreachable(&error) => {
+                    let Some(stale) = stale else {
+                        return Err(Error::Net(error));
+                    };
+                    warn!(%error, "AniList unreachable; serving the cached value");
+                    Ok(Cached {
+                        offline: true,
+                        ..stale
+                    })
+                }
+                Err(error) => Err(error),
+            }
+        }))
     }
 
     /// The entry under `key`. A missing, unreadable or outdated blob is a
@@ -356,7 +401,7 @@ mod tests {
             &self,
             fetch: impl Future<Output = Result<String, Error>> + Send + 'static,
         ) -> Result<Load<String>, Error> {
-            self.cache.load(KEY.to_owned(), TTL, fetch).await
+            self.cache.section(KEY.to_owned(), TTL, fetch).await
         }
 
         fn fetches(&self) -> usize {
@@ -482,6 +527,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_miss_leaves_the_fetch_pending() {
+        let fixture = Fixture::new();
+
+        let lookup = fixture
+            .cache
+            .lookup(KEY.to_owned(), TTL, fixture.online("new"))
+            .await;
+        #[expect(
+            clippy::panic,
+            reason = "a cold cache has no value to show, so a miss is the only shape"
+        )]
+        let Lookup::Miss(fetch) = lookup else {
+            panic!("a cold cache has no value to show");
+        };
+        assert_eq!(fixture.fetches(), 0, "the lookup does not await the fetch");
+
+        let cached = fetch.await.unwrap();
+        assert_eq!(cached.value, "new");
+        assert_eq!(fixture.fetches(), 1);
+        let next = fixture.load(fixture.online("newer")).await.unwrap();
+        assert_eq!(next.cached.value, "new", "the fetched value was stored");
+    }
+
+    #[tokio::test]
     async fn a_miss_fetches_and_stores_the_value() {
         let fixture = Fixture::new();
 
@@ -497,7 +566,7 @@ mod tests {
     #[test]
     fn catalog_loads_round_trip_through_a_blob() {
         use crate::{
-            CountryTrends, MediaFormat, MediaSeason, MediaStatus, MediaSummary, MediaTitle,
+            AiringEpisode, MediaFormat, MediaSeason, MediaStatus, MediaSummary, MediaTitle,
         };
 
         let media = MediaSummary {
@@ -527,28 +596,12 @@ mod tests {
             airing_at: 1_700_000_000,
             time_until_airing: -60,
         };
-        let discover = DiscoverLoad {
-            trending: vec![media.clone()],
-            popular: Vec::new(),
-            upcoming_season: Vec::new(),
-            trending_movies: Vec::new(),
-            airing_schedule: vec![episode.clone()],
-            missed_sequels: Vec::new(),
-            trending_manga: Vec::new(),
-            trending_by_country: CountryTrends {
-                japan: vec![media.clone()],
-                ..CountryTrends::default()
-            },
-        };
         let home = HomeLoad {
             trending: vec![media.clone()],
             aired_recently: vec![episode],
             anime_carousel: vec![media],
         };
 
-        let bytes = rmp_serde::to_vec_named(&(7u64, &discover)).unwrap();
-        let (seconds, decoded): (u64, DiscoverLoad) = rmp_serde::from_slice(&bytes).unwrap();
-        assert_eq!((seconds, decoded), (7, discover));
         let bytes = rmp_serde::to_vec_named(&(7u64, &home)).unwrap();
         let (_, decoded): (u64, HomeLoad) = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(decoded, home);

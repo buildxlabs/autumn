@@ -107,7 +107,7 @@ metadata      → domain, net
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)
-ui-screens    → ui-components, ui-state, db, metadata, domain (ui-theme as a dev-dependency only)
+ui-screens    → ui-components, ui-state, db, metadata, domain, futures (ui-theme as a dev-dependency only)
 autumn        → settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
 ```
 
