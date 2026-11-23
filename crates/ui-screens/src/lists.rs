@@ -17,18 +17,10 @@ use gpui_kit::{
 };
 use metadata::CatalogCache;
 use ui_components::{MediaCardView, PosterGrid};
-use ui_state::{ListCard, ListSort, ListTab, ListsSession, QuickEdit, bridge};
+use ui_state::{ListCard, ListSort, ListTab, ListsSession, QuickEdit, STATUS_ORDER, bridge};
 
 use crate::lists_source::LocalListSource;
 
-const STATUSES: [ListStatus; 6] = [
-    ListStatus::Current,
-    ListStatus::Repeating,
-    ListStatus::Planning,
-    ListStatus::Completed,
-    ListStatus::Paused,
-    ListStatus::Dropped,
-];
 const SORTS: [ListSort; 4] = [
     ListSort::Recent,
     ListSort::Title,
@@ -153,6 +145,7 @@ impl ListsScreen {
         let weak = screen.downgrade();
         screen.update(cx, |screen, cx| {
             screen.grid.update(cx, |grid, cx| {
+                grid.set_add_label("Edit");
                 grid.on_add_to_list(move |index, window, cx| {
                     let _ = weak.update(cx, |screen, cx| screen.open_editor(index, window, cx));
                 });
@@ -255,13 +248,13 @@ impl ListsScreen {
                                         .editing
                                         .as_ref()
                                         .and_then(|editing| {
-                                            STATUSES
+                                            STATUS_ORDER
                                                 .iter()
                                                 .position(|&status| status == editing.status)
                                         })
-                                        .map_or(0, |at| (at + 1) % STATUSES.len());
+                                        .map_or(0, |at| (at + 1) % STATUS_ORDER.len());
                                     if let (Some(editing), Some(status)) =
-                                        (screen.editing.as_mut(), STATUSES.get(next))
+                                        (screen.editing.as_mut(), STATUS_ORDER.get(next))
                                     {
                                         editing.status = *status;
                                     }
@@ -294,17 +287,23 @@ impl ListsScreen {
     }
 
     fn save_edit(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let Some(editing) = self.editing.take() else {
-            return;
-        };
-        let progress = self.progress.read(cx).value().parse::<u32>().ok();
-        let score = self
-            .score
-            .read(cx)
-            .value()
+        let progress_text = self.progress.read(cx).value().to_string();
+        let score_text = self.score.read(cx).value().to_string();
+        let progress = progress_text.parse::<u32>().ok();
+        let score = score_text
             .parse::<u8>()
             .ok()
             .and_then(|raw| Score::new(raw).ok());
+        if (progress.is_none() && !progress_text.trim().is_empty())
+            || (score.is_none() && !score_text.trim().is_empty())
+        {
+            self.error = Some("Progress must be a whole number and score 0–100.".to_owned());
+            cx.notify();
+            return; // keep the dialog open so the entry can be corrected
+        }
+        let Some(editing) = self.editing.take() else {
+            return;
+        };
         let edit = QuickEdit::new().status(editing.status);
         let edit = progress.map_or(edit, |progress| edit.progress(progress));
         let edit = score.map_or(edit, |score| edit.score(score));
@@ -495,7 +494,18 @@ mod tests {
         };
         assert!(shows("lists-screen"), "the screen renders");
         assert!(shows("list-tabs"), "tabs render");
-        assert!(shows("poster-grid"), "the grid has height");
+        assert!(shows("poster-grid"), "the grid renders");
+        assert!(shows("poster-grid-row-0"), "the first row is built");
+        let height = cx
+            .update_window(window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                window.find("poster-grid").bounds().size.height
+            })
+            .expect("window is open");
+        assert!(
+            height > px(0.),
+            "the grid has a non-zero height: {height:?}"
+        );
         let (cards, error) = cx.update(|cx| {
             let screen = screen.read(cx);
             (screen.session.cards().len(), screen.error.clone())

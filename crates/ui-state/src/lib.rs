@@ -16,7 +16,7 @@ mod scroll;
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use lists::{
-    ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit,
+    ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;

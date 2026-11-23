@@ -11,7 +11,9 @@ use std::future::Future;
 use domain::{ListEntry, ListStatus, MediaId, Score};
 
 /// The order status tabs appear in, matching the tracking platform.
-const STATUS_ORDER: [ListStatus; 6] = [
+/// The order status tabs appear in, matching the tracking platform. Exposed
+/// so screens can offer the same cycle without a second copy.
+pub const STATUS_ORDER: [ListStatus; 6] = [
     ListStatus::Current,
     ListStatus::Repeating,
     ListStatus::Planning,
@@ -188,14 +190,11 @@ impl<S> ListsSession<S> {
         self.sort = sort;
     }
 
-    /// Non-empty tabs, statuses first in platform order then custom lists by
-    /// name.
+    /// Every status tab in platform order, then the custom lists that have
+    /// entries. Status tabs stay present even when empty: the selected tab
+    /// must never disagree with the highlighted tab, and a quick edit that
+    /// empties a status must not make its tab disappear.
     pub fn tabs(&self) -> Vec<ListTab> {
-        let statuses = STATUS_ORDER.into_iter().filter(|status| {
-            self.cards
-                .iter()
-                .any(|card| card.entry.status == *status && !card.entry.hidden_from_status_lists)
-        });
         let mut custom: Vec<String> = self
             .cards
             .iter()
@@ -203,7 +202,8 @@ impl<S> ListsSession<S> {
             .collect();
         custom.sort();
         custom.dedup();
-        statuses
+        STATUS_ORDER
+            .into_iter()
             .map(ListTab::Status)
             .chain(custom.into_iter().map(ListTab::Custom))
             .collect()
@@ -294,7 +294,6 @@ mod tests {
 
     use super::{
         ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit,
-        STATUS_ORDER,
     };
 
     fn entry(id: i64, status: ListStatus, progress: u32) -> ListEntry {
@@ -383,10 +382,14 @@ mod tests {
             session.tabs(),
             vec![
                 ListTab::Status(ListStatus::Current),
+                ListTab::Status(ListStatus::Repeating),
                 ListTab::Status(ListStatus::Planning),
+                ListTab::Status(ListStatus::Completed),
+                ListTab::Status(ListStatus::Paused),
+                ListTab::Status(ListStatus::Dropped),
                 ListTab::Custom("Favourites".to_owned()),
             ],
-            "statuses come in platform order, then custom lists by name"
+            "every status tab is present, then custom lists by name"
         );
         session.set_tab(ListTab::Status(ListStatus::Current));
         assert_eq!(
@@ -474,20 +477,58 @@ mod tests {
         );
     }
 
-    #[test]
-    fn status_and_custom_tab_order_matches_the_platform() {
-        assert_eq!(
-            STATUS_ORDER,
-            [
-                ListStatus::Current,
-                ListStatus::Repeating,
+    #[tokio::test]
+    async fn an_empty_status_tab_stays_selected() {
+        let source = FakeSource {
+            cards: Arc::new(Mutex::new(vec![card(
+                1,
                 ListStatus::Planning,
-                ListStatus::Completed,
-                ListStatus::Paused,
-                ListStatus::Dropped,
-            ],
-            "statuses follow the platform order"
+                0,
+                0,
+                "Planned",
+            )])),
+        };
+        let mut session = ListsSession::new(source);
+        session.reload().await.expect("fake source loads");
+        session.set_tab(ListTab::Status(ListStatus::Current));
+
+        assert!(
+            session
+                .tabs()
+                .contains(&ListTab::Status(ListStatus::Current)),
+            "the Current tab exists even with no Current entries"
         );
+        assert_eq!(session.tab(), &ListTab::Status(ListStatus::Current));
+        assert!(session.visible().is_empty(), "its grid is empty");
+    }
+
+    #[tokio::test]
+    async fn quick_edit_that_empties_a_tab_keeps_it_selected() {
+        let cards = Arc::new(Mutex::new(vec![card(1, ListStatus::Current, 4, 0, "One")]));
+        let mut session = ListsSession::new(FakeSource {
+            cards: Arc::clone(&cards),
+        });
+        session.reload().await.expect("fake source loads");
+        session
+            .quick_edit(
+                MediaId::new(1),
+                &QuickEdit::new().status(ListStatus::Completed),
+            )
+            .await
+            .expect("quick edit saves");
+
+        assert_eq!(
+            session.tab(),
+            &ListTab::Status(ListStatus::Current),
+            "the tab stays selected"
+        );
+        assert!(
+            session
+                .tabs()
+                .contains(&ListTab::Status(ListStatus::Current)),
+            "the emptied tab is still offered"
+        );
+        assert!(session.visible().is_empty(), "the grid shows no stale card");
     }
 
     #[tokio::test]

@@ -73,6 +73,7 @@ pub struct MediaCard {
     view: MediaCardView,
     id: ElementId,
     width: Pixels,
+    add_label: SharedString,
     on_open: Option<CardAction>,
     on_add_to_list: Option<CardAction>,
 }
@@ -97,6 +98,7 @@ impl MediaCard {
             view,
             id: id.into(),
             width: px(POSTER_WIDTH),
+            add_label: "Add to list".into(),
             on_open: None,
             on_add_to_list: None,
         }
@@ -114,6 +116,13 @@ impl MediaCard {
     #[must_use]
     pub fn on_open(mut self, on_open: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_open = Some(Rc::new(on_open));
+        self
+    }
+
+    /// Renames the context-menu action for entries already on a list.
+    #[must_use]
+    pub fn add_to_list_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.add_label = label.into();
         self
     }
 
@@ -149,6 +158,7 @@ impl RenderOnce for MediaCard {
             view,
             id,
             width,
+            add_label,
             on_open,
             on_add_to_list,
         } = self;
@@ -187,6 +197,7 @@ impl RenderOnce for MediaCard {
             .child(title)
             .children(badge_elements(&view));
 
+        let menu_add_label = add_label;
         HoverCard::new(id)
             .trigger(card.context_menu(move |mut menu, _, _| {
                 if let Some(on_open) = on_open.clone() {
@@ -196,7 +207,7 @@ impl RenderOnce for MediaCard {
                 }
                 if let Some(on_add_to_list) = on_add_to_list.clone() {
                     menu = menu.item(
-                        PopupMenuItem::new("Add to list")
+                        PopupMenuItem::new(menu_add_label.clone())
                             .on_click(move |_, window, cx| on_add_to_list(window, cx)),
                     );
                 }
