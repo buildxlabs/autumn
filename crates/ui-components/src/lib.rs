@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+pub mod carousel;
 pub mod fetch_status;
 mod image_cache;
 mod media_card;
