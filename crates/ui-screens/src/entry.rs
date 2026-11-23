@@ -4,22 +4,29 @@
 //! this module covers the parts that need only the card and the store's
 //! editor draft.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use domain::{FuzzyDate, ListStatus, Score};
 use gpui_kit::{
-    App, AppContext, Context, ElementId, Entity, IntoElement, ParentElement, SharedString, Styled,
-    Window,
+    App, AppContext, Context, ElementId, Entity, Hsla, IntoElement, ParentElement, SharedString,
+    Styled, Window,
     component::{
+        ActiveTheme,
         button::Button,
+        carousel::CarouselState,
         input::{Input, InputState},
         label::Label,
     },
     div,
 };
+use metadata::MediaSummary;
 use ui_components::{
-    MediaCard, MediaCardView, MediaFormat,
+    CarouselWheel, LruImageCache, MediaCard, MediaCardView, MediaCarousel, MediaFormat,
     fetch_status::{FetchError, error_card, fetch_loader},
+    hero::{HeroBannerData, hero_banner},
 };
 use ui_state::entry_store::{EntryDraft, EntryState, EntryStore};
 
@@ -39,6 +46,11 @@ const STATUSES: [ListStatus; 6] = [
 /// last loaded for.
 pub(crate) struct EntryEditor {
     notes: Entity<InputState>,
+    /// Paging state for the two carousels, owned here so it survives redraws.
+    relations: Entity<CarouselState>,
+    recommendations: Entity<CarouselState>,
+    relations_wheel: CarouselWheel,
+    recommendations_wheel: CarouselWheel,
     synced_for: Option<u32>,
 }
 
@@ -46,8 +58,14 @@ impl EntryEditor {
     /// Creates the editor's notes input.
     pub(crate) fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
         let notes = cx.new(|cx| InputState::new(window, cx).placeholder("Notes"));
+        let relations = cx.new(|_| CarouselState::new(0));
+        let recommendations = cx.new(|_| CarouselState::new(0));
         cx.new(|_| Self {
             notes,
+            relations,
+            recommendations,
+            relations_wheel: CarouselWheel::default(),
+            recommendations_wheel: CarouselWheel::default(),
             synced_for: None,
         })
     }
@@ -57,10 +75,18 @@ impl EntryEditor {
         self.notes.read(cx).value().to_string()
     }
 
-    /// Loads the draft's notes into the input once per opened Entry, so a
-    /// render caused by another field edit never overwrites what the user
-    /// typed.
-    fn sync(&mut self, id: u32, notes: &str, window: &mut Window, cx: &mut Context<'_, Self>) {
+    /// Loads the draft's notes into the input and sizes the carousels once
+    /// per opened Entry, so a render caused by another field edit never
+    /// overwrites what the user typed or resets a carousel's page.
+    fn sync(
+        &mut self,
+        id: u32,
+        notes: &str,
+        relations: usize,
+        recommendations: usize,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         if self.synced_for == Some(id) {
             return;
         }
@@ -68,6 +94,10 @@ impl EntryEditor {
         self.notes.update(cx, |input, cx| {
             input.set_value(notes.to_owned(), window, cx);
         });
+        self.relations
+            .update(cx, |state, cx| state.set_item_count(relations, cx));
+        self.recommendations
+            .update(cx, |state, cx| state.set_item_count(recommendations, cx));
     }
 }
 
@@ -76,6 +106,7 @@ pub(crate) fn render(
     entry_store: &Entity<EntryStore>,
     editor: &Entity<EntryEditor>,
     id: u32,
+    cache: &Entity<LruImageCache>,
     window: &mut Window,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
@@ -99,80 +130,233 @@ pub(crate) fn render(
             detail,
             entry,
             draft,
-        } => {
-            editor.update(cx, |editor, cx| editor.sync(id, &draft.notes, window, cx));
-            let summary = &detail.summary;
-            let title = summary
-                .title
-                .english
-                .as_ref()
-                .or(summary.title.romaji.as_ref())
-                .or(summary.title.native.as_ref())
-                .map_or_else(|| "Untitled".to_owned(), Clone::clone);
-            let format = summary.format.clone().map(|format| match format {
-                metadata::MediaFormat::Manga
-                | metadata::MediaFormat::Novel
-                | metadata::MediaFormat::OneShot => MediaFormat::Manga,
-                _ => MediaFormat::Anime,
-            });
-            let card = MediaCard::new(
-                MediaCardView {
-                    poster: summary
-                        .poster
-                        .clone()
-                        .map(|url| gpui_kit::Resource::Uri(url.into())),
-                    title: title.clone().into(),
-                    format,
-                    score: draft.score.to_point_10_decimal(),
-                    progress: draft.progress,
-                    total: summary.episodes.or(summary.chapters),
-                    detail: title.clone().into(),
-                },
-                format!("entry-card-{id}"),
-            );
-            let store = entry_store.clone();
-            let editor_for_save = editor.clone();
-            div()
-                .flex()
-                .flex_col()
-                .gap_6()
-                .p_8()
-                .child(
-                    div().flex().gap_6().child(card).child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(Label::new(title).text_xl())
-                            .child(Label::new(format!(
-                                "{} · {} episodes",
-                                format.map_or("Anime", MediaFormat::label),
-                                summary.episodes.unwrap_or(0),
-                            )))
-                            .child(Label::new(if entry.is_some() {
-                                "On your Local list"
-                            } else {
-                                "Not on your Local list yet"
-                            })),
-                    ),
-                )
-                .child(editor_section(entry_store, editor, &draft, cx))
-                .child(
-                    Button::new("entry-save")
-                        .label("Save to Local list")
-                        .on_click(move |_, _, cx| {
-                            store.update(cx, |store, cx| {
-                                if let Some(draft) = store.draft_mut() {
-                                    draft.notes = editor_for_save.read(cx).notes(cx);
-                                }
-                                cx.notify();
-                            });
-                            store.update(cx, EntryStore::save);
-                        }),
-                )
-                .into_any_element()
-        }
+        } => render_ready(
+            entry_store,
+            editor,
+            id,
+            cache,
+            &detail,
+            if entry.is_some() {
+                "On your Local list"
+            } else {
+                "Not on your Local list yet"
+            },
+            &draft,
+            window,
+            cx,
+        )
+        .into_any_element(),
     }
+}
+
+/// The open Entry: hero, info box, poster, carousels and list editor.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the route view hands the shell's collaborators to one renderer"
+)]
+fn render_ready(
+    entry_store: &Entity<EntryStore>,
+    editor: &Entity<EntryEditor>,
+    id: u32,
+    cache: &Entity<LruImageCache>,
+    detail: &metadata::MediaDetail,
+    list_label: &str,
+    draft: &EntryDraft,
+    window: &mut Window,
+    cx: &mut Context<'_, AppShell>,
+) -> impl IntoElement {
+    let relations = detail
+        .relations
+        .iter()
+        .map(|relation| &relation.media)
+        .collect::<Vec<_>>();
+    let recommendations = detail.recommendations.iter().collect::<Vec<_>>();
+    editor.update(cx, |editor, cx| {
+        editor.sync(
+            id,
+            &draft.notes,
+            relations.len(),
+            recommendations.len(),
+            window,
+            cx,
+        );
+    });
+    let colors = cx.theme().colors;
+    let summary = &detail.summary;
+    let title = title_of(summary).to_owned();
+    let store = entry_store.clone();
+    let editor_for_save = editor.clone();
+    let save = Button::new("entry-save")
+        .label("Save to Local list")
+        .on_click(move |_, _, cx| {
+            store.update(cx, |store, cx| {
+                if let Some(draft) = store.draft_mut() {
+                    draft.notes = editor_for_save.read(cx).notes(cx);
+                }
+                cx.notify();
+            });
+            store.update(cx, EntryStore::save);
+        });
+    let hero = hero_banner(
+        "entry-hero",
+        HeroBannerData {
+            title: title.clone().into(),
+            synopsis: detail.description.clone().unwrap_or_default().into(),
+            banner: summary.banner.clone(),
+        },
+        cache,
+        colors.accent,
+        colors.background,
+        save,
+    );
+    let info = info_box(
+        summary,
+        list_label,
+        &detail.studios,
+        colors.background,
+        colors.muted_foreground,
+    );
+    let card = MediaCard::new(
+        MediaCardView {
+            poster: summary
+                .poster
+                .clone()
+                .map(|url| gpui_kit::Resource::Uri(url.into())),
+            title: title.clone().into(),
+            format: card_format(summary.format.clone()),
+            score: draft.score.to_point_10_decimal(),
+            progress: draft.progress,
+            total: summary.episodes.or(summary.chapters),
+            detail: title.into(),
+        },
+        format!("entry-card-{id}"),
+    );
+    let relations_carousel = MediaCarousel::new(
+        "entry-relations",
+        editor.read(cx).relations.clone(),
+        card_views(&relations),
+        cache.clone(),
+        editor.read(cx).relations_wheel.clone(),
+    );
+    let recommendations_carousel = MediaCarousel::new(
+        "entry-recommendations",
+        editor.read(cx).recommendations.clone(),
+        card_views(&recommendations),
+        cache.clone(),
+        editor.read(cx).recommendations_wheel.clone(),
+    );
+    div()
+        .flex()
+        .flex_col()
+        .gap_6()
+        .p_6()
+        .child(hero)
+        .child(info)
+        .child(div().flex().gap_6().child(card))
+        .child(carousel_section("Relations", relations_carousel))
+        .child(carousel_section(
+            "Recommendations",
+            recommendations_carousel,
+        ))
+        .child(editor_section(entry_store, editor, draft, cx))
+        .into_any_element()
+}
+
+/// The default banner mode's info box: a fluid row of metadata chips.
+fn info_box(
+    summary: &MediaSummary,
+    list_label: &str,
+    studios: &[String],
+    surface: Hsla,
+    muted: Hsla,
+) -> impl IntoElement {
+    let mut chips = vec![summary.format.as_ref().map_or_else(
+        || "Format unknown".to_owned(),
+        |format| format!("{format:?}"),
+    )];
+    if let Some(episodes) = summary.episodes {
+        chips.push(format!("{episodes} episodes"));
+    }
+    if let Some(season) = &summary.season {
+        chips.push(format!(
+            "{season:?} {}",
+            summary
+                .season_year
+                .map_or_else(|| "?".to_owned(), |year| year.to_string())
+        ));
+    }
+    chips.extend(studios.iter().cloned());
+    chips.push(list_label.to_owned());
+    div()
+        .flex()
+        .flex_wrap()
+        .gap_2()
+        .children(chips.into_iter().map(|chip| {
+            div()
+                .rounded_full()
+                .bg(surface)
+                .px_3()
+                .py_1()
+                .text_sm()
+                .text_color(muted)
+                .child(chip)
+        }))
+}
+
+/// A titled carousel row.
+fn carousel_section(title: &'static str, carousel: MediaCarousel) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(Label::new(title).text_lg())
+        .child(carousel)
+}
+
+/// Cards for the related and recommended media.
+fn card_views(items: &[&MediaSummary]) -> Rc<[MediaCardView]> {
+    items
+        .iter()
+        .map(|item| MediaCardView {
+            poster: item
+                .poster
+                .clone()
+                .map(|url| gpui_kit::Resource::Uri(url.into())),
+            title: title_of(item).into(),
+            format: card_format(item.format.clone()),
+            score: item.mean_score.map(|score| f32::from(score) / 10.0),
+            progress: 0,
+            total: item.episodes.or(item.chapters),
+            detail: format!(
+                "{} · {}",
+                title_of(item),
+                item.format.as_ref().map_or_else(
+                    || "Unknown format".to_owned(),
+                    |format| format!("{format:?}"),
+                )
+            )
+            .into(),
+        })
+        .collect()
+}
+
+fn title_of(summary: &MediaSummary) -> &str {
+    summary
+        .title
+        .english
+        .as_deref()
+        .or(summary.title.romaji.as_deref())
+        .or(summary.title.native.as_deref())
+        .unwrap_or("Untitled")
+}
+
+fn card_format(format: Option<metadata::MediaFormat>) -> Option<MediaFormat> {
+    format.map(|format| match format {
+        metadata::MediaFormat::Manga
+        | metadata::MediaFormat::Novel
+        | metadata::MediaFormat::OneShot => MediaFormat::Manga,
+        _ => MediaFormat::Anime,
+    })
 }
 
 /// The five editor fields, plus the entry's presence on the Local list.

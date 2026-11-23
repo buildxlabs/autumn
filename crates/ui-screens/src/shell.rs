@@ -673,6 +673,7 @@ impl AppShell {
                     &self.entry_store,
                     &self.entry_editor,
                     *id,
+                    &self.banner_cache,
                     window,
                     cx,
                 ))
