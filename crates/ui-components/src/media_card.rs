@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui_kit::{
     App, Div, ElementId, ImageSource, InteractiveElement, IntoElement, ObjectFit, ParentElement,
-    Pixels, RenderOnce, Resource, SharedString, Styled, StyledImage, Window,
+    Pixels, RenderOnce, Resource, SharedString, Styled, StyledImage, TestSupportExt, Window,
     component::{
         ActiveTheme, Sizable as _,
         hover_card::HoverCard,
@@ -126,6 +126,21 @@ impl MediaCard {
         self.on_add_to_list = Some(Rc::new(on_add_to_list));
         self
     }
+    /// Test-only: fires the card's Open action, as the context menu does.
+    #[cfg(test)]
+    pub(crate) fn fire_open(&self, window: &mut Window, cx: &mut App) {
+        if let Some(on_open) = &self.on_open {
+            on_open(window, cx);
+        }
+    }
+
+    /// Test-only: fires the card's Add to list action.
+    #[cfg(test)]
+    pub(crate) fn fire_add_to_list(&self, window: &mut Window, cx: &mut App) {
+        if let Some(on_add_to_list) = &self.on_add_to_list {
+            on_add_to_list(window, cx);
+        }
+    }
 }
 
 impl RenderOnce for MediaCard {
@@ -144,13 +159,16 @@ impl RenderOnce for MediaCard {
                 .w(width)
                 .child(
                     img(ImageSource::Resource(poster.clone()))
+                        .w_full()
                         .h(px(MEDIA_POSTER_HEIGHT))
-                        .object_fit(ObjectFit::Cover),
+                        .object_fit(ObjectFit::Cover)
+                        .with_loading(|| poster_skeleton().into_any_element())
+                        .with_fallback(|| poster_skeleton().into_any_element()),
                 ),
             None => div()
                 .debug_selector(|| "media-card-skeleton".into())
                 .w(width)
-                .child(Skeleton::new().h(px(MEDIA_POSTER_HEIGHT))),
+                .child(poster_skeleton()),
         };
         let title = title_line(view.title.clone())
             .debug_selector(|| "media-card-title".into())
@@ -158,6 +176,8 @@ impl RenderOnce for MediaCard {
             .h(px(20.))
             .text_color(colors.foreground);
         let card = div()
+            .id(id.clone())
+            .test_support()
             .flex_col()
             .gap_1()
             .w(width)
@@ -203,6 +223,11 @@ impl RenderOnce for MediaCard {
 /// The title text line, shared by the card and its hover popup.
 fn title_line(title: SharedString) -> Div {
     div().text_sm().child(title)
+}
+
+/// The poster placeholder while an image loads or if it fails.
+fn poster_skeleton() -> Skeleton {
+    Skeleton::new().w_full().h(px(MEDIA_POSTER_HEIGHT))
 }
 
 /// The card's badge wrappers: format, score and progress, when set.

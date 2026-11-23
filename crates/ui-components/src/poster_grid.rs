@@ -13,6 +13,9 @@ use gpui_kit::{
 
 use crate::{LruImageCache, MEDIA_CARD_HEIGHT, MediaCard, MediaCardView, POSTER_IMAGE_CAPACITY};
 
+/// A card action, called with the index of the card that was clicked.
+type GridAction = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+
 /// A card's width at the widest common container; [`poster_columns`] targets
 /// it, so cards grow with the window until another column fits.
 pub const POSTER_WIDTH: f32 = 160.;
@@ -23,14 +26,14 @@ pub const POSTER_GAP: f32 = 16.;
 /// The widest count whose cards plus the gaps between them fit; with one
 /// column the card is as wide as the container. A narrow or empty container
 /// still gets one column, so the grid never collapses to zero.
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the floor of a positive pixel count fits u16; negative or NaN widths saturate to zero and are clamped to one"
+)]
 pub fn poster_columns(container_width: f32) -> u16 {
-    let mut columns = 1;
-    let mut occupied = POSTER_WIDTH;
-    while occupied + POSTER_WIDTH + POSTER_GAP <= container_width {
-        columns += 1;
-        occupied += POSTER_WIDTH + POSTER_GAP;
-    }
-    columns
+    (((container_width + POSTER_GAP) / (POSTER_WIDTH + POSTER_GAP)).floor() as u16).max(1)
 }
 
 /// A virtualized grid of media cards: one row of cards per `v_virtual_list`
@@ -45,10 +48,11 @@ pub struct PosterGrid {
     /// it, so the grid starts at one column.
     width: Rc<Cell<Option<f32>>>,
     cache: Entity<LruImageCache>,
-    /// The row ranges the last render pass built; only visible rows appear.
-    /// Exposed for tests and instrumentation.
+    /// Test-only seam: the visible row range the last render pass built.
     built_rows: Vec<Range<usize>>,
     scroll_handle: VirtualListScrollHandle,
+    on_open: Option<GridAction>,
+    on_add_to_list: Option<GridAction>,
 }
 
 impl std::fmt::Debug for PosterGrid {
@@ -70,7 +74,46 @@ impl PosterGrid {
             cache,
             built_rows: Vec::new(),
             scroll_handle: VirtualListScrollHandle::new(),
+            on_open: None,
+            on_add_to_list: None,
         })
+    }
+
+    /// Replaces the cards without recreating the grid or its image cache.
+    /// Callers hold the returned entity, so this notifies the view to redraw.
+    pub fn set_items(&mut self, items: Vec<MediaCardView>, cx: &mut Context<'_, Self>) {
+        self.items = items;
+        cx.notify();
+    }
+
+    /// Handles Open on a card's context menu. The callback gets the card's
+    /// index in the grid. Notify the view after changing this.
+    pub fn on_open(&mut self, on_open: impl Fn(usize, &mut Window, &mut App) + 'static) {
+        self.on_open = Some(Rc::new(on_open));
+    }
+
+    /// Handles Add to list on a card's context menu. The callback gets the
+    /// card's index in the grid. Notify the view after changing this.
+    pub fn on_add_to_list(
+        &mut self,
+        on_add_to_list: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_add_to_list = Some(Rc::new(on_add_to_list));
+    }
+
+    /// Builds one card, forwarding the grid's actions with the item's index.
+    fn card(&self, index: usize, view: &MediaCardView, card_width: f32) -> MediaCard {
+        let mut card =
+            MediaCard::new(view.clone(), format!("poster-card-{index}")).width(px(card_width));
+        if let Some(on_open) = &self.on_open {
+            let on_open = Rc::clone(on_open);
+            card = card.on_open(move |window, cx| on_open(index, window, cx));
+        }
+        if let Some(on_add_to_list) = &self.on_add_to_list {
+            let on_add_to_list = Rc::clone(on_add_to_list);
+            card = card.on_add_to_list(move |window, cx| on_add_to_list(index, window, cx));
+        }
+        card
     }
 
     /// The number of columns the grid has with the measured width.
@@ -78,8 +121,8 @@ impl PosterGrid {
         poster_columns(self.width.get().unwrap_or_default())
     }
 
-    /// The visible row range the last render pass built; only visible rows
-    /// appear.
+    /// Test-only seam: the visible row range the last render pass built.
+    #[doc(hidden)]
     pub fn built_rows(&self) -> &[Range<usize>] {
         self.built_rows.as_slice()
     }
@@ -119,10 +162,7 @@ impl Render for PosterGrid {
                             .flatten()
                             .take(column_count)
                             .enumerate()
-                            .map(|(i, view)| {
-                                MediaCard::new(view.clone(), format!("poster-card-{}", first + i))
-                                    .width(px(card_width))
-                            })
+                            .map(|(i, view)| grid.card(first + i, view, card_width))
                             .collect::<Vec<_>>();
                         div()
                             .id(ElementId::Name(format!("poster-grid-row-{row}").into()))
@@ -156,8 +196,11 @@ impl Render for PosterGrid {
         .size_full();
 
         div()
+            .id("poster-grid")
+            .test_support()
             .relative()
             .size_full()
+            .px_8()
             .child(image_cache(self.cache.clone()).child(grid))
             .child(measure)
     }
@@ -165,8 +208,11 @@ impl Render for PosterGrid {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use gpui_kit::{
-        Context, IntoElement, Render, Resource, ScrollStrategy, TestAppContext, Window, size,
+        Context, IntoElement, Render, Resource, ScrollStrategy, TestAppContext, Window, px, size,
+        test::TestWindowExt as _,
     };
 
     use super::*;
@@ -252,6 +298,66 @@ mod tests {
         assert!(
             last.len() < total_rows,
             "still only visible rows are built: {last:?}"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn grid_passes_the_card_index_to_its_menu_callbacks(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let opened = Rc::new(RefCell::new(Vec::new()));
+        let added = Rc::new(RefCell::new(Vec::new()));
+        let grid = cx.update(|cx| PosterGrid::new(mock_views(100), cx));
+        let (opened_grid, added_grid) = (Rc::clone(&opened), Rc::clone(&added));
+        grid.update(cx, |grid, cx| {
+            grid.on_open(move |index, _, _| opened_grid.borrow_mut().push(index));
+            grid.on_add_to_list(move |index, _, _| added_grid.borrow_mut().push(index));
+            cx.notify();
+        });
+
+        let views = mock_views(100);
+        let seven = views.get(7).expect("seven cards");
+        let nine = views.get(9).expect("nine cards");
+        let card = grid.read_with(cx, |grid, _| grid.card(7, seven, 160.));
+        let other = grid.read_with(cx, |grid, _| grid.card(9, nine, 160.));
+        let root_grid = grid.clone();
+        let (_view, cx) = cx.add_window_view(move |_, _| GridView { grid: root_grid });
+        cx.update(|window, cx| {
+            card.fire_open(window, cx);
+            other.fire_add_to_list(window, cx);
+        });
+
+        assert_eq!(&*opened.borrow(), &[7], "Open gets the card's index");
+        assert_eq!(&*added.borrow(), &[9], "Add to list gets the card's index");
+    }
+
+    #[gpui_kit::test]
+    fn set_items_swaps_the_cards_without_recreating_the_grid(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let grid = cx.update(|cx| PosterGrid::new(mock_views(100), cx));
+        let cache = grid.read_with(cx, |grid, _| grid.cache.clone());
+        let root_grid = grid.clone();
+        let (_view, cx) = cx.add_window_view(move |_, _| GridView { grid: root_grid });
+        for _ in 0..4 {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.run_until_parked();
+        }
+
+        grid.update(cx, |grid, cx| grid.set_items(mock_views(3), cx));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+
+        assert_eq!(grid.read_with(cx, |grid, _| grid.items.len()), 3);
+        assert!(
+            cx.update(|window, _| window.try_find("poster-card-2").is_some()),
+            "the last new card is drawn"
+        );
+        assert!(
+            cx.update(|window, _| window.try_find("poster-card-3").is_none()),
+            "old cards are gone"
+        );
+        assert!(
+            cache == grid.read_with(cx, |grid, _| grid.cache.clone()),
+            "the image cache survives the item swap"
         );
     }
 
