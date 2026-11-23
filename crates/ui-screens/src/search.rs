@@ -2,7 +2,7 @@
 //! virtualized result grid and one committed request per filter or page
 //! (ticket #59).
 
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use domain::MediaKind;
 use gpui_kit::{
@@ -19,7 +19,8 @@ use gpui_kit::{
 use metadata::AniList;
 use ui_components::{MediaCardView, MediaFormat, PosterGrid};
 use ui_state::{
-    SearchFilters, SearchFormat, SearchSeason, SearchSession, SearchSort, SearchStatus, bridge,
+    RestoredPage, SearchFilters, SearchFormat, SearchSeason, SearchSession, SearchSort,
+    SearchStatus, bridge,
 };
 
 use crate::search_catalog::AniListCatalog;
@@ -40,10 +41,14 @@ pub(crate) enum SearchEvent {
 /// The Advanced Search view.
 pub(crate) struct SearchScreen {
     session: SearchSession<AniListCatalog>,
+    /// Last loaded pages per committed filter set, so Back restores a prior
+    /// search without re-fetching or clamping its scroll offset.
+    cache: HashMap<SearchFilters, RestoredPage>,
     grid: Entity<PosterGrid>,
     query: Entity<InputState>,
     genres: Entity<InputState>,
     country: Entity<InputState>,
+    year: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
     error: Option<String>,
     task: Option<Task<()>>,
@@ -85,9 +90,15 @@ fn next_sort(current: Option<SearchSort>) -> Option<SearchSort> {
 fn next_format(current: Option<SearchFormat>) -> Option<SearchFormat> {
     match current {
         None => Some(SearchFormat::Tv),
-        Some(SearchFormat::Tv) => Some(SearchFormat::Movie),
-        Some(SearchFormat::Movie) => Some(SearchFormat::Ova),
-        Some(SearchFormat::Ova) => Some(SearchFormat::Manga),
+        Some(SearchFormat::Tv) => Some(SearchFormat::TvShort),
+        Some(SearchFormat::TvShort) => Some(SearchFormat::Movie),
+        Some(SearchFormat::Movie) => Some(SearchFormat::Special),
+        Some(SearchFormat::Special) => Some(SearchFormat::Ova),
+        Some(SearchFormat::Ova) => Some(SearchFormat::Ona),
+        Some(SearchFormat::Ona) => Some(SearchFormat::Music),
+        Some(SearchFormat::Music) => Some(SearchFormat::Manga),
+        Some(SearchFormat::Manga) => Some(SearchFormat::Novel),
+        Some(SearchFormat::Novel) => Some(SearchFormat::OneShot),
         _ => None,
     }
 }
@@ -97,7 +108,8 @@ fn next_status(current: Option<SearchStatus>) -> Option<SearchStatus> {
         None => Some(SearchStatus::Releasing),
         Some(SearchStatus::Releasing) => Some(SearchStatus::Finished),
         Some(SearchStatus::Finished) => Some(SearchStatus::NotYetReleased),
-        Some(SearchStatus::NotYetReleased) => Some(SearchStatus::Hiatus),
+        Some(SearchStatus::NotYetReleased) => Some(SearchStatus::Cancelled),
+        Some(SearchStatus::Cancelled) => Some(SearchStatus::Hiatus),
         _ => None,
     }
 }
@@ -153,29 +165,30 @@ impl SearchScreen {
             let genres =
                 cx.new(|cx| InputState::new(window, cx).placeholder("Genres, comma separated"));
             let country = cx.new(|cx| InputState::new(window, cx).placeholder("Country, e.g. JP"));
-            let q = query.clone();
-            let g = genres.clone();
-            let c = country.clone();
+            let year = cx.new(|cx| InputState::new(window, cx).placeholder("Year"));
             let mut subscriptions = Vec::new();
-            for input in [&query, &genres, &country] {
-                let q = q.clone();
-                let g = g.clone();
-                let c = c.clone();
+            for input in [&query, &genres, &country, &year] {
+                let q = query.clone();
+                let g = genres.clone();
+                let c = country.clone();
+                let y = year.clone();
                 subscriptions.push(cx.subscribe(
                     input,
                     move |screen: &mut Self, _, event: &InputEvent, cx| {
                         if matches!(event, InputEvent::Change) {
-                            screen.schedule_apply(&q, &g, &c, cx);
+                            screen.schedule_apply(&q, &g, &c, &y, cx);
                         }
                     },
                 ));
             }
             Self {
                 session: SearchSession::new(AniListCatalog::new(anilist), filters),
+                cache: HashMap::new(),
                 grid: PosterGrid::new(Vec::new(), cx),
                 query,
                 genres,
                 country,
+                year,
                 _subscriptions: subscriptions,
                 error: None,
                 task: None,
@@ -188,8 +201,13 @@ impl SearchScreen {
     /// Applies filters from a restored route without navigating again.
     pub(crate) fn set_filters(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
         if self.session.filters() != &filters {
-            // The route is authoritative on Back; re-fetch only when it
-            // differs from what the session already committed.
+            if let Some(loaded) = self.cache.get(&filters).cloned() {
+                self.session.restore(filters, loaded);
+                self.sync_grid(cx);
+                cx.emit(SearchEvent::Loaded);
+                cx.notify();
+                return;
+            }
             let mut session = self.session.clone();
             self.task = Some(cx.spawn(async move |screen, cx| {
                 let task = cx.update(|cx| {
@@ -211,6 +229,17 @@ impl SearchScreen {
         }
     }
 
+    fn remember(&mut self) {
+        self.cache.insert(
+            self.session.filters().clone(),
+            RestoredPage {
+                results: self.session.results().to_vec(),
+                page: self.session.page(),
+                has_next: self.session.has_next(),
+            },
+        );
+    }
+
     fn sync_grid(&mut self, cx: &mut Context<'_, Self>) {
         let views = self.session.results().iter().map(card_view).collect();
         self.grid.update(cx, |grid, cx| grid.set_items(views, cx));
@@ -221,6 +250,7 @@ impl SearchScreen {
         query: &Entity<InputState>,
         genres: &Entity<InputState>,
         country: &Entity<InputState>,
+        year: &Entity<InputState>,
         cx: &App,
     ) -> SearchFilters {
         let mut filters = self.session.filters().clone();
@@ -235,6 +265,8 @@ impl SearchScreen {
             .collect();
         let country_text = country.read(cx).value().to_string();
         filters.country = (!country_text.is_empty()).then_some(country_text);
+        let year_text = year.read(cx).value().to_string();
+        filters.year = year_text.parse::<u16>().ok();
         filters
     }
 
@@ -244,9 +276,10 @@ impl SearchScreen {
         query: &Entity<InputState>,
         genres: &Entity<InputState>,
         country: &Entity<InputState>,
+        year: &Entity<InputState>,
         cx: &mut Context<'_, Self>,
     ) {
-        let filters = self.collected(query, genres, country, cx);
+        let filters = self.collected(query, genres, country, year, cx);
         let mut session = self.session.clone();
         self.task = Some(cx.spawn(async move |screen, cx| {
             cx.background_executor().timer(DEBOUNCE).await;
@@ -261,9 +294,10 @@ impl SearchScreen {
                 Ok(Ok(session)) => {
                     screen.session = session;
                     screen.error = None;
+                    screen.remember();
+                    cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
                     screen.sync_grid(cx);
                     cx.emit(SearchEvent::Loaded);
-                    cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
                     cx.notify();
                 }
                 Ok(Err(error)) => {
@@ -278,10 +312,10 @@ impl SearchScreen {
         }));
     }
 
-    /// Commits the current filters once, used for the initial page and for
-    /// filter buttons.
-    fn apply_now(&mut self, cx: &mut Context<'_, Self>) {
-        let filters = self.session.filters().clone();
+    /// Commits `filters` without discarding the last good results until the
+    /// catalog answers. The returned Task replaces the old one, cancelling an
+    /// earlier filter or page request.
+    fn apply_with(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
@@ -296,6 +330,10 @@ impl SearchScreen {
                     Ok(Ok(session)) => {
                         screen.session = session;
                         screen.error = None;
+                        screen.remember();
+                        // Publish the route before resizing the grid: the
+                        // shell saves the scroll offset on navigation.
+                        cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
                         screen.sync_grid(cx);
                         cx.emit(SearchEvent::Loaded);
                     }
@@ -307,16 +345,19 @@ impl SearchScreen {
         }));
     }
 
+    /// Commits the current filters once, used for the initial page.
+    fn apply_now(&mut self, cx: &mut Context<'_, Self>) {
+        let filters = self.session.filters().clone();
+        self.apply_with(filters, cx);
+    }
+
     fn change<F>(&mut self, cx: &mut Context<'_, Self>, update: F)
     where
         F: FnOnce(&mut SearchFilters),
     {
         let mut filters = self.session.filters().clone();
         update(&mut filters);
-        let catalog = self.session.catalog().clone();
-        self.session = SearchSession::new(catalog, filters.clone());
-        self.apply_now(cx);
-        cx.emit(SearchEvent::Filters(filters));
+        self.apply_with(filters, cx);
     }
 
     /// Loads one more page; the retained Task cancels an older page request.
@@ -335,6 +376,7 @@ impl SearchScreen {
                     Ok(Ok(session)) => {
                         screen.session = session;
                         screen.error = None;
+                        screen.remember();
                         screen.sync_grid(cx);
                         cx.emit(SearchEvent::Loaded);
                     }
@@ -396,6 +438,7 @@ impl Render for SearchScreen {
                     .items_center()
                     .child(Input::new(&self.genres).aria_label("Genres"))
                     .child(Input::new(&self.country).aria_label("Country"))
+                    .child(Input::new(&self.year).aria_label("Season year"))
                     .child(
                         Button::new("search-status")
                             .label(label("Status", filters.status.as_ref()))
