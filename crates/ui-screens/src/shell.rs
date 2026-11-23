@@ -974,6 +974,7 @@ pub(crate) fn title(route: &Route) -> SharedString {
         Route::Entry { .. } => "Entry",
         Route::Discover => "Discover",
         Route::Lists { .. } => "My Lists",
+        Route::Search(_) => "Advanced Search",
         Route::Schedule => "Schedule",
         Route::Manga => "Manga",
         Route::Extensions => "Extensions",
@@ -990,6 +991,7 @@ fn rows(route: &Route) -> usize {
         Route::Entry { .. }
         | Route::Home
         | Route::Lists { .. }
+        | Route::Search(_)
         | Route::Schedule
         | Route::Manga
         | Route::Extensions
@@ -1004,6 +1006,7 @@ pub(crate) fn icon(route: &Route) -> IconName {
         Route::Entry { .. } => IconName::Clapperboard,
         Route::Discover => IconName::Compass,
         Route::Lists { .. } => IconName::List,
+        Route::Search(_) => IconName::Search,
         Route::Schedule => IconName::Calendar,
         Route::Manga => IconName::BookOpen,
         Route::Extensions => IconName::Puzzle,

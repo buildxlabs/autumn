@@ -3,6 +3,7 @@
 use domain::ListStatus;
 
 use crate::lists::ListTab;
+use crate::search::SearchFilters;
 
 /// A page in Settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,6 +44,8 @@ pub enum Route {
         /// The selected status or custom list.
         status: ListTab,
     },
+    /// Advanced Search with the committed filters.
+    Search(SearchFilters),
     /// The airing schedule.
     Schedule,
     /// Manga library and sources.
@@ -97,6 +100,7 @@ impl Route {
             Self::Entry { .. } => "entry",
             Self::Discover => "discover",
             Self::Lists { .. } => "lists",
+            Self::Search(_) => "search",
             Self::Schedule => "schedule",
             Self::Manga => "manga",
             Self::Extensions => "extensions",
