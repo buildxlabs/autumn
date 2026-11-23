@@ -29,9 +29,21 @@ use crate::{
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 5] = [
+const ROUTES: [Route; 6] = [
     Route::Home,
     Route::Discover,
+    Route::Search(ui_state::SearchFilters {
+        query: None,
+        kind: None,
+        sort: None,
+        format: None,
+        status: None,
+        season: None,
+        year: None,
+        genres: Vec::new(),
+        country: None,
+        adult: false,
+    }),
     Route::Lists {
         status: ListTab::Status(ListStatus::Current),
     },

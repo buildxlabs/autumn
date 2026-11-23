@@ -210,6 +210,12 @@ impl<C> SearchSession<C> {
         &self.results
     }
 
+    /// The catalog used for requests, so a caller can rebuild the session
+    /// with new filters without recreating the client.
+    pub fn catalog(&self) -> &C {
+        &self.catalog
+    }
+
     /// The last loaded page, or 0 before the first request.
     pub fn page(&self) -> u32 {
         self.page

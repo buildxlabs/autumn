@@ -14,13 +14,6 @@ use ui_state::{
 
 use crate::palette_search::display_label;
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 fn sort(filter: SearchSort) -> MediaSort {
     match filter {
         SearchSort::Match => MediaSort::SearchMatch,
@@ -33,13 +26,6 @@ fn sort(filter: SearchSort) -> MediaSort {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 fn format(filter: SearchFormat) -> MediaFormat {
     match filter {
         SearchFormat::Tv => MediaFormat::Tv,
@@ -55,13 +41,6 @@ fn format(filter: SearchFormat) -> MediaFormat {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 fn status(filter: SearchStatus) -> MediaStatus {
     match filter {
         SearchStatus::Releasing => MediaStatus::Releasing,
@@ -72,13 +51,6 @@ fn status(filter: SearchStatus) -> MediaStatus {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 fn season(filter: SearchSeason) -> MediaSeason {
     match filter {
         SearchSeason::Winter => MediaSeason::Winter,
@@ -88,13 +60,6 @@ fn season(filter: SearchSeason) -> MediaSeason {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 fn preview(media: &MediaSummary) -> MediaPreview {
     let format = match &media.format {
         Some(MediaFormat::Tv) => Some(SearchFormat::Tv),
@@ -120,24 +85,10 @@ fn preview(media: &MediaSummary) -> MediaPreview {
 
 /// Searches AniList through the stale-first client's underlying catalog.
 #[derive(Debug, Clone)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 pub(crate) struct AniListCatalog {
     anilist: AniList,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Search screen when the poster grid lands (#55)"
-    )
-)]
 impl AniListCatalog {
     /// Uses `anilist` for every page request.
     pub(crate) fn new(anilist: AniList) -> Self {
