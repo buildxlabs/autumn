@@ -185,6 +185,27 @@ async fn save_and_delete_use_the_cached_list_entry_id() {
 }
 
 #[tokio::test]
+async fn deleting_on_a_cold_cache_looks_up_the_entry_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(154_587)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+
+    anilist.delete_entry(minted.media).await.unwrap();
+    let last = mock.request(mock.count() - 1);
+    assert_eq!(last["variables"]["id"], 9001, "id came from a lookup");
+    assert!(
+        !anilist.collection_truncated(),
+        "the fixture fits one chunk"
+    );
+}
+
+#[tokio::test]
 async fn connecting_anilist_keeps_local_entries_dormant_and_sign_out_restores_them() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("autumn.db");

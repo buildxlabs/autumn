@@ -149,7 +149,7 @@ struct CollectionVariables {
 #[cynic(graphql_type = "Query", variables = "CollectionVariables")]
 struct CollectionQuery {
     #[cynic(rename = "MediaListCollection")]
-    #[arguments(userName: $user_name, type: $kind)]
+    #[arguments(userName: $user_name, type: $kind, sort: [UPDATED_TIME_DESC])]
     collection: Option<Collection>,
     #[cynic(rename = "Viewer")]
     viewer: Option<Viewer>,
@@ -517,7 +517,10 @@ impl AniList {
             completed_at: input.completed_at.map(DateInput::new),
         };
         let data = self.mutation(SaveMutation::build(variables), token).await?;
-        data.entry.map(|entry| entry.id).ok_or(Error::Unauthorized)
+        data.entry.map(|entry| entry.id).ok_or_else(|| Error::Api {
+            status: None,
+            message: "AniList returned no saved list entry".to_owned(),
+        })
     }
 
     /// Deletes a list entry by its AniList list-entry id. Sent once.
@@ -538,9 +541,10 @@ impl AniList {
         Ok(())
     }
 
-    /// Creates custom-list names on the account. AniList has no dedicated
-    /// create mutation: `UpdateUser` list options own the names, and a name
-    /// used by `SaveMediaListEntry` before it exists there is a no-op.
+    /// Replaces all custom-list names for `kind` with `names`. AniList has
+    /// no dedicated create mutation: `UpdateUser` list options own the names,
+    /// and a name used by `SaveMediaListEntry` before it exists there is a
+    /// no-op. Pass the full desired list — a subset deletes the other names.
     ///
     /// # Errors
     ///
@@ -563,7 +567,10 @@ impl AniList {
         let data = self
             .mutation(UpdateUserMutation::build(variables), token)
             .await?;
-        data.user.ok_or(Error::Unauthorized)?;
+        data.user.ok_or_else(|| Error::Api {
+            status: None,
+            message: "AniList returned no user after UpdateUser".to_owned(),
+        })?;
         Ok(())
     }
 }
