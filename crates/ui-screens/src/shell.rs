@@ -941,18 +941,13 @@ mod tests {
     use std::{
         cell::{Cell, RefCell},
         rc::Rc,
-        sync::Arc,
         time::Duration,
     };
 
     use crate::discover::{
         DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
     };
-    use domain::{
-        AniListAccountState, AniListWait, AppEvent, ExternalId, ListEntry, MediaId, MediaKind,
-        SectionFetch,
-    };
-    use engine::{BoxFuture, EngineError, EngineServices};
+    use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
         ScrollDelta, Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -961,8 +956,8 @@ mod tests {
         point, px, size,
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
-    use metadata::{HomeLoad, Load, MediaDetail};
     use ui_state::entry_store::EntryStore;
+    use ui_state::test_support::pending_services;
     use ui_state::{
         Route, SettingsTab,
         account::AccountStore,
@@ -992,58 +987,6 @@ mod tests {
 
     const COLLAPSED: Pixels = px(64.);
     const EXPANDED: Pixels = px(260.);
-
-    /// A fake engine service: the shell tests don't exercise the stores'
-    /// data, so every call never returns.
-    struct FakeServices;
-
-    impl EngineServices for FakeServices {
-        fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn local_media(
-            &self,
-            _kind: MediaKind,
-            _ids: &[ExternalId],
-        ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn local_entry(
-            &self,
-            _media: MediaId,
-        ) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn save_entry(&self, _entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn mint(
-            &self,
-            _kind: MediaKind,
-            _ids: &[ExternalId],
-        ) -> BoxFuture<Result<MediaId, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn missed_sequels(
-            &self,
-            _kind: MediaKind,
-        ) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-    }
 
     struct Shell {
         window: WindowHandle<Root>,
@@ -1095,7 +1038,7 @@ mod tests {
                     let account = cx.new(|_| {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
-                    let entry_store = cx.new(|_| EntryStore::new(Arc::new(FakeServices)));
+                    let entry_store = cx.new(|_| EntryStore::new(pending_services()));
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,

@@ -109,9 +109,12 @@ tracker       → domain, db
 ui-state      → domain, engine, metadata
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain, futures (ui-theme as a dev-dependency only)
-ui-screens    → ui-components, ui-state, db, metadata, domain, engine (ui-theme as a dev-dependency only)
 autumn        → engine, settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
 ```
+
+Screens never depend on `engine`: they reach its services only through the
+ui-state stores. Engine fakes for screen tests live in `ui_state::test_support`
+(behind the `test-util` feature), not in `ui-screens`.
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.
 

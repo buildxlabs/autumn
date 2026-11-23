@@ -13,6 +13,8 @@ pub mod lists;
 mod route;
 mod router;
 mod scroll;
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_support;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;

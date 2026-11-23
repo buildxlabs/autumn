@@ -8451,7 +8451,6 @@ dependencies = [
  "db",
  "domain",
  "futures",
- "engine",
  "gpui-kit",
  "metadata",
  "net",
