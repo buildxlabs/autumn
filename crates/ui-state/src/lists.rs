@@ -108,14 +108,30 @@ pub struct ListCard {
 #[error("list source failed: {message}")]
 pub struct ListSourceError {
     message: String,
+    retryable: bool,
 }
 
 impl ListSourceError {
-    /// A source error with a message safe to show in the UI.
+    /// A retryable source error with a message safe to show in the UI.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            retryable: true,
         }
+    }
+
+    /// A permanent error, such as a rejected token: the UI offers no Retry.
+    pub fn permanent(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            retryable: false,
+        }
+    }
+
+    /// Whether the UI should offer a Retry action for this failure.
+    #[must_use]
+    pub fn is_retryable(&self) -> bool {
+        self.retryable
     }
 }
 
@@ -124,12 +140,11 @@ pub trait ListSource {
     /// Loads every entry on the active platform, most recently changed first.
     fn load(&self) -> impl Future<Output = Result<Vec<ListCard>, ListSourceError>> + Send;
 
-    /// Applies `edit` to the entry for `media`.
+    /// Stores a fully built entry and returns it as the platform saved it.
     fn save(
         &self,
-        media: MediaId,
-        edit: &QuickEdit,
-    ) -> impl Future<Output = Result<(), ListSourceError>> + Send;
+        entry: &ListEntry,
+    ) -> impl Future<Output = Result<ListEntry, ListSourceError>> + Send;
 }
 
 /// The observable state of My Lists, with no GPUI or platform dependency.
@@ -268,19 +283,41 @@ impl<S: ListSource> ListsSession<S> {
         Ok(())
     }
 
-    /// Saves a quick edit and reloads so the card reflects what was stored.
+    /// Saves a quick edit and patches the one card from the stored entry.
+    ///
+    /// Building the full entry from the card already in memory avoids reading
+    /// the whole collection twice just to find the entry being edited.
     ///
     /// # Errors
     ///
-    /// Returns the source's error if the edit cannot be saved or the entries
-    /// cannot be reloaded.
+    /// Returns the source's error if the edit cannot be saved. The card is
+    /// left untouched on failure.
     pub async fn quick_edit(
         &mut self,
         media: MediaId,
         edit: &QuickEdit,
     ) -> Result<(), ListSourceError> {
-        self.source.save(media, edit).await?;
-        self.reload().await
+        let edited = {
+            let Some(card) = self.cards.iter().find(|card| card.entry.media == media) else {
+                return Ok(());
+            };
+            let mut entry = card.entry.clone();
+            if let Some(status) = edit.status {
+                entry.status = status;
+            }
+            if let Some(progress) = edit.progress {
+                entry.progress = progress;
+            }
+            if let Some(score) = edit.score {
+                entry.score = score;
+            }
+            entry
+        };
+        let stored = self.source.save(&edited).await?;
+        if let Some(card) = self.cards.iter_mut().find(|card| card.entry.media == media) {
+            card.entry = stored;
+        }
+        Ok(())
     }
 }
 
@@ -340,7 +377,7 @@ mod tests {
             Ok(cards.clone())
         }
 
-        async fn save(&self, media: MediaId, edit: &QuickEdit) -> Result<(), ListSourceError> {
+        async fn save(&self, entry: &ListEntry) -> Result<ListEntry, ListSourceError> {
             tokio::task::yield_now().await;
             let mut cards = self
                 .cards
@@ -348,18 +385,10 @@ mod tests {
                 .map_err(|_| ListSourceError::new("poisoned fake source"))?;
             let stored = cards
                 .iter_mut()
-                .find(|card| card.entry.media == media)
+                .find(|card| card.entry.media == entry.media)
                 .ok_or_else(|| ListSourceError::new("unknown media"))?;
-            if let Some(status) = edit.status {
-                stored.entry.status = status;
-            }
-            if let Some(progress) = edit.progress {
-                stored.entry.progress = progress;
-            }
-            if let Some(score) = edit.score {
-                stored.entry.score = score;
-            }
-            Ok(())
+            stored.entry = entry.clone();
+            Ok(entry.clone())
         }
     }
 

@@ -33,6 +33,10 @@ const WINDOW_HEIGHT: f32 = 800.;
 /// Where the macOS traffic lights sit: centred vertically in the 40px titlebar.
 const TRAFFIC_LIGHTS: (f32, f32) = (14., 13.);
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the composition root wires startup once, in one place"
+)]
 fn main() -> ExitCode {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -64,8 +68,9 @@ fn main() -> ExitCode {
     // My Lists reads card text from the stale-first cache only, so it makes
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), started.poster_cache.clone());
-    let gateway = PlatformGateway::new(Local::new(started.db.clone()));
     let (engine_events, ui_events) = ui_state::events::channel();
+    let gateway =
+        PlatformGateway::with_events(Local::new(started.db.clone()), engine_events.clone());
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
     let restored = handle.block_on(session.restore(SystemTime::now()));

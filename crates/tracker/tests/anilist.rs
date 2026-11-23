@@ -7,7 +7,10 @@
     reason = "test harness: fixtures and JSON assertions index recorded data"
 )]
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use db::Db;
@@ -18,24 +21,32 @@ use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tracker::{ActiveKind, ActivePlatform, AniListPlatform, ListName, Local, Platform};
 
+/// Recorded requests plus the flag that makes the next request a 401.
+type MockState = (Arc<Mutex<Vec<Value>>>, Arc<AtomicBool>);
+
 struct Mock {
     client: metadata::AniList,
     requests: Arc<Mutex<Vec<Value>>>,
+    reject_token: Arc<AtomicBool>,
 }
 
 impl Mock {
     async fn serve() -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let reject_token = Arc::new(AtomicBool::new(false));
         let app = Router::new()
             .route(
                 "/",
                 post(
-                    move |State(seen): State<Arc<Mutex<Vec<Value>>>>,
+                    move |State((seen, reject_token)): State<MockState>,
                           Json(request): Json<Value>| {
                         let query = request["query"].as_str().unwrap_or_default().to_owned();
+                        let reject = reject_token.load(Ordering::SeqCst);
                         async move {
                             seen.lock().unwrap().push(request);
-                            let body = if query.contains("MediaListCollection(") {
+                            let body = if reject {
+                                json!({"errors": [{"message": "Unauthorized.", "status": 401}], "data": null})
+                            } else if query.contains("MediaListCollection(") {
                                 fixture()
                             } else if query.contains("SaveMediaListEntry(") {
                                 json!({"data": {"SaveMediaListEntry": {"id": 9001}}})
@@ -49,7 +60,7 @@ impl Mock {
                     },
                 ),
             )
-            .with_state(Arc::clone(&requests));
+            .with_state((Arc::clone(&requests), Arc::clone(&reject_token)));
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -61,7 +72,12 @@ impl Mock {
         Self {
             client: metadata::AniList::with_endpoint(http, format!("http://{address}/")),
             requests,
+            reject_token,
         }
+    }
+
+    fn reject_token(&self) {
+        self.reject_token.store(true, Ordering::SeqCst);
     }
 
     fn request(&self, at: usize) -> Value {
@@ -203,6 +219,97 @@ async fn deleting_on_a_cold_cache_looks_up_the_entry_id() {
         !anilist.collection_truncated(),
         "the fixture fits one chunk"
     );
+}
+
+#[tokio::test]
+async fn a_401_on_a_write_is_classified_as_unauthorized_not_a_generic_remote_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(154_587)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+    mock.reject_token();
+
+    let error = anilist
+        .save_entry(&entry(minted.media, ListStatus::Current, 3))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, tracker::PlatformError::Unauthorized),
+        "a 401 reaches the UI as Unauthorized: {error:?}"
+    );
+}
+
+#[tokio::test]
+async fn update_progress_preserves_an_existing_status_and_returns_the_cached_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let mock = Mock::serve().await;
+    let anilist = platform(db.clone(), &mock);
+    anilist.collection(MediaKind::Anime).await.unwrap();
+
+    let media = db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(52_991)])
+        .await
+        .unwrap()
+        .expect("the completed entry was minted by collection");
+    let updated = anilist.update_progress(media, 50).await.unwrap();
+
+    let variables = mock.request(mock.count() - 1)["variables"].clone();
+    assert!(
+        variables
+            .get("status")
+            .is_none_or(serde_json::Value::is_null),
+        "an existing entry's status is not overwritten: {variables}"
+    );
+    assert_eq!(variables["id"], 9002, "the cached list-entry id is used");
+    assert_eq!(variables["progress"], 50);
+    assert_eq!(updated.media, media);
+    assert_eq!(
+        updated.status,
+        ListStatus::Completed,
+        "the returned entry keeps its cached status"
+    );
+    assert_eq!(updated.progress, 50);
+    assert!(
+        updated.hidden_from_status_lists,
+        "unchanged cached fields come back too"
+    );
+}
+
+#[tokio::test]
+async fn update_progress_on_a_new_entry_sets_current_status_and_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(999_999)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+
+    let updated = anilist.update_progress(minted.media, 7).await.unwrap();
+
+    let variables = mock.request(mock.count() - 1)["variables"].clone();
+    assert_eq!(
+        variables["status"], "CURRENT",
+        "a new entry starts in the Current status"
+    );
+    assert!(
+        variables.get("id").is_none_or(serde_json::Value::is_null),
+        "a new entry has no list-entry id yet"
+    );
+    assert_eq!(variables["progress"], 7);
+    assert_eq!(updated.status, ListStatus::Current);
+    assert_eq!(updated.progress, 7);
+    assert_eq!(updated.score, Score::UNSCORED);
 }
 
 #[tokio::test]

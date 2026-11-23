@@ -10,6 +10,7 @@ publish                = false
 workspace = true
 
 [dependencies]
+db.workspace        = true
 domain.workspace    = true
 flume.workspace     = true
 gpui-kit.workspace  = true
@@ -18,7 +19,6 @@ tokio               = { features = [ "rt" ], workspace = true }
 tracker.workspace   = true
 
 [dev-dependencies]
-db.workspace       = true
 gpui-kit           = { features = [ "test-support" ], workspace = true }
 metadata.workspace = true
 net.workspace      = true

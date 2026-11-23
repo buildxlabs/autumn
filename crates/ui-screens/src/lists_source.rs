@@ -6,9 +6,9 @@
 //! fetches, so the Local platform still makes zero network requests.
 
 use db::Db;
-use domain::{ExternalId, ListEntry, MediaId, MediaKind};
+use domain::{ExternalId, ListEntry, MediaKind};
 use metadata::CatalogCache;
-use ui_state::{ListCard, ListSource, ListSourceError, PlatformGateway, QuickEdit};
+use ui_state::{ListCard, ListSource, ListSourceError, PlatformGateway};
 
 use crate::palette_search::display_label;
 
@@ -76,11 +76,14 @@ impl ListSource for PlatformListSource {
         Ok(cards)
     }
 
-    async fn save(&self, media: MediaId, edit: &QuickEdit) -> Result<(), ListSourceError> {
-        self.gateway
-            .edit_entry(media, edit)
-            .await
-            .map_err(source_error)
+    async fn save(&self, entry: &ListEntry) -> Result<ListEntry, ListSourceError> {
+        self.gateway.save_entry(entry).await.map_err(|error| {
+            if error.is_retryable() {
+                source_error(error)
+            } else {
+                ListSourceError::permanent(error.to_string())
+            }
+        })
     }
 }
 
@@ -124,7 +127,7 @@ mod tests {
             .expect("test client");
         let anilist = metadata::AniList::new(http);
         let disk = net::PosterCache::new(cache_dir).expect("test cache dir");
-        let gateway = PlatformGateway::new(tracker::Local::new(db.clone()));
+        let gateway = PlatformGateway::local(db.clone());
         PlatformListSource::new(gateway, db, metadata::CatalogCache::new(anilist, disk))
     }
 
@@ -219,7 +222,7 @@ mod tests {
             .expect("http client");
         let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
         let disk = net::PosterCache::new(dir.path()).expect("cache dir");
-        let gateway = PlatformGateway::new(tracker::Local::new(db.clone()));
+        let gateway = PlatformGateway::local(db.clone());
         let source =
             PlatformListSource::new(gateway, db, metadata::CatalogCache::new(anilist, disk));
         let mut session = ListsSession::new(source);

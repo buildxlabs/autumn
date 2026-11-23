@@ -8445,7 +8445,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "tracker",
  "ui-components",
  "ui-state",
  "ui-theme",

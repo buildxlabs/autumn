@@ -201,7 +201,15 @@ impl AppShell {
         let banner_cache = LruImageCache::new(POSTER_IMAGE_CAPACITY, cx);
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
         cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
-        cx.observe(&account, |_, _, cx| cx.notify()).detach();
+        cx.observe(&account, |shell, _, cx| {
+            // A platform switch is published as an account change. Refresh the
+            // open list so its entries come from the new active platform.
+            if let (Route::Lists { status }, Some(lists)) = (shell.route(), shell.lists.as_ref()) {
+                lists.update(cx, |lists, cx| lists.set_tab(status, cx));
+            }
+            cx.notify();
+        })
+        .detach();
         let account_events = cx.subscribe_in(
             &account,
             window,
