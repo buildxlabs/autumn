@@ -150,6 +150,18 @@ pub struct SearchPage {
     pub has_next_page: bool,
 }
 
+/// A previously loaded page set, kept so Back can restore it without a
+/// request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoredPage {
+    /// The loaded results, in order.
+    pub results: Vec<MediaPreview>,
+    /// The last loaded page number.
+    pub page: u32,
+    /// Whether another page follows.
+    pub has_next: bool,
+}
+
 /// Why a catalog request failed.
 #[derive(Debug, thiserror::Error)]
 #[error("catalog search failed: {message}")]
@@ -224,6 +236,15 @@ impl<C> SearchSession<C> {
     /// Whether a further page is available.
     pub fn has_next(&self) -> bool {
         self.has_next
+    }
+
+    /// Restores a previously loaded filter set and its pages, so Back to an
+    /// earlier search needs no request and keeps its scroll position valid.
+    pub fn restore(&mut self, filters: SearchFilters, loaded: RestoredPage) {
+        self.filters = filters;
+        self.results = loaded.results;
+        self.page = loaded.page;
+        self.has_next = loaded.has_next;
     }
 }
 
