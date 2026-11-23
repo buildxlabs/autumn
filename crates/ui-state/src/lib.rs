@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2, §4 and §5.
 
+pub mod account;
 pub mod actions;
 mod badges;
 pub mod bridge;
@@ -11,6 +12,7 @@ mod route;
 mod router;
 mod scroll;
 
+pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;

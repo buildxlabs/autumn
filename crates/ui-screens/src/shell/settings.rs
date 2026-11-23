@@ -1,19 +1,25 @@
 //! Settings pages and their poster cache controls.
 
 use gpui_kit::{
-    App, ClickEvent, Context, Display, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StyleRefinement, Styled, Task, TestSupportExt, Window,
+    App, ClickEvent, Context, Display, InteractiveElement, IntoElement, ObjectFit, ParentElement,
+    SharedString, StyleRefinement, Styled, StyledImage, Task, TestSupportExt, Window,
     component::{
-        Disableable,
+        ActiveTheme, Disableable,
         button::Button,
+        input::Input,
         label::Label,
         setting::{SettingGroup, SettingItem, SettingPage, Settings},
         switch::Switch,
         tab::{Tab, TabBar},
     },
-    div, px,
+    div, img,
+    prelude::FluentBuilder,
+    px,
 };
-use ui_state::{Route, SettingsTab};
+use ui_state::{
+    Route, SettingsTab,
+    account::{AccountCommand, AccountStore},
+};
 
 use super::{AppShell, RailMode};
 
@@ -86,17 +92,30 @@ impl AppShell {
         cx.notify();
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the three settings tabs share one renderer and are short individually"
+    )]
     pub(super) fn render_settings(
         &self,
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 2] = [SettingsTab::Appearance, SettingsTab::Storage];
-        let selected = usize::from(tab == SettingsTab::Storage);
+        const TABS: [SettingsTab; 3] = [
+            SettingsTab::Appearance,
+            SettingsTab::Account,
+            SettingsTab::Storage,
+        ];
+        let selected = match tab {
+            SettingsTab::Appearance => 0,
+            SettingsTab::Account => 1,
+            SettingsTab::Storage => 2,
+        };
         let tabs = TabBar::new("settings-tabs")
             .underline()
             .selected_index(selected)
             .child(settings_tab("settings-appearance", "Appearance"))
+            .child(settings_tab("settings-account", "Account"))
             .child(settings_tab("settings-storage", "Storage"))
             .on_click(cx.listener(|shell, index: &usize, _, cx| {
                 if let Some(&tab) = TABS.get(*index) {
@@ -125,6 +144,125 @@ impl AppShell {
                                     shell.set_rail_mode(mode, cx);
                                 });
                             })
+                    }),
+                )
+            }
+            SettingsTab::Account => {
+                let account = self.account.clone();
+                let signout_account = self.account.clone();
+                let token_input = self.token_input.clone();
+                let login_url = self.login_url.clone();
+                let busy = self.account_busy;
+                let logged_in = self.account.read(cx).is_logged_in();
+                let expired = self.account.read(cx).expired();
+                let avatar = self.account.read(cx).avatar().map(SharedString::from);
+                let name = self
+                    .account
+                    .read(cx)
+                    .name()
+                    .unwrap_or(if expired {
+                        "AniList (token expired)"
+                    } else {
+                        "Not connected"
+                    })
+                    .to_owned();
+                let error = self.account.read(cx).error().map(str::to_owned);
+                let expiring = self.account.read(cx).expiring();
+                let avatar_bg = cx.theme().colors.accent;
+                (
+                    "Account",
+                    SettingItem::render(move |_, _, _| {
+                        let account = account.clone();
+                        let token = token_input.clone();
+                        let login_url = login_url.clone();
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(avatar.clone().map_or_else(
+                                        || div().w(px(48.)).h(px(48.)).rounded_full().bg(avatar_bg),
+                                        |url| {
+                                            div().child(
+                                                img(url)
+                                                    .w(px(48.))
+                                                    .h(px(48.))
+                                                    .rounded_full()
+                                                    .object_fit(ObjectFit::Cover)
+                                                    .id("account-avatar")
+                                                    .test_support(),
+                                            )
+                                        },
+                                    ))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .child(Label::new(name.clone()))
+                                            .child(
+                                                Label::new(if expired {
+                                                    "Token expired — AniList is read-only until you log in again"
+                                                } else if expiring {
+                                                    "AniList token expires soon — log in again to keep syncing"
+                                                } else if logged_in {
+                                                    "Connected to AniList"
+                                                } else {
+                                                    "Account-free: local lists only"
+                                                })
+                                                .text_sm(),
+                                            ),
+                                    ),
+                            )
+                            .when_some(error.clone(), |column, message| {
+                                column.child(Label::new(message).text_sm())
+                            })
+                            .child(
+                                Input::new(&token).aria_label("AniList token"),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_3()
+                                    .child(
+                                        Button::new("open-anilist")
+                                            .label("Open AniList")
+                                            .on_click(move |_, _, cx| cx.open_url(&login_url)),
+                                    )
+                                    .child(
+                                        Button::new("connect-anilist")
+                                            .label(if busy { "Connecting…" } else { "Connect" })
+                                            .disabled(busy)
+                                            .on_click(move |_, _, cx| {
+                                                let pasted = token.read(cx).value().to_string();
+                                                account.update(cx, |_, cx| {
+                                                    AccountStore::request(
+                                                        AccountCommand::Login(pasted),
+                                                        cx,
+                                                    );
+                                                });
+                                            }),
+                                    )
+                                    .when(logged_in, |buttons| {
+                                        let account = signout_account.clone();
+                                        buttons.child(
+                                            Button::new("sign-out-anilist")
+                                                .label("Sign out")
+                                                .disabled(busy)
+                                                .on_click(move |_, _, cx| {
+                                                    account.update(cx, |_, cx| {
+                                                        AccountStore::request(
+                                                            AccountCommand::SignOut,
+                                                            cx,
+                                                        );
+                                                    });
+                                                }),
+                                        )
+                                    }),
+                            )
                     }),
                 )
             }

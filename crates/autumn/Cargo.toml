@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace             = true
+auth.workspace               = true
 db                           = { path = "../db" }
 domain.workspace             = true
 gpui-kit.workspace           = true
@@ -26,7 +27,8 @@ ui-state.workspace           = true
 ui-theme.workspace           = true
 
 [dev-dependencies]
-axum.workspace     = true
-gpui-kit           = { features = [ "test-support" ], workspace = true }
-tempfile.workspace = true
-tokio              = { features = [ "macros", "rt" ], workspace = true }
+axum.workspace       = true
+gpui-kit             = { features = [ "test-support" ], workspace = true }
+serde_json.workspace = true
+tempfile.workspace   = true
+tokio                = { features = [ "macros", "rt" ], workspace = true }

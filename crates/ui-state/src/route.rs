@@ -9,6 +9,8 @@
 pub enum SettingsTab {
     /// Appearance and rail interaction.
     Appearance,
+    /// AniList connection, avatar and token expiry.
+    Account,
     /// Disk cache usage and controls.
     Storage,
 }

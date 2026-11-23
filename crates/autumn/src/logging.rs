@@ -130,4 +130,82 @@ mod tests {
 
         assert!(Path::new(&dir).is_dir(), "the appender creates logs/");
     }
+
+    /// The #65 acceptance check: grepping the log dir after a login finds
+    /// no token, even with TRACE enabled.
+    #[test]
+    fn a_login_never_writes_the_token_to_the_logs() {
+        use std::sync::Mutex;
+
+        use auth::{AniListAuth, Keychain, KeychainError};
+        use axum::{Json, Router, routing::post};
+
+        #[derive(Default)]
+        struct MemoryKeychain(Mutex<Option<String>>);
+        impl Keychain for MemoryKeychain {
+            fn get(&self) -> Result<Option<String>, KeychainError> {
+                Ok(self.0.lock().unwrap().clone())
+            }
+            fn set(&self, token: &str) -> Result<(), KeychainError> {
+                *self.0.lock().unwrap() = Some(token.to_owned());
+                Ok(())
+            }
+            fn delete(&self) -> Result<(), KeychainError> {
+                self.0.lock().unwrap().take();
+                Ok(())
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let subscriber = subscriber(dir.path(), Some("trace")).unwrap();
+        let token = "header.eyJleHAiOjIxMDAwMDAwMDB9.unique-marker.signature";
+        tracing::subscriber::with_default(subscriber, || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async {
+                let viewer = serde_json::json!({
+                    "data": {"Viewer": {"id": 1, "name": "TestUser", "avatar": null}}
+                });
+                let app = Router::new().route(
+                    "/",
+                    post(move || {
+                        let viewer = viewer.clone();
+                        async move { Json(viewer) }
+                    }),
+                );
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let endpoint = format!("http://{}/", listener.local_addr().unwrap());
+                tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+                let http = net::Client::builder()
+                    .host("127.0.0.1", 6000, 100, net::HostKind::AniList)
+                    .max_retries(0)
+                    .build()
+                    .unwrap();
+                let auth = AniListAuth::with_endpoint(
+                    http,
+                    endpoint,
+                    std::sync::Arc::new(MemoryKeychain::default()),
+                );
+                auth.login(token, std::time::SystemTime::UNIX_EPOCH)
+                    .await
+                    .unwrap();
+            });
+            tracing::info!("login attempt finished");
+        });
+
+        let logged: String = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+            .collect();
+        assert!(
+            logged.contains("login attempt finished"),
+            "logs were written"
+        );
+        assert!(
+            !logged.contains("eyJleHAi") && !logged.contains("unique-marker"),
+            "the token must never appear in the logs"
+        );
+    }
 }

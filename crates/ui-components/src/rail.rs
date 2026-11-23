@@ -76,6 +76,10 @@ impl RailExpansion {
     }
 }
 
+/// The id passed to `Rail::new`'s selection callback when the account row is
+/// clicked.
+pub const ACCOUNT_ID: &str = "rail-account";
+
 /// Called with an item's id.
 type OnItem = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 /// Called with `true` when the pointer enters the rail, `false` when it leaves.
@@ -357,7 +361,12 @@ impl RenderOnce for Rail {
             .children(toggle)
             .child(main)
             .children(system)
-            .child(account_row(self.account, expansion, palette));
+            .child(account_row(
+                self.account,
+                expansion,
+                palette,
+                Rc::clone(&self.handlers.on_select),
+            ));
 
         if animate {
             rail.with_animation(
@@ -649,9 +658,18 @@ fn badge_pill(
         .child(count.to_string())
 }
 
-/// The placeholder account row: an avatar dot, then `name` when expanded.
-fn account_row(name: SharedString, expansion: RailExpansion, palette: Palette) -> impl IntoElement {
+/// The account row: an avatar dot, then `name` when expanded. Clicking it
+/// selects [`ACCOUNT_ID`], so the shell can open the Account settings tab.
+fn account_row(
+    name: SharedString,
+    expansion: RailExpansion,
+    palette: Palette,
+    on_select: OnItem,
+) -> impl IntoElement {
     div()
+        .id(ACCOUNT_ID)
+        .test_support()
+        .on_click(move |_, window, cx| on_select(&ACCOUNT_ID.into(), window, cx))
         .h(px(ITEM_SIZE))
         .mx(px(ITEM_MARGIN))
         .px(px((ITEM_SIZE - ICON_SIZE) / 2.))
