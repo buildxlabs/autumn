@@ -72,12 +72,24 @@ impl Route {
 
     /// Every route that has a stable settings key, including screens that
     /// are not rail items. [`Self::ALL`] stays the rail's default set.
-    pub const ALL_KEYED: [Self; 8] = [
+    pub const ALL_KEYED: [Self; 9] = [
         Self::Home,
         Self::Discover,
         Self::Lists {
             status: ListTab::Status(ListStatus::Current),
         },
+        Self::Search(SearchFilters {
+            query: None,
+            kind: None,
+            sort: None,
+            format: None,
+            status: None,
+            season: None,
+            year: None,
+            genres: Vec::new(),
+            country: None,
+            adult: false,
+        }),
         Self::Schedule,
         Self::Manga,
         Self::Extensions,
