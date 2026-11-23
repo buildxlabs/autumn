@@ -103,12 +103,13 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 ```text
 db            → domain
 auth           → domain, net
+engine         → domain, net, db, metadata, tracker, settings
 metadata      → domain, net
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain, futures (ui-theme as a dev-dependency only)
-autumn        → settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
+autumn        → engine, settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
 ```
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.

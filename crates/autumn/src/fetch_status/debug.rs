@@ -16,7 +16,7 @@ use ui_state::{
     fetch_status::{DebugFetch, FetchCommand, FetchStatus, HOME_POSTERS},
 };
 
-pub(crate) const HOST: &str = "127.0.0.1";
+pub(crate) const HOST: &str = engine::DEBUG_HOST;
 
 pub(crate) fn bind(store: &Entity<FetchStatus>, client: Client, events: Sender, cx: &mut App) {
     let mut last = None;

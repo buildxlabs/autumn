@@ -1,14 +1,16 @@
 //! Settings live in the database. The Phase 0 `settings.json` is imported
-//! once and then retired (ROADMAP Phase 1, decision #17).
+//! once and then retired (ROADMAP Phase 1, decision #17). Moved from
+//! `autumn` when the engine crate landed (#58).
 
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-use anyhow::Context as _;
 use db::Db;
 use settings::{Settings, SettingsError};
+
+use crate::EngineError;
 
 /// What `settings.json` is renamed to once imported, so the import never runs
 /// again.
@@ -22,14 +24,10 @@ const CORRUPT_SUFFIX: &str = "corrupt";
 ///
 /// A corrupt file or bad row is logged, and the affected settings take their
 /// defaults.
-pub(crate) async fn load(db: &Db, settings_file: &Path) -> anyhow::Result<Settings> {
+pub(crate) async fn load(db: &Db, settings_file: &Path) -> Result<Settings, EngineError> {
     import_once(db, settings_file).await?;
 
-    let rows = db
-        .settings()
-        .rows()
-        .await
-        .context("could not read settings")?;
+    let rows = db.settings().rows().await?;
     let (settings, errors) = Settings::from_rows(rows);
     for err in errors {
         log_error(&err, "a settings row is invalid; its tab uses the defaults");
@@ -42,7 +40,7 @@ pub(crate) async fn load(db: &Db, settings_file: &Path) -> anyhow::Result<Settin
 /// only tidying: if it fails, the next start skips the file anyway. A start
 /// with no file marks the import done, so a file that appears later is never
 /// imported over the database.
-async fn import_once(db: &Db, file: &Path) -> anyhow::Result<()> {
+async fn import_once(db: &Db, file: &Path) -> Result<(), EngineError> {
     if db.settings().imported().await? {
         if file.exists() {
             retire(file, IMPORTED_SUFFIX);
@@ -56,11 +54,7 @@ async fn import_once(db: &Db, file: &Path) -> anyhow::Result<()> {
             Ok(())
         }
         Ok(Some(settings)) => {
-            let imported = db
-                .settings()
-                .import_once(&settings.to_rows()?)
-                .await
-                .context("could not import settings.json")?;
+            let imported = db.settings().import_once(&settings.to_rows()?).await?;
             if imported {
                 tracing::info!(file = %file.display(), "imported settings.json into the database");
             } else {

@@ -1,33 +1,21 @@
-//! What runs before the window opens: app dirs, logging, the database and
-//! settings (ROADMAP Phases 0 and 1).
+//! What runs before the window opens: app dirs, logging. The database,
+//! settings and shared client open through the engine (#58).
 
 use anyhow::Context as _;
-use db::Db;
-use net::{Client, PosterCache};
-use settings::{AppPaths, Settings};
-use tokio::runtime::Runtime;
+use settings::AppPaths;
 
-/// Everything startup produced.
+/// What startup produced: the app directories, created and logged.
 #[derive(Debug)]
-#[expect(dead_code, reason = "the engine reads the paths once it exists (#39)")]
-pub(crate) struct Started {
+pub(crate) struct Startup {
     /// The resolved and created app directories.
     pub(crate) paths: AppPaths,
-    /// The open database. Its pool runs on `runtime`.
-    pub(crate) db: Db,
-    /// The settings from the database, or the defaults.
-    pub(crate) settings: Settings,
-    /// The shared HTTP client and its rate limits.
-    pub(crate) client: Client,
-    /// The on-disk poster cache for GPUI's image requests.
-    pub(crate) poster_cache: PosterCache,
 }
 
-/// Creates the app dirs, installs logging, opens the database, imports the
-/// Phase 0 `settings.json` once, then loads the settings.
+/// Creates the app dirs and installs logging.
 ///
-/// A corrupt settings file is logged and the defaults are used.
-pub(crate) fn run(runtime: &Runtime) -> anyhow::Result<Started> {
+/// A failure here is before any user-facing state exists, so it can only
+/// print: logging may not be installed yet.
+pub(crate) fn run() -> anyhow::Result<Startup> {
     let paths = AppPaths::resolve()?;
     paths
         .create_dirs()
@@ -40,38 +28,5 @@ pub(crate) fn run(runtime: &Runtime) -> anyhow::Result<Started> {
         cache = %paths.cache_dir().display(),
         "starting Autumn"
     );
-
-    let (db, settings) = runtime.block_on(async {
-        let db = Db::open(&paths.database_file())
-            .await
-            .context("could not open the database")?;
-        let settings = crate::settings_store::load(&db, &paths.settings_file()).await?;
-        anyhow::Ok((db, settings))
-    })?;
-    // Settings hold no secrets (those live in the keychain), so the whole
-    // struct may be logged. Revisit if a secret-adjacent field is added.
-    tracing::debug!(?settings, "settings loaded");
-
-    let client = Client::builder().anilist();
-    // Debug builds add the local host the fetch-status debug actions call.
-    #[cfg(debug_assertions)]
-    let client = client.host(
-        crate::fetch_status::debug::HOST,
-        25,
-        5,
-        net::HostKind::AniList,
-    );
-    let client = client
-        .build()
-        .context("could not create the shared HTTP client")?;
-    let poster_cache =
-        PosterCache::new(paths.cache_dir()).context("could not open the poster cache")?;
-
-    Ok(Started {
-        paths,
-        db,
-        settings,
-        client,
-        poster_cache,
-    })
+    Ok(Startup { paths })
 }
