@@ -12,3 +12,9 @@ extend-exclude = [
   "**/tests/fixtures",
   "target",
 ]
+
+[default.extend-words]
+# ADN (Anime Digital Network), a source tag in release names.
+adn = "adn"
+# The suffix of ordinals such as 2nd, as in "2nd Season".
+nd = "nd"

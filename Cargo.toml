@@ -27,6 +27,7 @@ metadata = { path = "crates/metadata" }
 net = { path = "crates/net" }
 nucleo-matcher = "0.3"
 rand = "0.10"
+release-parser = { path = "crates/release-parser" }
 reqwest = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }
 rmp-serde = "1.3"
 rustls = { default-features = false, features = [ "ring", "std", "tls12" ], version = "0.23" }
