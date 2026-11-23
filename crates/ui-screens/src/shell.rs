@@ -327,7 +327,8 @@ impl AppShell {
         self.router.current().clone()
     }
 
-    fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
+    /// Opens `route`, saving the current route's scroll offset.
+    pub(crate) fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
         let restore = self.router.push(route, self.scroll.offset());
         self.show(restore, cx);
     }

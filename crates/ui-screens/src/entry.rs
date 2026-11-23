@@ -1,8 +1,5 @@
-//! The Anime Entry route (#58): the media card and the Local list editor.
-//!
-//! The hero header and the Relations/Recommendations carousels land with #56;
-//! this module covers the parts that need only the card and the store's
-//! editor draft.
+//! The Anime Entry route (#58): the hero header, media card, Characters & VA,
+//! Relations/Recommendations carousels and the Local list editor.
 
 use std::{
     rc::Rc,
@@ -22,13 +19,16 @@ use gpui_kit::{
     },
     div,
 };
-use metadata::MediaSummary;
+use metadata::{Character, MediaSummary};
 use ui_components::{
     CarouselWheel, LruImageCache, MediaCard, MediaCardView, MediaCarousel, MediaFormat,
     fetch_status::{FetchError, error_card, fetch_loader},
     hero::{HeroBannerData, hero_banner},
 };
-use ui_state::entry_store::{EntryDraft, EntryState, EntryStore};
+use ui_state::{
+    Route,
+    entry_store::{EntryDraft, EntryState, EntryStore},
+};
 
 use crate::shell::AppShell;
 
@@ -231,20 +231,8 @@ fn render_ready(
         },
         format!("entry-card-{id}"),
     );
-    let relations_carousel = MediaCarousel::new(
-        "entry-relations",
-        editor.read(cx).relations.clone(),
-        card_views(&relations),
-        cache.clone(),
-        editor.read(cx).relations_wheel.clone(),
-    );
-    let recommendations_carousel = MediaCarousel::new(
-        "entry-recommendations",
-        editor.read(cx).recommendations.clone(),
-        card_views(&recommendations),
-        cache.clone(),
-        editor.read(cx).recommendations_wheel.clone(),
-    );
+    let [relations_carousel, recommendations_carousel] =
+        carousels(&relations, &recommendations, editor, cache, cx);
     div()
         .flex()
         .flex_col()
@@ -252,6 +240,7 @@ fn render_ready(
         .p_6()
         .child(hero)
         .child(info)
+        .children((!detail.characters.is_empty()).then(|| characters_section(&detail.characters)))
         .child(div().flex().gap_6().child(card))
         .child(carousel_section("Relations", relations_carousel))
         .child(carousel_section(
@@ -260,6 +249,40 @@ fn render_ready(
         ))
         .child(editor_section(entry_store, editor, draft, cx))
         .into_any_element()
+}
+
+/// The Relations and Recommendations carousels. Clicking a card opens that
+/// media's Entry, using the AniList id carried by its card view model.
+fn carousels(
+    relations: &[&MediaSummary],
+    recommendations: &[&MediaSummary],
+    editor: &Entity<EntryEditor>,
+    cache: &Entity<LruImageCache>,
+    cx: &mut Context<'_, AppShell>,
+) -> [MediaCarousel; 2] {
+    let relation_ids = relations.iter().map(|media| media.anilist_id).collect();
+    let recommendation_ids = recommendations
+        .iter()
+        .map(|media| media.anilist_id)
+        .collect();
+    [
+        MediaCarousel::new(
+            "entry-relations",
+            editor.read(cx).relations.clone(),
+            card_views(relations),
+            cache.clone(),
+            editor.read(cx).relations_wheel.clone(),
+        )
+        .on_open(open_entry(relation_ids, cx)),
+        MediaCarousel::new(
+            "entry-recommendations",
+            editor.read(cx).recommendations.clone(),
+            card_views(recommendations),
+            cache.clone(),
+            editor.read(cx).recommendations_wheel.clone(),
+        )
+        .on_open(open_entry(recommendation_ids, cx)),
+    ]
 }
 
 /// The default banner mode's info box: a fluid row of metadata chips.
@@ -309,8 +332,60 @@ fn carousel_section(title: &'static str, carousel: MediaCarousel) -> impl IntoEl
         .flex()
         .flex_col()
         .gap_3()
-        .child(Label::new(title).text_lg())
+        .child(
+            Label::new(title)
+                .id(format!("entry-{title}-label"))
+                .text_lg(),
+        )
         .child(carousel)
+}
+
+/// Opens the Entry of the media at a carousel card's index.
+fn open_entry(
+    ids: Vec<u32>,
+    cx: &mut Context<'_, AppShell>,
+) -> impl Fn(usize, &mut Window, &mut App) + 'static {
+    let shell = cx.entity().downgrade();
+    move |index, _, cx| {
+        if let Some(id) = ids.get(index).copied() {
+            let _ = shell.update(cx, |shell, cx| {
+                shell.navigate(Route::Entry { id }, cx);
+            });
+        }
+    }
+}
+
+/// The main cast and their Japanese voice actors, as listed by AniList.
+fn characters_section(characters: &[Character]) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            Label::new("Characters & VA")
+                .id("entry-characters-label")
+                .text_lg(),
+        )
+        .children(characters.iter().map(|character| {
+            let name = character
+                .name
+                .clone()
+                .unwrap_or_else(|| "Unknown character".to_owned());
+            let actors = character
+                .voice_actors
+                .iter()
+                .filter_map(|actor| actor.name.as_deref())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let line = if actors.is_empty() {
+                name
+            } else {
+                format!("{name} — {actors}")
+            };
+            Label::new(line)
+                .id(format!("entry-character-{}", character.anilist_id))
+                .text_sm()
+        }))
 }
 
 /// Cards for the related and recommended media.
@@ -454,8 +529,12 @@ fn date_field(
         .flex()
         .flex_col()
         .gap_1()
-        .child(Label::new(title))
-        .child(Label::new(format_fuzzy_date(date)).text_sm())
+        .child(Label::new(title).id(format!("entry-{id}-title")))
+        .child(
+            Label::new(format_fuzzy_date(date))
+                .id(format!("entry-{id}-value"))
+                .text_sm(),
+        )
         .child(
             div()
                 .flex()
