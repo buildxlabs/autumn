@@ -1,5 +1,7 @@
 //! The places the route view can show. See ARCHITECTURE §5.
 
+use domain::ListStatus;
+
 use crate::lists::ListTab;
 
 /// A page in Settings.
@@ -65,6 +67,23 @@ impl Route {
         },
     ];
 
+    /// Every route that has a stable settings key, including screens that
+    /// are not rail items. [`Self::ALL`] stays the rail's default set.
+    pub const ALL_KEYED: [Self; 8] = [
+        Self::Home,
+        Self::Discover,
+        Self::Lists {
+            status: ListTab::Status(ListStatus::Current),
+        },
+        Self::Schedule,
+        Self::Manga,
+        Self::Extensions,
+        Self::Sync,
+        Self::Settings {
+            tab: SettingsTab::Appearance,
+        },
+    ];
+
     /// A stable name for storing the route in settings. Never change one:
     /// saved settings refer to it.
     pub fn key(&self) -> &'static str {
@@ -82,7 +101,10 @@ impl Route {
 
     /// The route stored under `key`, if any.
     pub fn from_key(key: &str) -> Option<Self> {
-        Self::ALL.iter().find(|route| route.key() == key).cloned()
+        Self::ALL_KEYED
+            .iter()
+            .find(|route| route.key() == key)
+            .cloned()
     }
 }
 
@@ -94,7 +116,7 @@ mod tests {
 
     #[test]
     fn every_route_round_trips_through_its_key() {
-        for route in Route::ALL {
+        for route in Route::ALL_KEYED {
             assert_eq!(
                 Route::from_key(route.key()).as_ref(),
                 Some(&route),
@@ -114,5 +136,12 @@ mod tests {
         };
         assert_eq!(favourites.key(), "lists", "the rail key ignores the tab");
         assert_ne!(favourites, watching, "each tab keeps its own scroll slot");
+        assert_eq!(
+            Route::from_key("lists"),
+            Some(Route::Lists {
+                status: ListTab::default()
+            }),
+            "a persisted Lists route restores its default tab"
+        );
     }
 }

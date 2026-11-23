@@ -474,13 +474,24 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn status_and_custom_tab_order_matches_the_platform() {
-        assert_eq!(STATUS_ORDER.len(), 6, "all six AniList statuses have a tab");
+    #[test]
+    fn status_and_custom_tab_order_matches_the_platform() {
+        assert_eq!(
+            STATUS_ORDER,
+            [
+                ListStatus::Current,
+                ListStatus::Repeating,
+                ListStatus::Planning,
+                ListStatus::Completed,
+                ListStatus::Paused,
+                ListStatus::Dropped,
+            ],
+            "statuses follow the platform order"
+        );
     }
 
     #[tokio::test]
-    async fn quick_edit_updates_the_card_and_survives_a_restart() {
+    async fn quick_edit_updates_the_card_and_reloads_from_the_source() {
         let cards = Arc::new(Mutex::new(vec![card(1, ListStatus::Planning, 0, 0, "One")]));
         let edit = QuickEdit::new()
             .status(ListStatus::Current)
@@ -513,15 +524,28 @@ mod tests {
         assert_eq!(card.entry.score.raw(), 85, "score survives a restart");
     }
 
-    #[test]
-    fn a_recent_sort_uses_the_update_time() {
+    #[tokio::test]
+    async fn the_default_sort_puts_the_most_recent_first() {
         let mut older = card(1, ListStatus::Current, 0, 0, "Older");
         older.entry.updated_at = SystemTime::UNIX_EPOCH;
         let mut newer = card(2, ListStatus::Current, 0, 0, "Newer");
         newer.entry.updated_at = SystemTime::UNIX_EPOCH + Duration::from_secs(60);
-        assert!(
-            newer.entry.updated_at > older.entry.updated_at,
-            "fixture order"
+        let source = FakeSource {
+            cards: Arc::new(Mutex::new(vec![older, newer])),
+        };
+        let mut session = ListsSession::new(source);
+        session.reload().await.expect("fake source loads");
+        session.set_tab(ListTab::Status(ListStatus::Current));
+
+        assert_eq!(session.sort(), ListSort::Recent, "recent is the default");
+        assert_eq!(
+            session
+                .visible()
+                .iter()
+                .map(|card| card.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Newer", "Older"],
+            "most recently updated card comes first"
         );
     }
 }
