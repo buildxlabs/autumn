@@ -15,6 +15,7 @@ mod error;
 mod fragments;
 mod model;
 mod search;
+mod viewer;
 
 pub use cache::{Cached, CatalogCache, Load, Refresh};
 pub use catalog::{AiringEpisode, CountryTrends, DiscoverLoad, HomeLoad};
@@ -25,6 +26,7 @@ pub use model::{
     MediaSummary, MediaTitle, Relation, VoiceActor,
 };
 pub use search::{MediaSort, PageRequest, SearchFilters, SearchPage};
+pub use viewer::{Avatar, Viewer};
 
 /// The AniList schema, registered in `build.rs` from `schema/anilist.graphql`.
 #[cynic::schema("anilist")]

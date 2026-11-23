@@ -1,0 +1,12 @@
+{
+  "data": {
+    "Viewer": {
+      "id": 123456,
+      "name": "TestUser",
+      "avatar": {
+        "large": "https://s4.anilist.co/file/anilistcdn/user/avatar/large/u123456-abc.jpg",
+        "medium": "https://s4.anilist.co/file/anilistcdn/user/avatar/medium/u123456-abc.jpg"
+      }
+    }
+  }
+}

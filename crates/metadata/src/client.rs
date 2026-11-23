@@ -44,11 +44,40 @@ impl AniList {
         Q: DeserializeOwned,
         V: Serialize,
     {
+        self.query_with_token(operation, None).await
+    }
+
+    /// Posts a query with an `Authorization: Bearer` header. The token is
+    /// never logged: `net` logs hosts and statuses, not request headers.
+    pub(crate) async fn authenticated<Q, V>(
+        &self,
+        operation: Operation<Q, V>,
+        token: &str,
+    ) -> Result<Q, Error>
+    where
+        Q: DeserializeOwned,
+        V: Serialize,
+    {
+        self.query_with_token(operation, Some(token)).await
+    }
+
+    async fn query_with_token<Q, V>(
+        &self,
+        operation: Operation<Q, V>,
+        token: Option<&str>,
+    ) -> Result<Q, Error>
+    where
+        Q: DeserializeOwned,
+        V: Serialize,
+    {
         let body = serde_json::to_vec(&operation).map_err(Error::Encode)?;
-        let request = net::Request::new(net::Method::Post, &self.endpoint)
+        let mut request = net::Request::new(net::Method::Post, &self.endpoint)
             .header("Content-Type", "application/json")?
-            .header("Accept", "application/json")?
-            .body(body);
+            .header("Accept", "application/json")?;
+        if let Some(token) = token {
+            request = request.header("Authorization", &format!("Bearer {token}"))?;
+        }
+        let request = request.body(body);
         let response = self.http.read(request).await?;
         let bytes = response.bytes().await?;
         let envelope: Envelope<Q> = serde_json::from_slice(&bytes).map_err(Error::Decode)?;
