@@ -12,8 +12,12 @@ workspace = true
 [dependencies]
 db.workspace        = true
 domain.workspace    = true
+metadata.workspace  = true
 thiserror.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true
-tokio              = { features = [ "macros", "rt", "rt-multi-thread" ], workspace = true }
+axum.workspace       = true
+net.workspace        = true
+serde_json.workspace = true
+tempfile.workspace   = true
+tokio                = { features = [ "macros", "rt", "rt-multi-thread" ], workspace = true }
