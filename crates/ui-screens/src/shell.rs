@@ -11,7 +11,6 @@ use gpui_kit::{
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
-        carousel::CarouselState,
         input::InputState,
         label::Label,
     },
@@ -19,12 +18,11 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, CarouselWheel, LruImageCache, MediaCardView, MediaCarousel, POSTER_IMAGE_CAPACITY,
-    PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    ACCOUNT_ID, LruImageCache, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
+    RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
-    hero::{HeroBannerData, hero_banner},
 };
 use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
@@ -45,6 +43,7 @@ use settings::{PosterCacheRequest, StorageStatus};
 mod settings;
 
 use crate::{
+    discover::{DiscoverLoader, DiscoverView},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
@@ -52,12 +51,6 @@ use crate::{
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
 const TITLEBAR_HEIGHT: f32 = 40.;
-
-/// A known-good AniList image standing in for a `bannerImage` until Discover
-/// loads real catalog data. It is loaded through the same net-backed cache as
-/// a poster.
-const MOCK_BANNER: &str =
-    "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg";
 
 /// Width of the command palette dialog.
 const PALETTE_WIDTH: f32 = 560.;
@@ -157,14 +150,8 @@ pub struct AppShell {
     /// My Lists is built only when startup supplied a catalog cache.
     lists: Option<Entity<ListsScreen>>,
     lists_events: Option<Subscription>,
-    /// Bounded decoded-image cache shared by the banner and carousel.
-    banner_cache: Entity<LruImageCache>,
-    /// The mock carousel's paging state, owned here so it survives redraws.
-    media_carousel: Entity<CarouselState>,
-    /// Shared Rc so redraws clone a pointer, not the mock cards.
-    carousel_items: Rc<[MediaCardView]>,
-    /// Accumulates Alt+wheel delta between page turns.
-    carousel_wheel: CarouselWheel,
+    /// The Discover screen, loaded stale-first when that route is shown.
+    discover_view: Entity<DiscoverView>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -193,6 +180,7 @@ impl AppShell {
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+        discover_loader: DiscoverLoader,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -224,9 +212,7 @@ impl AppShell {
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let home_grid = PosterGrid::new(mock_media_views(), cx);
-        let carousel_items: Rc<[MediaCardView]> = mock_media_views().into_iter().take(12).collect();
-        let media_carousel = cx.new(|_| CarouselState::new(carousel_items.len()));
-        let carousel_wheel = CarouselWheel::default();
+        let discover_view = DiscoverView::new(String::new(), discover_loader, banner_cache, cx);
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -255,10 +241,7 @@ impl AppShell {
             home_grid,
             lists: None,
             lists_events: None,
-            banner_cache,
-            media_carousel,
-            carousel_items,
-            carousel_wheel,
+            discover_view,
         }
     }
 
@@ -276,6 +259,7 @@ impl AppShell {
         save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+        discover_loader: DiscoverLoader,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -290,6 +274,7 @@ impl AppShell {
             save_prefs,
             poster_cache,
             account_request,
+            discover_loader,
             window,
             cx,
         );
@@ -386,6 +371,9 @@ impl AppShell {
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
         if let Some(offset) = restore {
             self.scroll.restore(offset);
+            if self.route() == Route::Discover {
+                self.discover_view.update(cx, DiscoverView::load);
+            }
             if matches!(
                 self.route(),
                 Route::Settings {
@@ -614,6 +602,7 @@ impl AppShell {
             .id("route-view")
             .flex_1()
             .min_w_0()
+            .min_h_0()
             .h_full()
             .test_support();
         match &route {
@@ -644,10 +633,14 @@ impl AppShell {
                     ))
                     .into_any_element(),
             },
+            Route::Discover => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(self.discover_view.clone())
+                .into_any_element(),
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
-                .children((route == &Route::Discover).then(|| self.render_discover_heroes(cx)))
                 .child(placeholder(
                     title(route),
                     rows(route),
@@ -697,75 +690,6 @@ impl AppShell {
                 .size_full()
                 .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
         }
-    }
-
-    /// Mock heroes on the placeholder route: one with a `bannerImage`, one
-    /// without, so both states can be checked by hand until #62 replaces it.
-    fn render_discover_heroes(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let colors = cx.theme().colors;
-        let mock = |banner: Option<String>| HeroBannerData {
-            title: "Frieren: Beyond Journey's End".into(),
-            synopsis: "After the hero party defeats the Demon King, the elf mage Frieren \
-                       sets out on a new journey to understand the people she once travelled \
-                       with &amp; the <i>time</i> they shared. Along the way she meets a \
-                       young mage &amp; learns what it means to remember."
-                .into(),
-            banner,
-        };
-        let actions = || {
-            div()
-                .flex()
-                .gap_2()
-                .child(Button::new("hero-watch").label("Watch now"))
-                .child(Button::new("hero-details").label("Details"))
-        };
-        div()
-            .px_8()
-            .pb_6()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(colors.muted_foreground)
-                    .child("With a banner image"),
-            )
-            .child(hero_banner(
-                "hero-with",
-                mock(Some(MOCK_BANNER.to_owned())),
-                &self.banner_cache,
-                colors.accent,
-                colors.background,
-                actions(),
-            ))
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(colors.muted_foreground)
-                    .child("Without a banner image"),
-            )
-            .child(hero_banner(
-                "hero-without",
-                mock(None),
-                &self.banner_cache,
-                colors.accent,
-                colors.background,
-                actions(),
-            ))
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(colors.muted_foreground)
-                    .child("Media carousel — drag, use the arrows, or Alt+wheel"),
-            )
-            .child(MediaCarousel::new(
-                "discover-carousel",
-                self.media_carousel.clone(),
-                Rc::clone(&self.carousel_items),
-                self.banner_cache.clone(),
-                self.carousel_wheel.clone(),
-            ))
     }
 }
 
@@ -966,10 +890,11 @@ mod tests {
         time::Duration,
     };
 
+    use crate::discover::DiscoverStore;
     use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
-        AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta,
-        Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
+        App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
+        ScrollDelta, Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
         base::Root,
         component::WindowExt,
         point, px, size,
@@ -979,6 +904,7 @@ mod tests {
         Route, SettingsTab,
         account::AccountStore,
         actions::OpenCommandPalette,
+        bridge::BridgeError,
         events::{Sender, channel, start_pump},
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
     };
@@ -1070,6 +996,9 @@ mod tests {
                                 }
                             },
                             |_, _| Task::ready(()),
+                            Rc::new(|_: String, _: &App| {
+                                Task::ready(Ok::<_, BridgeError>(DiscoverStore::default()))
+                            }),
                             window,
                             cx,
                         )
@@ -2030,63 +1959,18 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn the_discover_placeholder_shows_a_hero_with_and_without_a_banner(cx: &mut TestAppContext) {
+    fn the_discover_route_shows_its_view(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
-        assert!(!shell.shows(cx, "hero-with-banner"), "Home has no hero");
+        assert!(
+            !shell.shows(cx, "discover-view"),
+            "Home shows no Discover view"
+        );
 
         shell.click(cx, "rail-discover");
 
         assert!(
-            shell.shows(cx, "hero-with-banner"),
-            "the banner render exists"
+            shell.shows(cx, "discover-view"),
+            "Discover renders its view"
         );
-        assert!(
-            shell.shows(cx, "hero-with-image"),
-            "a media with a bannerImage loads it through the image cache"
-        );
-        assert!(
-            shell.shows(cx, "hero-without-banner"),
-            "the fallback render exists too"
-        );
-        assert!(
-            !shell.shows(cx, "hero-without-image"),
-            "a media without a bannerImage gets the gradient, not an img"
-        );
-    }
-
-    #[gpui_kit::test]
-    fn the_mock_carousel_renders_cards_and_its_arrow_pages(cx: &mut TestAppContext) {
-        let shell = Shell::open(cx);
-        shell.click(cx, "rail-discover");
-
-        assert!(
-            shell.shows(cx, "discover-carousel"),
-            "the carousel is on screen"
-        );
-        assert!(
-            shell.shows(cx, "discover-carousel-card-0"),
-            "the first media card is drawn"
-        );
-        let selected = |cx: &mut TestAppContext| {
-            shell.view.read_with(cx, |shell, cx| {
-                shell
-                    .media_carousel
-                    .read_with(cx, |state, _| state.selected_index())
-            })
-        };
-        assert_eq!(selected(cx), Some(0));
-
-        // The placeholder's long list puts the arrows below the fold.
-        shell.act(cx, |window, cx| {
-            window.scroll(
-                "route-view",
-                ScrollDelta::Pixels(point(px(0.), px(-520.))),
-                cx,
-            );
-        });
-        shell.click(cx, "discover-carousel-next");
-        assert_eq!(selected(cx), Some(1), "the next arrow paged one card");
-        shell.click(cx, "discover-carousel-previous");
-        assert_eq!(selected(cx), Some(0), "the previous arrow paged back");
     }
 }

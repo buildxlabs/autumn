@@ -11,8 +11,8 @@ mod placeholder;
 mod shell;
 
 pub use discover::{
-    AIRING_TTL, CATALOG_TTL, DiscoverCatalog, DiscoverKey, DiscoverSection, DiscoverStore,
-    RealDiscoverCatalog, Section, SectionEntries, SectionLoad,
+    AIRING_TTL, CATALOG_TTL, DiscoverCatalog, DiscoverKey, DiscoverLoader, DiscoverSection,
+    DiscoverStore, DiscoverView, RealDiscoverCatalog, Section, SectionEntries, SectionLoad,
 };
 
 pub use shell::{AppShell, PosterCacheAction, RailMode, RailPrefs, SYSTEM_ROUTES};

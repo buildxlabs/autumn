@@ -1,10 +1,22 @@
 //! The Discover screen's data layer: eight sections, each stale-first and
 //! independently recoverable (#62, decisions #23 and #31).
 
-use std::{future::Future, time::Duration};
+use std::{future::Future, rc::Rc, time::Duration};
 
-use domain::SectionFetch;
+use domain::{MediaKind, SectionFetch};
+use gpui_kit::{
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
+    Resource, Styled, Task, TestSupportExt, Window,
+    component::{ActiveTheme, button::Button, carousel::CarouselState},
+    div, px,
+};
 use metadata::{AiringEpisode, AniList, CatalogCache, CountryTrends, Error, Load, MediaSummary};
+use ui_components::{
+    CarouselWheel, LruImageCache, MEDIA_CARD_HEIGHT, MediaCardView, MediaCarousel,
+    MediaFormat as CardFormat,
+    hero::{HeroBannerData, hero_banner},
+};
+use ui_state::bridge::BridgeError;
 
 /// How long a catalog section stays fresh before it is refreshed (#31).
 pub const CATALOG_TTL: Duration = Duration::from_hours(6);
@@ -411,6 +423,267 @@ async fn load_section<C: DiscoverCatalog>(
     }
 }
 
+/// Loads the eight sections for one account. The composition root builds
+/// this around the stale-first catalog cache; tests use a fake.
+pub type DiscoverLoader = Rc<dyn Fn(String, &App) -> Task<Result<DiscoverStore, BridgeError>>>;
+
+/// The action run when a carousel card's Open menu item is used.
+type CardAction = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+
+/// The Discover screen: a hero and seven carousels, each rendering its own
+/// fetch outcome so a failed section cannot hide the others.
+pub struct DiscoverView {
+    store: DiscoverStore,
+    loader: DiscoverLoader,
+    user: String,
+    task: Option<Task<()>>,
+    cache: Entity<LruImageCache>,
+    carousel_states: Vec<Entity<CarouselState>>,
+    wheels: Vec<CarouselWheel>,
+    /// Optional seam for the Entry screen to open a card's media later.
+    on_open: Option<CardAction>,
+}
+
+impl std::fmt::Debug for DiscoverView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiscoverView")
+            .field("sections", &self.store.sections().len())
+            .field("user", &self.user)
+            .finish_non_exhaustive()
+    }
+}
+
+impl DiscoverView {
+    /// A view that loads `user`'s catalog through `loader`. The cache is
+    /// shared with the shell's other images.
+    #[must_use]
+    pub fn new(
+        user: String,
+        loader: DiscoverLoader,
+        cache: Entity<LruImageCache>,
+        cx: &mut App,
+    ) -> Entity<Self> {
+        let carousel_states = (0..10).map(|_| cx.new(|_| CarouselState::new(0))).collect();
+        let wheels = (0..10).map(|_| CarouselWheel::default()).collect();
+        cx.new(|_| Self {
+            store: DiscoverStore::default(),
+            loader,
+            user,
+            task: None,
+            cache,
+            carousel_states,
+            wheels,
+            on_open: None,
+        })
+    }
+
+    /// Sets the action run when a carousel card's Open menu item is used.
+    /// The Entry screen can attach its navigation here when it lands.
+    pub fn set_on_open(&mut self, on_open: impl Fn(usize, &mut Window, &mut App) + 'static) {
+        self.on_open = Some(Rc::new(on_open));
+    }
+
+    /// Starts a load, replacing and so cancelling any older one.
+    pub fn load(&mut self, cx: &mut Context<'_, Self>) {
+        let task = (self.loader)(self.user.clone(), cx);
+        self.task = Some(cx.spawn(async move |view, cx| {
+            let result = task.await;
+            let _ = view.update(cx, |view, cx| {
+                if let Ok(store) = result {
+                    view.store = store;
+                }
+                view.task = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    fn carousel(
+        &self,
+        id: &str,
+        title: &str,
+        entries: &SectionEntries,
+        state: &SectionFetch,
+        index: usize,
+    ) -> impl IntoElement {
+        let body = if let SectionFetch::Failed(message) = state {
+            div()
+                .h(px(MEDIA_CARD_HEIGHT))
+                .child(format!("Could not load {title}: {message}"))
+                .into_any_element()
+        } else {
+            let cards = card_views(entries);
+            if cards.is_empty() {
+                div()
+                    .h(px(MEDIA_CARD_HEIGHT))
+                    .child("Nothing to show yet")
+                    .into_any_element()
+            } else if let (Some(carousel_state), Some(wheel)) =
+                (self.carousel_states.get(index), self.wheels.get(index))
+            {
+                let mut carousel = MediaCarousel::new(
+                    id,
+                    carousel_state.clone(),
+                    cards,
+                    self.cache.clone(),
+                    wheel.clone(),
+                );
+                if let Some(on_open) = &self.on_open {
+                    let on_open = Rc::clone(on_open);
+                    carousel = carousel.on_open(move |index, window, cx| {
+                        on_open(index, window, cx);
+                    });
+                }
+                carousel.into_any_element()
+            } else {
+                div().into_any_element()
+            }
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(div().text_xl().child(title.to_owned()))
+            .child(body)
+    }
+}
+
+fn title_of(media: &MediaSummary) -> String {
+    media
+        .title
+        .english
+        .clone()
+        .or_else(|| media.title.romaji.clone())
+        .or_else(|| media.title.native.clone())
+        .unwrap_or_default()
+}
+
+fn media_card(media: &MediaSummary) -> MediaCardView {
+    let format = match media.kind {
+        Some(MediaKind::Anime) => Some(CardFormat::Anime),
+        Some(MediaKind::Manga) => Some(CardFormat::Manga),
+        _ => None,
+    };
+    MediaCardView {
+        poster: media
+            .poster
+            .as_ref()
+            .map(|url| Resource::Uri(url.clone().into())),
+        title: title_of(media).into(),
+        format,
+        score: media.mean_score.map(f32::from),
+        progress: 0,
+        total: media.episodes.or(media.chapters),
+        detail: media.genres.first().cloned().unwrap_or_default().into(),
+    }
+}
+
+fn card_views(entries: &SectionEntries) -> Rc<[MediaCardView]> {
+    match entries {
+        SectionEntries::Media(media) => media.iter().map(media_card).collect(),
+        SectionEntries::Schedule(schedule) => schedule
+            .iter()
+            .map(|entry| media_card(&entry.media))
+            .collect(),
+        SectionEntries::Countries(_) => Rc::from([]),
+    }
+}
+
+fn first_media(entries: &SectionEntries) -> Option<&MediaSummary> {
+    match entries {
+        SectionEntries::Media(media) => media.first(),
+        SectionEntries::Schedule(schedule) => schedule.first().map(|entry| &entry.media),
+        SectionEntries::Countries(trends) => trends.japan.first(),
+    }
+}
+
+impl Render for DiscoverView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let mut index = 0usize;
+        let mut sections = Vec::new();
+        for section in self.store.sections() {
+            match section.section {
+                DiscoverSection::Trending => {
+                    if let Some(media) = first_media(&section.entries) {
+                        let data = HeroBannerData {
+                            title: title_of(media).into(),
+                            synopsis: String::new().into(),
+                            banner: media.banner.clone(),
+                        };
+                        sections.push(
+                            div()
+                                .id("discover-hero")
+                                .test_support()
+                                .child(hero_banner(
+                                    "discover-hero",
+                                    data,
+                                    &self.cache,
+                                    colors.accent,
+                                    colors.background,
+                                    div().child(
+                                        Button::new("discover-hero-details").label("Details"),
+                                    ),
+                                ))
+                                .into_any_element(),
+                        );
+                    }
+                }
+                DiscoverSection::TrendingByCountry => {
+                    if let SectionEntries::Countries(trends) = &section.entries {
+                        for (label, media) in [
+                            ("Japan", &trends.japan),
+                            ("South Korea", &trends.korea),
+                            ("China", &trends.china),
+                        ] {
+                            // A failed country keeps its failure to itself:
+                            // the other two still render their media.
+                            let state = if media.is_empty() {
+                                section.state.clone()
+                            } else {
+                                SectionFetch::Ready
+                            };
+                            sections.push(
+                                self.carousel(
+                                    &format!("discover-country-{label}"),
+                                    label,
+                                    &SectionEntries::Media(media.clone()),
+                                    &state,
+                                    index,
+                                )
+                                .into_any_element(),
+                            );
+                            index += 1;
+                        }
+                    }
+                }
+                _ => {
+                    sections.push(
+                        self.carousel(
+                            &format!("discover-section-{}", section.section.title()),
+                            section.section.title(),
+                            &section.entries,
+                            &section.state,
+                            index,
+                        )
+                        .into_any_element(),
+                    );
+                    index += 1;
+                }
+            }
+        }
+        div()
+            .id("discover-view")
+            .test_support()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .p_6()
+            .children(sections)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -525,6 +798,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn card_views_map_a_catalog_summary_to_a_media_card() {
+        let mut media = media_summary("A title");
+        media.poster = Some("https://example.test/poster.jpg".to_owned());
+        let views = card_views(&SectionEntries::Media(vec![media]));
+        let card = views.first().expect("one card");
+        assert_eq!(
+            card.title,
+            String::from("A title"),
+            "the title is shown on the card"
+        );
+        assert!(
+            card.poster.is_some(),
+            "a poster URL becomes an image resource"
+        );
+    }
+
     #[tokio::test]
     async fn the_eight_sections_render_in_ticket_order() {
         let store = DiscoverStore::load(&FakeCatalog::default(), "viewer").await;
@@ -561,6 +851,27 @@ mod tests {
                 section.section.title()
             );
         }
+    }
+
+    #[tokio::test]
+    async fn one_failed_country_does_not_hide_the_other_two() {
+        let catalog = FakeCatalog::failing(DiscoverKey::Japan);
+        let store = DiscoverStore::load(&catalog, "viewer").await;
+        let country = store
+            .sections()
+            .iter()
+            .find(|section| section.section == DiscoverSection::TrendingByCountry)
+            .unwrap();
+        assert!(
+            matches!(country.entries, SectionEntries::Countries(_)),
+            "the country section holds three carousels"
+        );
+        let SectionEntries::Countries(trends) = &country.entries else {
+            return;
+        };
+        assert!(trends.japan.is_empty(), "Japan failed");
+        assert!(!trends.korea.is_empty(), "Korea still renders");
+        assert!(!trends.china.is_empty(), "China still renders");
     }
 
     #[tokio::test]

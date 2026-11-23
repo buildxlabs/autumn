@@ -8,7 +8,7 @@ mod rail_prefs;
 mod settings_store;
 mod startup;
 
-use std::{fmt::Display, process::ExitCode, sync::Arc, time::SystemTime};
+use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 
 use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
@@ -18,7 +18,9 @@ use gpui_kit::{
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use metadata::{AniList, CatalogCache};
-use ui_screens::{AppShell, PosterCacheAction, RailPrefs};
+use ui_screens::{
+    AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
+};
 use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
 
@@ -74,6 +76,17 @@ fn main() -> ExitCode {
     let prefs = rail_prefs::from_settings(&started.settings);
     let storage_request = poster_cache_request(started.poster_cache.clone());
     let save_prefs = rail_prefs::saver(started.db.clone(), started.settings);
+    let discover_catalog = RealDiscoverCatalog::new(
+        CatalogCache::new(anilist.clone(), started.poster_cache.clone()),
+        anilist.clone(),
+    );
+    let discover_loader: DiscoverLoader = Rc::new(move |user, cx| {
+        let catalog = discover_catalog.clone();
+        ui_state::bridge::run(
+            cx,
+            async move { DiscoverStore::load(&catalog, &user).await },
+        )
+    });
 
     let http_client =
         http_client::PosterHttpClient::new(client.clone(), started.poster_cache, handle.clone());
@@ -106,6 +119,7 @@ fn main() -> ExitCode {
                 save_prefs,
                 storage_request,
                 account_request,
+                discover_loader,
                 started.db.clone(),
                 anilist,
                 catalog,
@@ -159,6 +173,7 @@ fn open_main_window(
     save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+    discover_loader: DiscoverLoader,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -176,6 +191,7 @@ fn open_main_window(
                 save_prefs,
                 storage_request,
                 account_request,
+                discover_loader,
                 db,
                 anilist,
                 catalog,
@@ -221,11 +237,13 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use db::Db;
-    use gpui_kit::{AppContext, Task, TestAppContext};
+    use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
-    use ui_screens::RailPrefs;
-    use ui_state::account::AccountStore;
+    use ui_screens::{DiscoverStore, RailPrefs};
+    use ui_state::{account::AccountStore, bridge::BridgeError};
 
     use super::{FetchStatus, open_main_window};
 
@@ -256,6 +274,9 @@ mod tests {
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
                 |_, _| Task::ready(()),
+                Rc::new(|_: String, _: &App| {
+                    Task::ready(Ok::<_, BridgeError>(DiscoverStore::default()))
+                }),
                 db,
                 anilist,
                 catalog,
