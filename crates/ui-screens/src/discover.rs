@@ -1,7 +1,12 @@
 //! The Discover screen's data layer: eight sections, each stale-first and
 //! independently recoverable (#62, decisions #23 and #31).
 
-use std::{future::Future, rc::Rc, time::Duration};
+use std::{
+    future::Future,
+    pin::Pin,
+    rc::Rc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use domain::{MediaKind, SectionFetch};
 use gpui_kit::{
@@ -10,25 +15,23 @@ use gpui_kit::{
     component::{ActiveTheme, button::Button, carousel::CarouselState},
     div, px,
 };
-use metadata::{AiringEpisode, AniList, CatalogCache, CountryTrends, Error, Load, MediaSummary};
+use metadata::{
+    AIRING_TTL, AiringEpisode, AniList, CATALOG_TTL, Cached, CatalogCache, CountryTrends, Error,
+    Load, MediaSummary, Refresh,
+};
 use ui_components::{
     CarouselWheel, LruImageCache, MEDIA_CARD_HEIGHT, MediaCardView, MediaCarousel,
     MediaFormat as CardFormat,
     hero::{HeroBannerData, hero_banner},
 };
-use ui_state::bridge::BridgeError;
+use ui_state::bridge::{self, BridgeError};
 
-/// How long a catalog section stays fresh before it is refreshed (#31).
-pub const CATALOG_TTL: Duration = Duration::from_hours(6);
-/// How long the airing schedule stays fresh before it is refreshed (#31).
-pub const AIRING_TTL: Duration = Duration::from_hours(1);
+/// One carousel for every section but the hero, with the country section
+/// expanded into three rows.
+const CAROUSEL_COUNT: usize = DiscoverSection::ORDER.len() + 1;
 
 /// One cached request behind a Discover section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "the cache keys are this crate's contract with its catalog service"
-)]
 pub enum DiscoverKey {
     /// Trending Anime, the hero.
     Trending,
@@ -56,7 +59,7 @@ impl DiscoverKey {
     /// The stable cache key for this request. Missed Sequels depends on the
     /// account, so it is keyed by user; no other key is.
     #[must_use]
-    pub fn cache_key(self, user: &str) -> String {
+    pub(crate) fn cache_key(self, user: &str) -> String {
         let name = match self {
             Self::Trending => "trending",
             Self::Popular => "popular",
@@ -74,21 +77,31 @@ impl DiscoverKey {
 
     /// How long this request stays fresh.
     #[must_use]
-    pub const fn ttl(self) -> Duration {
+    pub(crate) const fn ttl(self) -> Duration {
         match self {
             Self::AiringSchedule => AIRING_TTL,
             _ => CATALOG_TTL,
+        }
+    }
+
+    /// The display section this key feeds.
+    const fn section(self) -> DiscoverSection {
+        match self {
+            Self::Trending => DiscoverSection::Trending,
+            Self::Popular => DiscoverSection::Popular,
+            Self::UpcomingSeason => DiscoverSection::UpcomingSeason,
+            Self::TrendingMovies => DiscoverSection::TrendingMovies,
+            Self::AiringSchedule => DiscoverSection::AiringSchedule,
+            Self::MissedSequels => DiscoverSection::MissedSequels,
+            Self::TrendingManga => DiscoverSection::TrendingManga,
+            Self::Japan | Self::Korea | Self::China => DiscoverSection::TrendingByCountry,
         }
     }
 }
 
 /// The eight carousels of the Discover screen, in display order (#23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "the screen renders every section, so a new one must be handled here"
-)]
-pub enum DiscoverSection {
+pub(crate) enum DiscoverSection {
     /// Trending Anime, shown as the hero.
     Trending,
     /// Popular Anime.
@@ -109,7 +122,7 @@ pub enum DiscoverSection {
 
 impl DiscoverSection {
     /// The sections in the order the ticket lists them.
-    pub const ORDER: [Self; 8] = [
+    pub(crate) const ORDER: [Self; 8] = [
         Self::Trending,
         Self::Popular,
         Self::UpcomingSeason,
@@ -122,7 +135,7 @@ impl DiscoverSection {
 
     /// The heading of this section.
     #[must_use]
-    pub const fn title(self) -> &'static str {
+    pub(crate) const fn title(self) -> &'static str {
         match self {
             Self::Trending => "Trending Anime",
             Self::Popular => "Popular Anime",
@@ -138,11 +151,7 @@ impl DiscoverSection {
 
 /// The media of one section.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "each section knows which of these three shapes it renders"
-)]
-pub enum SectionEntries {
+pub(crate) enum SectionEntries {
     /// Media, from any of the media carousels.
     Media(Vec<MediaSummary>),
     /// Upcoming episode releases.
@@ -151,24 +160,37 @@ pub enum SectionEntries {
     Countries(CountryTrends),
 }
 
-/// One cached request's result, with the fetch state needed to render it.
+/// One value to show, with the fetch state needed to render it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SectionLoad {
-    /// The value to show, stale if a refresh is in flight or failed.
-    pub entries: SectionEntries,
-    /// When AniList returned this value.
-    pub updated_at: std::time::SystemTime,
-    /// Whether the last refresh could not reach AniList.
-    pub offline: bool,
-    /// A refresh failed with a real answer, such as an API error. The
-    /// cached value is still shown, but the section can report the problem.
-    pub refresh_error: Option<String>,
+struct SectionValue {
+    entries: SectionEntries,
+    updated_at: SystemTime,
+    offline: bool,
 }
+
+/// A value served now and, when it is stale, a refresh to run in the
+/// background. The refresh is `'static` so the UI can run it on the bridge.
+pub struct LoadedSection {
+    value: SectionValue,
+    refresh: Option<SectionRefresh>,
+}
+
+impl std::fmt::Debug for LoadedSection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedSection")
+            .field("value", &self.value)
+            .field("has_refresh", &self.refresh.is_some())
+            .finish()
+    }
+}
+
+/// A pending refresh, applied to its section when it lands.
+type SectionRefresh = Pin<Box<dyn Future<Output = Result<SectionValue, Error>> + Send>>;
 
 /// The cached catalog requests Discover needs. Implemented by the real
 /// [`metadata::CatalogCache`] wrapper and by fakes in tests.
 pub trait DiscoverCatalog: Send + Sync {
-    /// Serve one request stale-first, fetching when there is no fresh value.
+    /// Serve one request's cached value at once, with a pending refresh.
     ///
     /// # Errors
     ///
@@ -177,7 +199,7 @@ pub trait DiscoverCatalog: Send + Sync {
         &self,
         key: DiscoverKey,
         user: &str,
-    ) -> impl Future<Output = Result<SectionLoad, Error>> + Send;
+    ) -> impl Future<Output = Result<LoadedSection, Error>> + Send;
 }
 
 /// The [`DiscoverCatalog`] backed by the stale-first metadata cache.
@@ -199,12 +221,12 @@ impl RealDiscoverCatalog {
         key: DiscoverKey,
         user: &str,
         fetch: impl Future<Output = Result<Vec<MediaSummary>, Error>> + Send + 'static,
-    ) -> Result<SectionLoad, Error> {
-        let load = self
+    ) -> Result<LoadedSection, Error> {
+        let Load { cached, refresh } = self
             .cache
             .section(key.cache_key(user), key.ttl(), fetch)
             .await?;
-        Ok(resolve(load, SectionEntries::Media).await)
+        Ok(loaded(cached, refresh, SectionEntries::Media))
     }
 
     async fn schedule(
@@ -212,37 +234,47 @@ impl RealDiscoverCatalog {
         key: DiscoverKey,
         user: &str,
         fetch: impl Future<Output = Result<Vec<AiringEpisode>, Error>> + Send + 'static,
-    ) -> Result<SectionLoad, Error> {
-        let load = self
+    ) -> Result<LoadedSection, Error> {
+        let Load { cached, refresh } = self
             .cache
             .section(key.cache_key(user), key.ttl(), fetch)
             .await?;
-        Ok(resolve(load, SectionEntries::Schedule).await)
+        Ok(loaded(cached, refresh, SectionEntries::Schedule))
     }
 }
 
-/// Use the cached value at once, awaiting a refresh when one is due. A
-/// failed refresh keeps the stale value on screen and reports the error so
-/// only that section shows a recovery affordance.
-async fn resolve<T>(load: Load<T>, wrap: impl FnOnce(T) -> SectionEntries) -> SectionLoad {
-    let Load { cached, refresh } = load;
-    let (cached, refresh_error) = match refresh {
-        Some(refresh) => match refresh.await {
-            Ok(cached) => (cached, None),
-            Err(error) => (cached, Some(error.to_string())),
-        },
-        None => (cached, None),
-    };
-    SectionLoad {
+/// Wrap a cached value and turn a stale one into a background refresh.
+fn loaded<T>(
+    cached: Cached<T>,
+    refresh: Option<Refresh<T>>,
+    wrap: fn(T) -> SectionEntries,
+) -> LoadedSection
+where
+    T: Send + 'static,
+{
+    let updated_at = cached.updated_at;
+    let offline = cached.offline;
+    let value = SectionValue {
         entries: wrap(cached.value),
-        updated_at: cached.updated_at,
-        offline: cached.offline,
-        refresh_error,
-    }
+        updated_at,
+        offline,
+    };
+    let refresh = refresh.map(|refresh| {
+        let future: SectionRefresh = Box::pin(async move {
+            let refreshed = refresh.await?;
+            Ok(SectionValue {
+                entries: wrap(refreshed.value),
+                updated_at: refreshed.updated_at,
+                offline: refreshed.offline,
+            })
+        });
+        future
+    });
+    LoadedSection { value, refresh }
 }
 
 impl DiscoverCatalog for RealDiscoverCatalog {
-    async fn load(&self, key: DiscoverKey, user: &str) -> Result<SectionLoad, Error> {
+    async fn load(&self, key: DiscoverKey, user: &str) -> Result<LoadedSection, Error> {
         let anilist = self.anilist.clone();
         match key {
             DiscoverKey::Trending => {
@@ -295,83 +327,255 @@ impl DiscoverCatalog for RealDiscoverCatalog {
 
 /// One rendered section and the outcome of its fetch.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Section {
+pub(crate) struct Section {
     /// Which carousel this is.
-    pub section: DiscoverSection,
+    pub(crate) kind: DiscoverSection,
     /// The media to render; empty when the fetch failed with no cache.
-    pub entries: SectionEntries,
+    pub(crate) entries: SectionEntries,
     /// The outcome of this section's fetch, independent of the others.
-    pub state: SectionFetch,
+    pub(crate) state: SectionFetch,
+    /// Each country's fetch state, in JP/KR/CN order.
+    country_states: [SectionFetch; 3],
 }
 
 /// The eight Discover sections, loaded independently.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DiscoverStore {
     sections: Vec<Section>,
 }
 
+/// A cached snapshot and the refreshes still in flight.
+#[derive(Debug, Default)]
+pub struct DiscoverUpdate {
+    store: DiscoverStore,
+    pending: Vec<PendingRefresh>,
+}
+
+impl DiscoverUpdate {
+    /// A snapshot with nothing to refresh, for loaders serving cached data.
+    #[must_use]
+    pub fn new(store: DiscoverStore) -> Self {
+        Self {
+            store,
+            pending: Vec::new(),
+        }
+    }
+}
+
+/// One refresh waiting to be applied to its key's section.
+struct PendingRefresh {
+    key: DiscoverKey,
+    refresh: SectionRefresh,
+}
+
+impl std::fmt::Debug for PendingRefresh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingRefresh")
+            .field("key", &self.key)
+            .finish_non_exhaustive()
+    }
+}
+
 impl DiscoverStore {
     /// The sections in display order.
-    #[must_use]
-    pub fn sections(&self) -> &[Section] {
+    pub(crate) fn sections(&self) -> &[Section] {
         &self.sections
     }
 
-    /// Load every section, keeping each section's error to itself.
-    pub async fn load<C: DiscoverCatalog>(catalog: &C, user: &str) -> Self {
+    /// Publish every cached section at once, keeping each section's error to
+    /// itself. Stale sections come with a refresh the caller runs separately,
+    /// so a slow section cannot hold up the others.
+    pub async fn load<C: DiscoverCatalog>(catalog: &C, user: Option<&str>) -> DiscoverUpdate {
         let mut sections = Vec::with_capacity(DiscoverSection::ORDER.len());
+        let mut pending = Vec::new();
         for section in DiscoverSection::ORDER {
-            sections.push(load_section(catalog, user, section).await);
+            if section == DiscoverSection::TrendingByCountry {
+                let KeyLoad {
+                    value: japan_value,
+                    refresh: japan_refresh,
+                    state: japan_state,
+                } = load_key(catalog, user, DiscoverKey::Japan).await;
+                let KeyLoad {
+                    value: korea_value,
+                    refresh: korea_refresh,
+                    state: korea_state,
+                } = load_key(catalog, user, DiscoverKey::Korea).await;
+                let KeyLoad {
+                    value: china_value,
+                    refresh: china_refresh,
+                    state: china_state,
+                } = load_key(catalog, user, DiscoverKey::China).await;
+                let country_states = [japan_state, korea_state, china_state];
+                let state = country_state(&country_states);
+                for (key, refresh) in [
+                    (DiscoverKey::Japan, japan_refresh),
+                    (DiscoverKey::Korea, korea_refresh),
+                    (DiscoverKey::China, china_refresh),
+                ] {
+                    if let Some(refresh) = refresh {
+                        pending.push(PendingRefresh { key, refresh });
+                    }
+                }
+                sections.push(Section {
+                    kind: section,
+                    entries: SectionEntries::Countries(CountryTrends {
+                        japan: media_only(japan_value.entries),
+                        korea: media_only(korea_value.entries),
+                        china: media_only(china_value.entries),
+                    }),
+                    state,
+                    country_states,
+                });
+                continue;
+            }
+            let key = key_of(section);
+            let KeyLoad {
+                value,
+                refresh,
+                state,
+            } = load_key(catalog, user, key).await;
+            if let Some(refresh) = refresh {
+                pending.push(PendingRefresh { key, refresh });
+            }
+            sections.push(Section {
+                kind: section,
+                entries: value.entries,
+                state,
+                country_states: std::array::from_fn(|_| SectionFetch::Ready),
+            });
         }
-        Self { sections }
+        DiscoverUpdate {
+            store: Self { sections },
+            pending,
+        }
+    }
+
+    /// Apply one refresh outcome to its section, leaving the others alone.
+    fn apply(&mut self, key: DiscoverKey, value: Option<SectionValue>, error: Option<&str>) {
+        let state = match (error, &value) {
+            (Some(message), _) => SectionFetch::Failed(message.to_owned()),
+            (None, Some(value)) => value_state(value),
+            (None, None) => SectionFetch::Ready,
+        };
+        let Some(target) = self
+            .sections
+            .iter_mut()
+            .find(|section| section.kind == key.section())
+        else {
+            return;
+        };
+        if let (
+            DiscoverKey::Japan | DiscoverKey::Korea | DiscoverKey::China,
+            SectionEntries::Countries(countries),
+        ) = (key, &mut target.entries)
+        {
+            let slot = match key {
+                DiscoverKey::Japan => &mut countries.japan,
+                DiscoverKey::Korea => &mut countries.korea,
+                _ => &mut countries.china,
+            };
+            if let Some(SectionValue {
+                entries: SectionEntries::Media(media),
+                ..
+            }) = value
+            {
+                *slot = media;
+            }
+            let index = match key {
+                DiscoverKey::Japan => 0,
+                DiscoverKey::Korea => 1,
+                _ => 2,
+            };
+            if let Some(slot) = target.country_states.get_mut(index) {
+                *slot = state;
+            }
+            target.state = country_state(&target.country_states);
+        } else {
+            if let Some(value) = value {
+                target.entries = value.entries;
+            }
+            target.state = state;
+        }
     }
 }
 
 /// One key's result, before it is placed in a display section.
 struct KeyLoad {
-    entries: SectionEntries,
+    value: SectionValue,
+    refresh: Option<SectionRefresh>,
     state: SectionFetch,
 }
 
 /// Load one key; a failed request is data for that section, not an error
-/// that stops the other seven from rendering.
-async fn load_key<C: DiscoverCatalog>(catalog: &C, user: &str, key: DiscoverKey) -> KeyLoad {
-    match catalog.load(key, user).await {
-        Ok(load) => {
-            let state = if let Some(message) = load.refresh_error {
-                SectionFetch::Failed(message)
-            } else if load.offline {
-                SectionFetch::Offline {
-                    last_updated: Some(load.updated_at),
-                }
-            } else {
-                SectionFetch::Ready
-            };
+/// that stops the other seven from rendering. A guest skips the one request
+/// that reads their personal collection.
+async fn load_key<C: DiscoverCatalog>(
+    catalog: &C,
+    user: Option<&str>,
+    key: DiscoverKey,
+) -> KeyLoad {
+    if key == DiscoverKey::MissedSequels && user.is_none() {
+        return KeyLoad {
+            value: empty_value(key),
+            refresh: None,
+            state: SectionFetch::Ready,
+        };
+    }
+    match catalog.load(key, user.unwrap_or_default()).await {
+        Ok(loaded) => {
+            let state = value_state(&loaded.value);
             KeyLoad {
-                entries: load.entries,
+                value: loaded.value,
+                refresh: loaded.refresh,
                 state,
             }
         }
         Err(error) => KeyLoad {
-            entries: if key == DiscoverKey::AiringSchedule {
-                SectionEntries::Schedule(Vec::new())
-            } else {
-                SectionEntries::Media(Vec::new())
-            },
+            value: empty_value(key),
+            refresh: None,
             state: SectionFetch::Failed(error.to_string()),
         },
     }
 }
 
-fn media_of(load: KeyLoad) -> Vec<MediaSummary> {
-    match load.entries {
-        SectionEntries::Media(media) => media,
-        _ => Vec::new(),
+fn key_of(section: DiscoverSection) -> DiscoverKey {
+    match section {
+        DiscoverSection::Trending => DiscoverKey::Trending,
+        DiscoverSection::Popular => DiscoverKey::Popular,
+        DiscoverSection::UpcomingSeason => DiscoverKey::UpcomingSeason,
+        DiscoverSection::TrendingMovies => DiscoverKey::TrendingMovies,
+        DiscoverSection::AiringSchedule => DiscoverKey::AiringSchedule,
+        DiscoverSection::MissedSequels => DiscoverKey::MissedSequels,
+        DiscoverSection::TrendingManga => DiscoverKey::TrendingManga,
+        DiscoverSection::TrendingByCountry => DiscoverKey::Japan,
+    }
+}
+
+fn empty_value(key: DiscoverKey) -> SectionValue {
+    let entries = if key == DiscoverKey::AiringSchedule {
+        SectionEntries::Schedule(Vec::new())
+    } else {
+        SectionEntries::Media(Vec::new())
+    };
+    SectionValue {
+        entries,
+        updated_at: UNIX_EPOCH,
+        offline: false,
+    }
+}
+
+fn value_state(value: &SectionValue) -> SectionFetch {
+    if value.offline {
+        SectionFetch::Offline {
+            last_updated: Some(value.updated_at),
+        }
+    } else {
+        SectionFetch::Ready
     }
 }
 
 /// The country section shows what it has and reports the first failure.
-fn country_state(states: [&SectionFetch; 3]) -> SectionFetch {
+fn country_state(states: &[SectionFetch; 3]) -> SectionFetch {
     for state in states {
         if let SectionFetch::Failed(message) = state {
             return SectionFetch::Failed(message.clone());
@@ -386,57 +590,24 @@ fn country_state(states: [&SectionFetch; 3]) -> SectionFetch {
     SectionFetch::Ready
 }
 
-async fn load_section<C: DiscoverCatalog>(
-    catalog: &C,
-    user: &str,
-    section: DiscoverSection,
-) -> Section {
-    let key = match section {
-        DiscoverSection::Trending => DiscoverKey::Trending,
-        DiscoverSection::Popular => DiscoverKey::Popular,
-        DiscoverSection::UpcomingSeason => DiscoverKey::UpcomingSeason,
-        DiscoverSection::TrendingMovies => DiscoverKey::TrendingMovies,
-        DiscoverSection::AiringSchedule => DiscoverKey::AiringSchedule,
-        DiscoverSection::MissedSequels => DiscoverKey::MissedSequels,
-        DiscoverSection::TrendingManga => DiscoverKey::TrendingManga,
-        DiscoverSection::TrendingByCountry => {
-            let japan = load_key(catalog, user, DiscoverKey::Japan).await;
-            let korea = load_key(catalog, user, DiscoverKey::Korea).await;
-            let china = load_key(catalog, user, DiscoverKey::China).await;
-            let state = country_state([&japan.state, &korea.state, &china.state]);
-            return Section {
-                section,
-                entries: SectionEntries::Countries(CountryTrends {
-                    japan: media_of(japan),
-                    korea: media_of(korea),
-                    china: media_of(china),
-                }),
-                state,
-            };
-        }
-    };
-    let loaded = load_key(catalog, user, key).await;
-    Section {
-        section,
-        entries: loaded.entries,
-        state: loaded.state,
-    }
-}
-
 /// Loads the eight sections for one account. The composition root builds
 /// this around the stale-first catalog cache; tests use a fake.
-pub type DiscoverLoader = Rc<dyn Fn(String, &App) -> Task<Result<DiscoverStore, BridgeError>>>;
+pub type DiscoverLoader =
+    Rc<dyn Fn(Option<String>, &App) -> Task<Result<DiscoverUpdate, BridgeError>>>;
 
-/// The action run when a carousel card's Open menu item is used.
-type CardAction = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+/// The action run when a carousel card's Open menu item is used, with the
+/// card's AniList id so a later Entry screen can navigate to it.
+type CardAction = Rc<dyn Fn(u32, &mut Window, &mut App)>;
 
 /// The Discover screen: a hero and seven carousels, each rendering its own
 /// fetch outcome so a failed section cannot hide the others.
 pub struct DiscoverView {
     store: DiscoverStore,
     loader: DiscoverLoader,
-    user: String,
+    user: Option<String>,
     task: Option<Task<()>>,
+    refresh_tasks: Vec<Task<()>>,
+    error: Option<String>,
     cache: Entity<LruImageCache>,
     carousel_states: Vec<Entity<CarouselState>>,
     wheels: Vec<CarouselWheel>,
@@ -454,22 +625,29 @@ impl std::fmt::Debug for DiscoverView {
 }
 
 impl DiscoverView {
-    /// A view that loads `user`'s catalog through `loader`. The cache is
-    /// shared with the shell's other images.
+    /// A view that loads `user`'s catalog through `loader`. `None` is a guest,
+    /// whose personal sections are not requested. The cache is shared with
+    /// the shell's other images.
     #[must_use]
     pub fn new(
-        user: String,
+        user: Option<String>,
         loader: DiscoverLoader,
         cache: Entity<LruImageCache>,
         cx: &mut App,
     ) -> Entity<Self> {
-        let carousel_states = (0..10).map(|_| cx.new(|_| CarouselState::new(0))).collect();
-        let wheels = (0..10).map(|_| CarouselWheel::default()).collect();
+        let carousel_states = (0..CAROUSEL_COUNT)
+            .map(|_| cx.new(|_| CarouselState::new(0)))
+            .collect();
+        let wheels = (0..CAROUSEL_COUNT)
+            .map(|_| CarouselWheel::default())
+            .collect();
         cx.new(|_| Self {
             store: DiscoverStore::default(),
             loader,
             user,
             task: None,
+            refresh_tasks: Vec::new(),
+            error: None,
             cache,
             carousel_states,
             wheels,
@@ -477,26 +655,96 @@ impl DiscoverView {
         })
     }
 
+    /// Changes the account whose personal sections are loaded. The caller
+    /// starts a reload when the screen is on screen.
+    pub fn set_user(&mut self, user: Option<String>) {
+        self.user = user;
+    }
+
     /// Sets the action run when a carousel card's Open menu item is used.
     /// The Entry screen can attach its navigation here when it lands.
-    pub fn set_on_open(&mut self, on_open: impl Fn(usize, &mut Window, &mut App) + 'static) {
+    pub fn set_on_open(&mut self, on_open: impl Fn(u32, &mut Window, &mut App) + 'static) {
         self.on_open = Some(Rc::new(on_open));
     }
 
-    /// Starts a load, replacing and so cancelling any older one.
+    /// Starts a load, replacing and so cancelling any older one. The cached
+    /// values land at once; each stale section refreshes on its own task.
     pub fn load(&mut self, cx: &mut Context<'_, Self>) {
-        let task = (self.loader)(self.user.clone(), cx);
-        self.task = Some(cx.spawn(async move |view, cx| {
-            let result = task.await;
-            let _ = view.update(cx, |view, cx| {
-                if let Ok(store) = result {
-                    view.store = store;
+        let user = self.user.clone();
+        let task = (self.loader)(user, cx);
+        self.error = None;
+        self.task = Some(cx.spawn(async move |view, cx| match task.await {
+            Ok(DiscoverUpdate { store, pending }) => {
+                let mut refresh_tasks = Vec::with_capacity(pending.len());
+                for PendingRefresh { key, refresh } in pending {
+                    let refresh_task = cx.update(|cx| bridge::run(cx, refresh));
+                    let weak = view.clone();
+                    refresh_tasks.push(cx.spawn(async move |cx| {
+                        let outcome = match refresh_task.await {
+                            Ok(Ok(value)) => (Some(value), None),
+                            Ok(Err(error)) => (None, Some(error.to_string())),
+                            Err(error) => (None, Some(error.to_string())),
+                        };
+                        let _ = weak.update(cx, |view, cx| {
+                            view.store.apply(key, outcome.0, outcome.1.as_deref());
+                            cx.notify();
+                        });
+                    }));
                 }
-                view.task = None;
-                cx.notify();
-            });
+                let _ = view.update(cx, |view, cx| view.adopt(store, refresh_tasks, cx));
+            }
+            Err(error) => {
+                let _ = view.update(cx, |view, cx| {
+                    view.error = Some(error.to_string());
+                    view.task = None;
+                    cx.notify();
+                });
+            }
         }));
         cx.notify();
+    }
+
+    fn adopt(
+        &mut self,
+        store: DiscoverStore,
+        refresh_tasks: Vec<Task<()>>,
+        cx: &mut Context<'_, Self>,
+    ) {
+        self.store = store;
+        self.refresh_tasks = refresh_tasks;
+        self.task = None;
+        self.sync_carousel_counts(cx);
+        cx.notify();
+    }
+
+    /// A carousel built with no items never enabled its arrows. Tell each
+    /// state how many cards arrived so paging and selection work.
+    fn sync_carousel_counts(&mut self, cx: &mut Context<'_, Self>) {
+        let counts = self.carousel_counts();
+        for (index, count) in counts.into_iter().enumerate() {
+            if let Some(state) = self.carousel_states.get(index) {
+                cx.update_entity(state, |state, state_cx| {
+                    state.set_item_count(count, state_cx);
+                });
+            }
+        }
+    }
+
+    /// Card counts in the same order as [`Self::render`] emits carousels.
+    fn carousel_counts(&self) -> Vec<usize> {
+        let mut counts = Vec::new();
+        for section in self.store.sections() {
+            match section.kind {
+                DiscoverSection::Trending => {}
+                DiscoverSection::TrendingByCountry => {
+                    if let SectionEntries::Countries(trends) = &section.entries {
+                        counts.extend([trends.japan.len(), trends.korea.len(), trends.china.len()]);
+                    }
+                }
+                _ => counts.push(entry_len(&section.entries)),
+            }
+        }
+        counts
     }
 
     fn carousel(
@@ -531,8 +779,11 @@ impl DiscoverView {
                 );
                 if let Some(on_open) = &self.on_open {
                     let on_open = Rc::clone(on_open);
+                    let ids: Rc<[u32]> = anilist_ids(entries).into();
                     carousel = carousel.on_open(move |index, window, cx| {
-                        on_open(index, window, cx);
+                        if let Some(id) = ids.get(index) {
+                            on_open(*id, window, cx);
+                        }
                     });
                 }
                 carousel.into_any_element()
@@ -590,6 +841,31 @@ fn card_views(entries: &SectionEntries) -> Rc<[MediaCardView]> {
     }
 }
 
+fn entry_len(entries: &SectionEntries) -> usize {
+    match entries {
+        SectionEntries::Media(media) => media.len(),
+        SectionEntries::Schedule(schedule) => schedule.len(),
+        SectionEntries::Countries(_) => 0,
+    }
+}
+
+fn anilist_ids(entries: &SectionEntries) -> Vec<u32> {
+    match entries {
+        SectionEntries::Media(media) => media.iter().map(|item| item.anilist_id).collect(),
+        SectionEntries::Schedule(schedule) => {
+            schedule.iter().map(|item| item.media.anilist_id).collect()
+        }
+        SectionEntries::Countries(_) => Vec::new(),
+    }
+}
+
+fn media_only(entries: SectionEntries) -> Vec<MediaSummary> {
+    match entries {
+        SectionEntries::Media(media) => media,
+        _ => Vec::new(),
+    }
+}
+
 fn first_media(entries: &SectionEntries) -> Option<&MediaSummary> {
     match entries {
         SectionEntries::Media(media) => media.first(),
@@ -603,8 +879,17 @@ impl Render for DiscoverView {
         let colors = cx.theme().colors;
         let mut index = 0usize;
         let mut sections = Vec::new();
+        if let Some(message) = &self.error {
+            sections.push(
+                div()
+                    .id("discover-error")
+                    .test_support()
+                    .child(format!("Could not load Discover: {message}"))
+                    .into_any_element(),
+            );
+        }
         for section in self.store.sections() {
-            match section.section {
+            match section.kind {
                 DiscoverSection::Trending => {
                     if let Some(media) = first_media(&section.entries) {
                         let data = HeroBannerData {
@@ -661,8 +946,8 @@ impl Render for DiscoverView {
                 _ => {
                     sections.push(
                         self.carousel(
-                            &format!("discover-section-{}", section.section.title()),
-                            section.section.title(),
+                            &format!("discover-section-{}", section.kind.title()),
+                            section.kind.title(),
                             &section.entries,
                             &section.state,
                             index,
@@ -688,89 +973,125 @@ impl Render for DiscoverView {
 mod tests {
     use std::{
         collections::{HashMap, HashSet},
-        sync::{
-            Mutex,
-            atomic::{AtomicUsize, Ordering},
-        },
-        time::SystemTime,
+        sync::{Arc, Mutex},
     };
+
+    use gpui_kit::{TestAppContext, test::TestWindowExt};
 
     use super::*;
 
+    /// Whether a fetch is the first load or a refresh of a stale value.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum FetchKind {
+        Initial,
+        Refresh,
+    }
+
     /// A catalog that counts fetches and models each key's TTL with a
     /// movable clock, so the six-hour boundary is observable.
-    #[derive(Debug, Default)]
+    #[derive(Debug, Clone, Default)]
     struct FakeCatalog {
-        fetches: AtomicUsize,
-        failing: HashSet<DiscoverKey>,
-        failing_refresh: HashSet<DiscoverKey>,
-        fetched_at: Mutex<HashMap<DiscoverKey, Duration>>,
-        now: Mutex<Duration>,
+        fetches: Arc<std::sync::atomic::AtomicUsize>,
+        failing: Arc<Mutex<HashSet<DiscoverKey>>>,
+        failing_refresh: Arc<Mutex<HashSet<DiscoverKey>>>,
+        fetched_at: Arc<Mutex<HashMap<DiscoverKey, Duration>>>,
+        now: Arc<Mutex<Duration>>,
     }
 
     impl FakeCatalog {
         fn failing(key: DiscoverKey) -> Self {
             Self {
-                failing: HashSet::from([key]),
+                failing: Arc::new(Mutex::new(HashSet::from([key]))),
                 ..Self::default()
             }
         }
 
-        fn failing_refresh(key: DiscoverKey) -> Self {
-            Self {
-                failing_refresh: HashSet::from([key]),
-                ..Self::default()
-            }
+        fn fail_refresh(&self, key: DiscoverKey) {
+            self.failing_refresh
+                .lock()
+                .expect("lock poisoned")
+                .insert(key);
         }
 
         fn fetches(&self) -> usize {
-            self.fetches.load(Ordering::SeqCst)
+            self.fetches.load(std::sync::atomic::Ordering::SeqCst)
         }
 
         fn advance(&self, by: Duration) {
-            *self.now.lock().unwrap() += by;
+            *self.now.lock().expect("lock poisoned") += by;
         }
 
-        fn entries(&self, key: DiscoverKey) -> SectionLoad {
+        fn entries(key: DiscoverKey) -> SectionValue {
             let entries = if key == DiscoverKey::AiringSchedule {
                 SectionEntries::Schedule(Vec::new())
             } else {
                 SectionEntries::Media(vec![media_summary(&key.cache_key("viewer"))])
             };
-            SectionLoad {
+            SectionValue {
                 entries,
-                updated_at: SystemTime::UNIX_EPOCH,
+                updated_at: UNIX_EPOCH,
                 offline: false,
-                refresh_error: self
-                    .failing_refresh
-                    .contains(&key)
-                    .then(|| "refresh failed".to_owned()),
             }
         }
 
-        async fn serve(&self, key: DiscoverKey) -> Result<SectionLoad, Error> {
-            std::future::ready(()).await;
-            let now = *self.now.lock().unwrap();
-            if let Some(fetched_at) = self.fetched_at.lock().unwrap().get(&key)
-                && now.saturating_sub(*fetched_at) < key.ttl()
+        fn fetch(
+            &self,
+            key: DiscoverKey,
+            now: Duration,
+            kind: FetchKind,
+        ) -> Result<SectionValue, Error> {
+            self.fetches
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.failing.lock().expect("lock poisoned").contains(&key)
+                || (kind == FetchKind::Refresh
+                    && self
+                        .failing_refresh
+                        .lock()
+                        .expect("lock poisoned")
+                        .contains(&key))
             {
-                return Ok(self.entries(key));
-            }
-            self.fetches.fetch_add(1, Ordering::SeqCst);
-            if self.failing.contains(&key) {
                 return Err(Error::Api {
                     status: None,
                     message: format!("{key:?} failed"),
                 });
             }
-            self.fetched_at.lock().unwrap().insert(key, now);
-            Ok(self.entries(key))
+            self.fetched_at
+                .lock()
+                .expect("lock poisoned")
+                .insert(key, now);
+            Ok(Self::entries(key))
         }
     }
 
     impl DiscoverCatalog for FakeCatalog {
-        async fn load(&self, key: DiscoverKey, _user: &str) -> Result<SectionLoad, Error> {
-            self.serve(key).await
+        async fn load(&self, key: DiscoverKey, _user: &str) -> Result<LoadedSection, Error> {
+            std::future::ready(()).await;
+            let now = *self.now.lock().expect("lock poisoned");
+            let fetched_at = self
+                .fetched_at
+                .lock()
+                .expect("lock poisoned")
+                .get(&key)
+                .copied();
+            match fetched_at {
+                None => Ok(LoadedSection {
+                    value: self.fetch(key, now, FetchKind::Initial)?,
+                    refresh: None,
+                }),
+                Some(at) if now.saturating_sub(at) < key.ttl() => Ok(LoadedSection {
+                    value: Self::entries(key),
+                    refresh: None,
+                }),
+                Some(_) => {
+                    let catalog = self.clone();
+                    Ok(LoadedSection {
+                        value: Self::entries(key),
+                        refresh: Some(Box::pin(async move {
+                            catalog.fetch(key, now, FetchKind::Refresh)
+                        })),
+                    })
+                }
+            }
         }
     }
 
@@ -798,6 +1119,21 @@ mod tests {
         }
     }
 
+    /// Apply refreshes one at a time, as the UI does when each lands.
+    async fn settle(update: DiscoverUpdate) -> DiscoverStore {
+        let mut store = update.store;
+        for pending in update.pending {
+            match pending.refresh.await {
+                Ok(value) => store.apply(pending.key, Some(value), None),
+                Err(error) => {
+                    let message = error.to_string();
+                    store.apply(pending.key, None, Some(&message));
+                }
+            }
+        }
+        store
+    }
+
     #[test]
     fn card_views_map_a_catalog_summary_to_a_media_card() {
         let mut media = media_summary("A title");
@@ -815,11 +1151,23 @@ mod tests {
         );
     }
 
+    #[test]
+    fn anilist_ids_follow_the_card_order() {
+        let mut first = media_summary("First");
+        first.anilist_id = 42;
+        let mut second = media_summary("Second");
+        second.anilist_id = 7;
+        let ids = anilist_ids(&SectionEntries::Media(vec![first, second]));
+        assert_eq!(ids, [42, 7], "Open receives the card's AniList id");
+    }
+
     #[tokio::test]
     async fn the_eight_sections_render_in_ticket_order() {
-        let store = DiscoverStore::load(&FakeCatalog::default(), "viewer").await;
+        let store = DiscoverStore::load(&FakeCatalog::default(), Some("viewer"))
+            .await
+            .store;
 
-        let got: Vec<DiscoverSection> = store.sections().iter().map(|s| s.section).collect();
+        let got: Vec<DiscoverSection> = store.sections().iter().map(|s| s.kind).collect();
         assert_eq!(
             got,
             DiscoverSection::ORDER,
@@ -830,25 +1178,25 @@ mod tests {
     #[tokio::test]
     async fn one_failing_section_leaves_the_others_rendered() {
         let catalog = FakeCatalog::failing(DiscoverKey::Popular);
-        let store = DiscoverStore::load(&catalog, "viewer").await;
+        let store = DiscoverStore::load(&catalog, Some("viewer")).await.store;
 
         let popular = store
             .sections()
             .iter()
-            .find(|s| s.section == DiscoverSection::Popular)
-            .unwrap();
+            .find(|s| s.kind == DiscoverSection::Popular)
+            .expect("the Popular section");
         assert!(matches!(popular.state, SectionFetch::Failed(_)));
         assert_eq!(popular.entries, SectionEntries::Media(Vec::new()));
 
         for section in store.sections() {
-            if section.section == DiscoverSection::Popular {
+            if section.kind == DiscoverSection::Popular {
                 continue;
             }
             assert_eq!(
                 section.state,
                 SectionFetch::Ready,
                 "{} must render",
-                section.section.title()
+                section.kind.title()
             );
         }
     }
@@ -856,12 +1204,12 @@ mod tests {
     #[tokio::test]
     async fn one_failed_country_does_not_hide_the_other_two() {
         let catalog = FakeCatalog::failing(DiscoverKey::Japan);
-        let store = DiscoverStore::load(&catalog, "viewer").await;
+        let store = DiscoverStore::load(&catalog, Some("viewer")).await.store;
         let country = store
             .sections()
             .iter()
-            .find(|section| section.section == DiscoverSection::TrendingByCountry)
-            .unwrap();
+            .find(|section| section.kind == DiscoverSection::TrendingByCountry)
+            .expect("the country section");
         assert!(
             matches!(country.entries, SectionEntries::Countries(_)),
             "the country section holds three carousels"
@@ -877,13 +1225,13 @@ mod tests {
     #[tokio::test]
     async fn a_second_visit_within_six_hours_makes_no_requests() {
         let catalog = FakeCatalog::default();
-        let first = DiscoverStore::load(&catalog, "viewer").await;
+        let first = DiscoverStore::load(&catalog, Some("viewer")).await.store;
         let requests = catalog.fetches();
         assert!(requests > 0, "the first visit fetches the catalog");
 
         // Well inside even the shortest Discover TTL (the one-hour schedule).
         catalog.advance(Duration::from_mins(30));
-        let second = DiscoverStore::load(&catalog, "viewer").await;
+        let second = DiscoverStore::load(&catalog, Some("viewer")).await.store;
         assert_eq!(
             catalog.fetches(),
             requests,
@@ -896,10 +1244,15 @@ mod tests {
         );
 
         catalog.advance(Duration::from_hours(7));
-        let _third = DiscoverStore::load(&catalog, "viewer").await;
+        let third = settle(DiscoverStore::load(&catalog, Some("viewer")).await).await;
         assert!(
             catalog.fetches() > requests,
-            "once every section is stale, the catalog is fetched again"
+            "once every section is stale, its refresh fetches again"
+        );
+        assert_eq!(
+            first.sections(),
+            third.sections(),
+            "the values are still shown"
         );
     }
 
@@ -918,25 +1271,141 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_failed_refresh_keeps_the_stale_value_but_reports_its_section() {
-        let catalog = FakeCatalog::failing_refresh(DiscoverKey::TrendingManga);
-        let store = DiscoverStore::load(&catalog, "viewer").await;
+    async fn a_guest_never_requests_their_personal_collection() {
+        let catalog = FakeCatalog::failing(DiscoverKey::MissedSequels);
+        let guest = DiscoverStore::load(&catalog, None).await.store;
+        let sequels = guest
+            .sections()
+            .iter()
+            .find(|section| section.kind == DiscoverSection::MissedSequels)
+            .expect("the Missed Sequels section");
+        assert_eq!(
+            sequels.state,
+            SectionFetch::Ready,
+            "a guest is not sent an AniList request"
+        );
+        assert_eq!(sequels.entries, SectionEntries::Media(Vec::new()));
 
+        let signed_in = settle(DiscoverStore::load(&catalog, Some("viewer")).await).await;
+        let sequels = signed_in
+            .sections()
+            .iter()
+            .find(|section| section.kind == DiscoverSection::MissedSequels)
+            .expect("the Missed Sequels section");
+        assert!(
+            matches!(sequels.state, SectionFetch::Failed(_)),
+            "an account with no cached sequels does make the request"
+        );
+    }
+
+    #[tokio::test]
+    async fn cached_values_are_published_before_their_refresh_lands() {
+        let catalog = FakeCatalog::default();
+        // Seed every key, then let them all go stale and fail one refresh.
+        let _ = DiscoverStore::load(&catalog, Some("viewer")).await;
+        catalog.advance(Duration::from_hours(7));
+        catalog.fail_refresh(DiscoverKey::TrendingManga);
+        let update = DiscoverStore::load(&catalog, Some("viewer")).await;
+        assert!(
+            !update.pending.is_empty(),
+            "stale sections come with refreshes"
+        );
+
+        let manga = update
+            .store
+            .sections()
+            .iter()
+            .find(|section| section.kind == DiscoverSection::TrendingManga)
+            .expect("the manga section");
+        assert_ne!(
+            manga.entries,
+            SectionEntries::Media(Vec::new()),
+            "the cached value is on screen at once"
+        );
+        assert_eq!(manga.state, SectionFetch::Ready);
+
+        let store = settle(update).await;
         let manga = store
             .sections()
             .iter()
-            .find(|section| section.section == DiscoverSection::TrendingManga)
-            .unwrap();
+            .find(|section| section.kind == DiscoverSection::TrendingManga)
+            .expect("the manga section");
         assert!(matches!(manga.state, SectionFetch::Failed(_)));
         assert_ne!(
             manga.entries,
             SectionEntries::Media(Vec::new()),
-            "the stale value stays on screen"
+            "a failed refresh keeps the stale value"
         );
-        for section in store.sections() {
-            if section.section != DiscoverSection::TrendingManga {
-                assert_eq!(section.state, SectionFetch::Ready);
-            }
-        }
+    }
+
+    #[tokio::test]
+    async fn applying_one_refresh_leaves_the_other_sections_alone() {
+        let catalog = FakeCatalog::default();
+        let _ = DiscoverStore::load(&catalog, Some("viewer")).await;
+        catalog.advance(Duration::from_hours(7));
+        let mut update = DiscoverStore::load(&catalog, Some("viewer")).await;
+        let before = update.store.sections().to_vec();
+        let pending = update.pending.remove(0);
+        update
+            .store
+            .apply(pending.key, None, Some("refresh failed"));
+
+        let changed = before
+            .iter()
+            .zip(update.store.sections())
+            .filter(|(old, new)| old != new)
+            .count();
+        assert_eq!(changed, 1, "only the refreshed section changed");
+    }
+
+    #[gpui_kit::test]
+    fn a_carousel_card_has_non_zero_bounds(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            ui_theme::init(cx);
+        });
+        let store = DiscoverStore {
+            sections: vec![Section {
+                kind: DiscoverSection::Popular,
+                entries: SectionEntries::Media(vec![media_summary("A title")]),
+                state: SectionFetch::Ready,
+                country_states: std::array::from_fn(|_| SectionFetch::Ready),
+            }],
+        };
+        let loader: DiscoverLoader = Rc::new(move |_, _| {
+            Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store.clone())))
+        });
+        let (window, view) = cx
+            .update(|cx| {
+                gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |_, cx| {
+                    DiscoverView::new(None, loader, LruImageCache::new(4, cx), cx)
+                })
+            })
+            .expect("the test platform opens windows");
+        cx.update(|cx| view.update(cx, DiscoverView::load));
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.render_frame(cx))
+            .expect("the test window");
+
+        let bounds = cx
+            .update_window(window, |_, window, _| {
+                window
+                    .find("discover-section-Popular Anime-card-0")
+                    .bounds()
+            })
+            .expect("the test window");
+        assert!(
+            bounds.size.width > px(0.) && bounds.size.height > px(0.),
+            "the loaded card is laid out: {bounds:?}"
+        );
+        let carousel_state = cx.read(|app| {
+            view.read(app)
+                .carousel_states
+                .first()
+                .cloned()
+                .expect("the first carousel")
+        });
+        let item_count = cx.read(|app| carousel_state.read(app).item_count());
+        assert_eq!(item_count, 1, "the carousel knows a card arrived");
     }
 }

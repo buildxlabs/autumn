@@ -212,7 +212,21 @@ impl AppShell {
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let home_grid = PosterGrid::new(mock_media_views(), cx);
-        let discover_view = DiscoverView::new(String::new(), discover_loader, banner_cache, cx);
+        let user = account.read(cx).name().map(str::to_owned);
+        let discover_view = DiscoverView::new(user, discover_loader, banner_cache, cx);
+        // Missed Sequels reads the signed-in account's collection, so a new
+        // account replaces the old data instead of showing it under a new name.
+        cx.observe(&account, |shell, account, cx| {
+            let user = account.read(cx).name().map(str::to_owned);
+            let reload = shell.route() == Route::Discover;
+            shell.discover_view.update(cx, |view, cx| {
+                view.set_user(user);
+                if reload {
+                    view.load(cx);
+                }
+            });
+        })
+        .detach();
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -890,7 +904,7 @@ mod tests {
         time::Duration,
     };
 
-    use crate::discover::DiscoverStore;
+    use crate::discover::DiscoverUpdate;
     use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
@@ -935,6 +949,8 @@ mod tests {
         view: Entity<AppShell>,
         /// Every preference set the shell asked to save, oldest first.
         saved: Rc<RefCell<Vec<RailPrefs>>>,
+        /// Every account the Discover loader was given, oldest first.
+        users: Rc<RefCell<Vec<Option<String>>>>,
     }
 
     impl Shell {
@@ -957,6 +973,8 @@ mod tests {
         ) -> Self {
             let saved = Rc::new(RefCell::new(Vec::new()));
             let log = Rc::clone(&saved);
+            let users = Rc::new(RefCell::new(Vec::new()));
+            let seen = Rc::clone(&users);
             let (window, view) = cx.update(|cx| {
                 gpui_kit::init(cx);
                 ui_theme::init(cx);
@@ -996,8 +1014,9 @@ mod tests {
                                 }
                             },
                             |_, _| Task::ready(()),
-                            Rc::new(|_: String, _: &App| {
-                                Task::ready(Ok::<_, BridgeError>(DiscoverStore::default()))
+                            Rc::new(move |user: Option<String>, _: &App| {
+                                seen.borrow_mut().push(user);
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             window,
                             cx,
@@ -1010,6 +1029,7 @@ mod tests {
                 window: window.downcast::<Root>().unwrap(),
                 view,
                 saved,
+                users,
             }
         }
 
@@ -1971,6 +1991,51 @@ mod tests {
         assert!(
             shell.shows(cx, "discover-view"),
             "Discover renders its view"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn discover_uses_the_account_name_and_follows_account_changes(cx: &mut TestAppContext) {
+        let active = |name: &str| AniListAccountState::Active {
+            name: name.to_owned(),
+            avatar: None,
+            expires_at: std::time::UNIX_EPOCH + Duration::from_hours(500_000),
+            expiring: false,
+        };
+        let shell = Shell::open_with_account(cx, active("FrierenFan"));
+        shell.click(cx, "rail-discover");
+        cx.run_until_parked();
+        assert_eq!(
+            shell.users.borrow().as_slice(),
+            [Some("FrierenFan".to_owned())],
+            "the loader gets the AniList name, not an empty string"
+        );
+
+        let account = cx.read(|app| shell.view.read(app).account.clone());
+        for (event, expected) in [
+            (
+                AppEvent::AccountChanged(active("Himmel")),
+                Some("Himmel".to_owned()),
+            ),
+            (
+                AppEvent::AccountChanged(AniListAccountState::LoggedOut),
+                None,
+            ),
+        ] {
+            cx.update(|cx| {
+                account.update(cx, |account, cx| account.apply(event, cx));
+            });
+            cx.run_until_parked();
+            assert_eq!(
+                shell.users.borrow().last().cloned().flatten(),
+                expected,
+                "the loader follows the current account"
+            );
+        }
+        assert_eq!(
+            shell.users.borrow().len(),
+            3,
+            "each account change reloads exactly once"
         );
     }
 }

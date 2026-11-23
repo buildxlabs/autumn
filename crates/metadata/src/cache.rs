@@ -17,12 +17,12 @@ use std::{
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::warn;
 
-use crate::{AiringEpisode, AniList, DiscoverLoad, Error, HomeLoad, MediaDetail};
+use crate::{AiringEpisode, AniList, Error, HomeLoad, MediaDetail};
 
 /// How long an airing schedule stays fresh.
-const AIRING_TTL: Duration = Duration::from_hours(1);
+pub const AIRING_TTL: Duration = Duration::from_hours(1);
 /// How long Home and Discover stay fresh.
-const CATALOG_TTL: Duration = Duration::from_hours(6);
+pub const CATALOG_TTL: Duration = Duration::from_hours(6);
 /// How long an Entry page stays fresh.
 const ENTRY_TTL: Duration = Duration::from_hours(24);
 
@@ -104,21 +104,6 @@ impl CatalogCache {
         let anilist = self.anilist.clone();
         self.section("home".to_owned(), CATALOG_TTL, async move {
             anilist.home_load().await
-        })
-        .await
-    }
-
-    /// [`AniList::discover_load`], fresh for 6 hours.
-    ///
-    /// # Errors
-    ///
-    /// Only on a cache miss: the fetch's error.
-    pub async fn discover(&self, missed_sequels_user: &str) -> Result<Load<DiscoverLoad>, Error> {
-        let anilist = self.anilist.clone();
-        let user = missed_sequels_user.to_owned();
-        let key = format!("discover:{user}");
-        self.section(key, CATALOG_TTL, async move {
-            anilist.discover_load(&user).await
         })
         .await
     }
@@ -510,7 +495,7 @@ mod tests {
     #[test]
     fn catalog_loads_round_trip_through_a_blob() {
         use crate::{
-            CountryTrends, MediaFormat, MediaSeason, MediaStatus, MediaSummary, MediaTitle,
+            AiringEpisode, MediaFormat, MediaSeason, MediaStatus, MediaSummary, MediaTitle,
         };
 
         let media = MediaSummary {
@@ -540,28 +525,12 @@ mod tests {
             airing_at: 1_700_000_000,
             time_until_airing: -60,
         };
-        let discover = DiscoverLoad {
-            trending: vec![media.clone()],
-            popular: Vec::new(),
-            upcoming_season: Vec::new(),
-            trending_movies: Vec::new(),
-            airing_schedule: vec![episode.clone()],
-            missed_sequels: Vec::new(),
-            trending_manga: Vec::new(),
-            trending_by_country: CountryTrends {
-                japan: vec![media.clone()],
-                ..CountryTrends::default()
-            },
-        };
         let home = HomeLoad {
             trending: vec![media.clone()],
             aired_recently: vec![episode],
             anime_carousel: vec![media],
         };
 
-        let bytes = rmp_serde::to_vec_named(&(7u64, &discover)).unwrap();
-        let (seconds, decoded): (u64, DiscoverLoad) = rmp_serde::from_slice(&bytes).unwrap();
-        assert_eq!((seconds, decoded), (7, discover));
         let bytes = rmp_serde::to_vec_named(&(7u64, &home)).unwrap();
         let (_, decoded): (u64, HomeLoad) = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(decoded, home);

@@ -82,10 +82,9 @@ fn main() -> ExitCode {
     );
     let discover_loader: DiscoverLoader = Rc::new(move |user, cx| {
         let catalog = discover_catalog.clone();
-        ui_state::bridge::run(
-            cx,
-            async move { DiscoverStore::load(&catalog, &user).await },
-        )
+        ui_state::bridge::run(cx, async move {
+            DiscoverStore::load(&catalog, user.as_deref()).await
+        })
     });
 
     let http_client =
@@ -242,7 +241,7 @@ mod tests {
     use db::Db;
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
-    use ui_screens::{DiscoverStore, RailPrefs};
+    use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::{account::AccountStore, bridge::BridgeError};
 
     use super::{FetchStatus, open_main_window};
@@ -274,8 +273,8 @@ mod tests {
                 |_, _| Task::ready(()),
                 |_, _| Task::ready(Ok(0)),
                 |_, _| Task::ready(()),
-                Rc::new(|_: String, _: &App| {
-                    Task::ready(Ok::<_, BridgeError>(DiscoverStore::default()))
+                Rc::new(|_: Option<String>, _: &App| {
+                    Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                 }),
                 db,
                 anilist,

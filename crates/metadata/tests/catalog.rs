@@ -285,31 +285,6 @@ async fn a_home_load_uses_three_requests() {
 }
 
 #[tokio::test]
-async fn a_discover_load_uses_eleven_requests() {
-    let mock = MockCatalog::serve().await;
-
-    let discover = mock.client.discover_load("kiyors").await.unwrap();
-
-    assert_eq!(discover.trending.len(), 50);
-    assert_eq!(discover.popular.len(), 50);
-    assert_eq!(discover.upcoming_season.len(), 50);
-    assert_eq!(discover.trending_movies.len(), 50);
-    assert_eq!(discover.airing_schedule.len(), 50);
-    assert_eq!(discover.missed_sequels.len(), 1);
-    assert_eq!(discover.trending_manga.len(), 50);
-    assert_eq!(discover.trending_by_country.japan.len(), 50);
-    assert_eq!(discover.trending_by_country.korea.len(), 50);
-    assert_eq!(discover.trending_by_country.china.len(), 50);
-    assert_eq!(
-        mock.request_count(),
-        11,
-        "Discover: Trending Anime, Popular, Upcoming Season, Trending Movies, \
-         Airing Schedule, Missed Sequels (2), Trending Manga, \
-         Trending by Country (JP, KR, CN)"
-    );
-}
-
-#[tokio::test]
 async fn catalog_queries_ask_for_the_first_page() {
     let mock = MockCatalog::serve().await;
 
