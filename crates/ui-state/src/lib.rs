@@ -12,6 +12,7 @@ pub mod lists;
 mod route;
 mod router;
 mod scroll;
+pub mod search;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
@@ -21,3 +22,7 @@ pub use lists::{
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};
+pub use search::{
+    Catalog, CatalogError, MediaPreview, SearchFilters, SearchFormat, SearchPage, SearchSeason,
+    SearchSession, SearchSort, SearchStatus,
+};

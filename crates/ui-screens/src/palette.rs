@@ -108,10 +108,6 @@ impl Mode {
 
 /// One row of the palette.
 #[derive(Debug, Clone)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "search rows are copied into the command list; boxing them would not change the row count"
-)]
 enum Entry {
     /// Navigates to the route.
     Route(Route),
