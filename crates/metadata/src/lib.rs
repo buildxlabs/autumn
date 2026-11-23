@@ -13,6 +13,7 @@ mod client;
 mod detail;
 mod error;
 mod fragments;
+mod list;
 mod model;
 mod search;
 mod viewer;
@@ -21,6 +22,7 @@ pub use cache::{Cached, CatalogCache, Load, Refresh};
 pub use catalog::{AiringEpisode, CountryTrends, DiscoverLoad, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
+pub use list::{ListCollection, ListEntryData, ListEntryInput, ListGroup, ScoreFormat};
 pub use model::{
     Character, CharacterRole, MediaDetail, MediaFormat, MediaRelation, MediaSeason, MediaStatus,
     MediaSummary, MediaTitle, Relation, VoiceActor,
