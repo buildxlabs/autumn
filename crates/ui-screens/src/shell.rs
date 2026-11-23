@@ -19,8 +19,8 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, LruImageCache, MediaCarousel, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail,
-    RailExpansion, RailItem,
+    ACCOUNT_ID, CarouselWheel, LruImageCache, MediaCardView, MediaCarousel, POSTER_IMAGE_CAPACITY,
+    PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -57,7 +57,7 @@ const TITLEBAR_HEIGHT: f32 = 40.;
 /// loads real catalog data. It is loaded through the same net-backed cache as
 /// a poster.
 const MOCK_BANNER: &str =
-    "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-qQTzQnEJJ3oB.jpg";
+    "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg";
 
 /// Width of the command palette dialog.
 const PALETTE_WIDTH: f32 = 560.;
@@ -161,8 +161,10 @@ pub struct AppShell {
     banner_cache: Entity<LruImageCache>,
     /// The mock carousel's paging state, owned here so it survives redraws.
     media_carousel: Entity<CarouselState>,
-    /// The cards shown in the mock carousel.
-    carousel_items: Vec<ui_components::MediaCardView>,
+    /// Shared Rc so redraws clone a pointer, not the mock cards.
+    carousel_items: Rc<[MediaCardView]>,
+    /// Accumulates Alt+wheel delta between page turns.
+    carousel_wheel: CarouselWheel,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -222,8 +224,9 @@ impl AppShell {
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let home_grid = PosterGrid::new(mock_media_views(), cx);
-        let carousel_items = mock_media_views().into_iter().take(12).collect::<Vec<_>>();
+        let carousel_items: Rc<[MediaCardView]> = mock_media_views().into_iter().take(12).collect();
         let media_carousel = cx.new(|_| CarouselState::new(carousel_items.len()));
+        let carousel_wheel = CarouselWheel::default();
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -255,6 +258,7 @@ impl AppShell {
             banner_cache,
             media_carousel,
             carousel_items,
+            carousel_wheel,
         }
     }
 
@@ -643,7 +647,7 @@ impl AppShell {
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
-                .children((route == Route::Discover).then(|| self.render_discover_heroes(cx)))
+                .children((route == &Route::Discover).then(|| self.render_discover_heroes(cx)))
                 .child(placeholder(
                     title(route),
                     rows(route),
@@ -729,7 +733,7 @@ impl AppShell {
             )
             .child(hero_banner(
                 "hero-with",
-                &mock(Some(MOCK_BANNER.to_owned())),
+                mock(Some(MOCK_BANNER.to_owned())),
                 &self.banner_cache,
                 colors.accent,
                 colors.background,
@@ -743,7 +747,7 @@ impl AppShell {
             )
             .child(hero_banner(
                 "hero-without",
-                &mock(None),
+                mock(None),
                 &self.banner_cache,
                 colors.accent,
                 colors.background,
@@ -758,8 +762,9 @@ impl AppShell {
             .child(MediaCarousel::new(
                 "discover-carousel",
                 self.media_carousel.clone(),
-                self.carousel_items.clone(),
+                Rc::clone(&self.carousel_items),
                 self.banner_cache.clone(),
+                self.carousel_wheel.clone(),
             ))
     }
 }

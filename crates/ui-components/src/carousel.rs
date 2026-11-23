@@ -4,9 +4,11 @@
 //! carousel. This module adds the arrows and maps Alt+wheel to horizontal
 //! paging, on top of the plain input helpers.
 
+use std::{cell::Cell, rc::Rc};
+
 use gpui_kit::{
     App, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels, Point,
-    RenderOnce, ScrollEvent, Styled, TestSupportExt, Window,
+    RenderOnce, ScrollEvent, SharedString, Styled, TestSupportExt, Window,
     component::{
         Disableable,
         button::Button,
@@ -15,7 +17,15 @@ use gpui_kit::{
     div, image_cache, point, px,
 };
 
-use crate::{LruImageCache, MEDIA_CARD_HEIGHT, MediaCard, MediaCardView, POSTER_WIDTH};
+use crate::{LruImageCache, MEDIA_CARD_HEIGHT, MediaCard, MediaCardView, POSTER_GAP, POSTER_WIDTH};
+
+/// How much Alt+wheel delta accumulates before the carousel pages once.
+/// One wheel line is about this many pixels; a trackpad swipe therefore
+/// pages a few cards, not the whole row.
+pub const WHEEL_PAGE_THRESHOLD: f64 = 24.;
+
+/// A card action, called with the card's index.
+type CardAction = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
 /// Which arrow the user pressed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +67,13 @@ pub fn alt_wheel_delta(event: &ScrollEvent, line_height: Pixels) -> Option<Point
     Some(point(delta.y, px(0.)))
 }
 
+/// The wheel delta a carousel has accumulated between page turns. Held by
+/// the caller so a redraw does not reset an in-flight trackpad gesture.
+#[derive(Debug, Clone, Default)]
+pub struct CarouselWheel {
+    delta: Rc<Cell<f64>>,
+}
+
 /// A horizontally paging row of media cards. The state is owned by the
 /// caller so paging survives redraws and a newer view can replace the items.
 #[derive(IntoElement)]
@@ -64,8 +81,12 @@ pub struct MediaCarousel {
     /// Prefix for every child id, so a screen can show several carousels.
     prefix: String,
     state: Entity<CarouselState>,
-    items: Vec<MediaCardView>,
+    items: Rc<[MediaCardView]>,
     cache: Entity<LruImageCache>,
+    wheel: CarouselWheel,
+    on_open: Option<CardAction>,
+    on_add_to_list: Option<CardAction>,
+    add_label: Option<SharedString>,
 }
 
 impl std::fmt::Debug for MediaCarousel {
@@ -82,15 +103,44 @@ impl MediaCarousel {
     pub fn new(
         id: &str,
         state: Entity<CarouselState>,
-        items: Vec<MediaCardView>,
+        items: Rc<[MediaCardView]>,
         cache: Entity<LruImageCache>,
+        wheel: CarouselWheel,
     ) -> Self {
         Self {
             prefix: id.to_owned(),
             state,
             items,
             cache,
+            wheel,
+            on_open: None,
+            on_add_to_list: None,
+            add_label: None,
         }
+    }
+
+    /// Handles Open on a card's context menu, with the card's index.
+    #[must_use]
+    pub fn on_open(mut self, on_open: impl Fn(usize, &mut Window, &mut App) + 'static) -> Self {
+        self.on_open = Some(Rc::new(on_open));
+        self
+    }
+
+    /// Handles Add to list on a card's context menu, with its index.
+    #[must_use]
+    pub fn on_add_to_list(
+        mut self,
+        on_add_to_list: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_add_to_list = Some(Rc::new(on_add_to_list));
+        self
+    }
+
+    /// Relabels the Add to list menu item, as the poster grid does.
+    #[must_use]
+    pub fn add_to_list_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.add_label = Some(label.into());
+        self
     }
 }
 
@@ -117,15 +167,29 @@ impl RenderOnce for MediaCarousel {
         let cards = image_cache(self.cache.clone()).child(
             CarouselContent::new(&self.state)
                 .h(px(MEDIA_CARD_HEIGHT))
-                .children(self.items.into_iter().enumerate().map(|(index, view)| {
+                .children(self.items.iter().cloned().enumerate().map(|(index, view)| {
                     let item_id = ElementId::Name(format!("{}-item-{index}", self.prefix).into());
                     let card_id = ElementId::Name(format!("{}-card-{index}", self.prefix).into());
+                    let mut card = MediaCard::new(view, card_id).width(px(POSTER_WIDTH));
+                    if let Some(on_open) = &self.on_open {
+                        let on_open = Rc::clone(on_open);
+                        card = card.on_open(move |window, cx| on_open(index, window, cx));
+                    }
+                    if let Some(on_add_to_list) = &self.on_add_to_list {
+                        let on_add_to_list = Rc::clone(on_add_to_list);
+                        card = card
+                            .on_add_to_list(move |window, cx| on_add_to_list(index, window, cx));
+                    }
+                    if let Some(label) = &self.add_label {
+                        card = card.add_to_list_label(label.clone());
+                    }
                     CarouselItem::new(item_id, index, &self.state)
-                        .w(px(POSTER_WIDTH))
-                        .child(MediaCard::new(view, card_id).width(px(POSTER_WIDTH)))
+                        .w(px(POSTER_WIDTH + POSTER_GAP))
+                        .child(card)
                 })),
         );
         let wheel_state = self.state.clone();
+        let wheel = self.wheel.clone();
         div()
             .id(ElementId::Name(self.prefix.clone().into()))
             .test_support()
@@ -136,7 +200,13 @@ impl RenderOnce for MediaCarousel {
                 let Some(delta) = alt_wheel_delta(event, window.line_height()) else {
                     return;
                 };
-                let direction = if delta.x < px(0.) {
+                let accumulated = wheel.delta.get() + delta.x.to_f64();
+                if accumulated.abs() < WHEEL_PAGE_THRESHOLD {
+                    wheel.delta.set(accumulated);
+                    return;
+                }
+                wheel.delta.set(0.);
+                let direction = if accumulated < 0. {
                     PageDirection::Next
                 } else {
                     PageDirection::Previous

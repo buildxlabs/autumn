@@ -36,6 +36,10 @@ pub fn synopsis_excerpt(description: &str, max_chars: usize) -> String {
         let used = excerpt.chars().count();
         let needed = usize::from(!excerpt.is_empty()) + word.chars().count();
         if used + needed > max_chars {
+            if excerpt.is_empty() {
+                let head = word.chars().take(max_chars).collect::<String>();
+                return format!("{head}…");
+            }
             cut = true;
             break;
         }
@@ -84,17 +88,22 @@ fn strip_markup(input: &str) -> String {
 /// read on its own.
 pub fn hero_banner(
     id: &str,
-    data: &HeroBannerData,
+    data: HeroBannerData,
     cache: &Entity<LruImageCache>,
     accent: Hsla,
     surface: Hsla,
     actions: impl IntoElement,
 ) -> impl IntoElement {
+    let HeroBannerData {
+        title,
+        synopsis,
+        banner,
+    } = data;
     let image_id = ElementId::Name(format!("{id}-image").into());
     let banner_id = ElementId::Name(format!("{id}-banner").into());
-    let backdrop = match data.banner.as_deref() {
+    let backdrop = match banner.as_deref() {
         Some(url) => div().absolute().inset_0().child(
-            image_cache(cache.clone()).child(
+            image_cache(cache.clone()).size_full().child(
                 img(url)
                     .w_full()
                     .h_full()
@@ -127,12 +136,12 @@ pub fn hero_banner(
                 .gap_3()
                 .h_full()
                 .p_8()
-                .child(div().text_3xl().child(data.title.clone()))
+                .child(div().text_3xl().child(title))
                 .child(
                     div()
                         .max_w(px(640.))
                         .text_sm()
-                        .child(synopsis_excerpt(&data.synopsis, SYNOPSIS_MAX_CHARS)),
+                        .child(synopsis_excerpt(&synopsis, SYNOPSIS_MAX_CHARS)),
                 )
                 .child(actions),
         )
@@ -175,12 +184,76 @@ fn scrim_gradient() -> Background {
 
 #[cfg(test)]
 mod tests {
+    use gpui_kit::{AppContext, Context, Render, TestAppContext, Window, test::TestWindowExt as _};
+
     use super::*;
+
+    struct Harness {
+        cache: Entity<LruImageCache>,
+    }
+
+    impl Render for Harness {
+        fn render(&mut self, _: &mut Window, _: &mut Context<'_, Self>) -> impl IntoElement {
+            hero_banner(
+                "test",
+                HeroBannerData {
+                    title: "A title".into(),
+                    synopsis: "A synopsis".into(),
+                    banner: Some(
+                        "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg"
+                            .to_owned(),
+                    ),
+                },
+                &self.cache,
+                Hsla {
+                    h: 0.,
+                    s: 0.,
+                    l: 0.5,
+                    a: 1.,
+                },
+                Hsla {
+                    h: 0.,
+                    s: 0.,
+                    l: 0.05,
+                    a: 1.,
+                },
+                div(),
+            )
+        }
+    }
+
+    #[gpui_kit::test]
+    fn a_banner_image_fills_the_hero_height(cx: &mut TestAppContext) {
+        let cache = cx.update(|cx| LruImageCache::new(8, cx));
+        let window = cx.add_window(|_, _| Harness { cache });
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let height = cx
+            .update_window(window.into(), |_, window, _| {
+                window.find("test-image").bounds().size.height
+            })
+            .unwrap();
+        assert_eq!(
+            height,
+            px(300.),
+            "the backdrop must fill the banner, not the image's aspect ratio"
+        );
+    }
 
     #[test]
     fn synopsis_excerpt_strips_markup_and_truncates_at_a_word() {
         let html = "<i>Fate</i><br> A &amp; B &nbsp; C D E F G H I J";
         assert_eq!(synopsis_excerpt(html, 11), "Fate A & B…");
+    }
+
+    #[test]
+    fn synopsis_excerpt_hard_cuts_one_overlong_word() {
+        assert_eq!(
+            synopsis_excerpt("Supercalifragilistic later", 10),
+            "Supercalif…"
+        );
     }
 
     #[test]
