@@ -562,26 +562,38 @@ impl AppShell {
     fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
-        let content = match route {
-            Route::Settings { tab } => self.render_settings(tab, cx).into_any_element(),
-            route => div()
+        let route_view = div()
+            .id("route-view")
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .test_support();
+        match route {
+            Route::Settings { tab } => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(self.render_settings(tab, cx))
+                .into_any_element(),
+            Route::Home => route_view
+                .flex()
+                .flex_col()
+                .child(div().flex_none().child(placeholder(
+                    title(route),
+                    rows(route),
+                    colors.muted_foreground,
+                )))
+                .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
+                .into_any_element(),
+            route => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
                 .child(placeholder(
                     title(route),
                     rows(route),
                     colors.muted_foreground,
                 ))
-                .children((route == Route::Home).then(|| self.render_home_posters(cx)))
                 .into_any_element(),
-        };
-        div()
-            .id("route-view")
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .overflow_y_scroll()
-            .track_scroll(self.scroll.handle())
-            .child(content)
-            .test_support()
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -613,9 +625,16 @@ impl AppShell {
                 div().px_8().child(offline_empty("offline-empty", retry))
             }
             Some(SectionStatus::OfflineCached(age)) => div()
+                .flex()
+                .flex_col()
+                .size_full()
                 .child(div().px_8().pb_4().child(offline_banner(age.as_str())))
-                .child(self.home_grid.clone()),
-            _ => div().child(self.home_grid.clone()),
+                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
+            _ => div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
         }
     }
 }
@@ -1261,10 +1280,7 @@ mod tests {
                 has_text(window, "Offline: last updated just now"),
                 "the banner includes the cache age"
             );
-            assert!(
-                window.try_find("poster-grid-row-0").is_some(),
-                "cached content remains visible"
-            );
+            assert_grid_shown(window, "cached content remains visible");
         });
 
         show(cx, SectionFetch::Offline { last_updated: None });
@@ -1287,15 +1303,25 @@ mod tests {
 
         show(cx, SectionFetch::Ready);
         shell.act(cx, |window, _| {
-            assert!(
-                window.try_find("poster-grid-row-0").is_some(),
-                "successful fetch restores the section"
-            );
+            assert_grid_shown(window, "successful fetch restores the section");
             assert!(
                 window.try_find("offline-empty").is_none(),
                 "recovery clears the empty state"
             );
         });
+    }
+
+    /// The grid is a full-height flex child, not a zero-height auto div.
+    fn assert_grid_shown(window: &gpui_kit::Window, message: &str) {
+        assert!(window.find("poster-grid").visible(), "{message}");
+        assert!(
+            window.find("poster-grid").bounds().size.height > px(0.),
+            "the grid has room to lay out rows"
+        );
+        assert!(
+            window.try_find("poster-grid-row-0").is_some(),
+            "the first row is built"
+        );
     }
 
     fn has_text(window: &gpui_kit::Window, expected: &str) -> bool {
