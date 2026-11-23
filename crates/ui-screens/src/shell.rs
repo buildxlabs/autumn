@@ -220,8 +220,7 @@ impl AppShell {
             let user = account.read(cx).name().map(str::to_owned);
             let reload = shell.route() == Route::Discover;
             shell.discover_view.update(cx, |view, cx| {
-                view.set_user(user);
-                if reload {
+                if view.set_user(user) && reload {
                     view.load(cx);
                 }
             });
@@ -904,7 +903,9 @@ mod tests {
         time::Duration,
     };
 
-    use crate::discover::DiscoverUpdate;
+    use crate::discover::{
+        DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
+    };
     use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
@@ -1016,7 +1017,12 @@ mod tests {
                             |_, _| Task::ready(()),
                             Rc::new(move |user: Option<String>, _: &App| {
                                 seen.borrow_mut().push(user);
-                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
+                                let store = DiscoverStore::from_sections(vec![Section::new(
+                                    DiscoverSection::Popular,
+                                    SectionEntries::Media(vec![test_media("A shell card")]),
+                                    SectionFetch::Ready,
+                                )]);
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
                             window,
                             cx,
@@ -1987,10 +1993,16 @@ mod tests {
         );
 
         shell.click(cx, "rail-discover");
+        cx.run_until_parked();
+        shell.act(cx, |_, _| {});
 
         assert!(
             shell.shows(cx, "discover-view"),
             "Discover renders its view"
+        );
+        assert!(
+            shell.shows(cx, "discover-section-Popular Anime-card-0"),
+            "the Discover loader's section renders a card"
         );
     }
 
