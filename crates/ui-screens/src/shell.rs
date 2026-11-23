@@ -16,7 +16,7 @@ use gpui_kit::{
     },
     div, px,
 };
-use metadata::AniList;
+use metadata::{AniList, CatalogCache};
 use ui_components::{
     ACCOUNT_ID, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
@@ -42,6 +42,7 @@ use settings::{PosterCacheRequest, StorageStatus};
 mod settings;
 
 use crate::{
+    lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
 };
@@ -144,6 +145,9 @@ pub struct AppShell {
     badges: Entity<RailBadges>,
     /// The virtualized mock media grid on Home.
     home_grid: Entity<PosterGrid>,
+    /// My Lists is built only when startup supplied a catalog cache.
+    lists: Option<Entity<ListsScreen>>,
+    lists_events: Option<Subscription>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -228,6 +232,8 @@ impl AppShell {
             rail_menus: 0,
             badges,
             home_grid,
+            lists: None,
+            lists_events: None,
         }
     }
 
@@ -247,10 +253,11 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         db: Db,
         anilist: AniList,
+        catalog: CatalogCache,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
-        let shell = Self::new(
+        let mut shell = Self::new(
             prefs,
             fetch_status,
             account,
@@ -263,7 +270,20 @@ impl AppShell {
         );
         shell
             .palette
-            .update(cx, |palette, _| palette.attach_sources(db, anilist));
+            .update(cx, |palette, _| palette.attach_sources(db.clone(), anilist));
+        let lists = ListsScreen::new(db, catalog, window, cx);
+        let events = cx.subscribe(&lists, |shell, _, event: &ListsEvent, cx| {
+            let ListsEvent::SelectTab(status) = event;
+            shell.navigate(
+                Route::Lists {
+                    status: status.clone(),
+                },
+                cx,
+            );
+        });
+        cx.observe(&lists, |_, _, cx| cx.notify()).detach();
+        shell.lists = Some(lists);
+        shell.lists_events = Some(events);
         shell
     }
 
@@ -348,6 +368,9 @@ impl AppShell {
                 }
             ) {
                 self.request_poster_cache(PosterCacheAction::Measure, cx);
+            }
+            if let (Route::Lists { status }, Some(lists)) = (self.route(), &self.lists) {
+                lists.update(cx, |lists, cx| lists.set_tab(status, cx));
             }
             cx.notify();
         }
@@ -584,10 +607,26 @@ impl AppShell {
                 )))
                 .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
                 .into_any_element(),
+            Route::Lists { .. } => match &self.lists {
+                Some(lists) => route_view.child(lists.clone()).into_any_element(),
+                None => route_view
+                    .overflow_y_scroll()
+                    .track_scroll(self.scroll.handle())
+                    .child(placeholder(
+                        title(&route),
+                        rows(&route),
+                        colors.muted_foreground,
+                    ))
+                    .into_any_element(),
+            },
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
-                .child(placeholder(title(route), rows(route), colors.muted_foreground))
+                .child(placeholder(
+                    title(route),
+                    rows(route),
+                    colors.muted_foreground,
+                ))
                 .into_any_element(),
         }
     }

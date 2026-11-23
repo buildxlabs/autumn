@@ -11,38 +11,17 @@ use ui_state::{ListCard, ListSource, ListSourceError, QuickEdit};
 
 use crate::palette_search::display_label;
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Lists screen when the poster grid lands (#55)"
-    )
-)]
 fn source_error(error: impl std::fmt::Display) -> ListSourceError {
     ListSourceError::new(error.to_string())
 }
 
 /// Reads and writes list entries on the Local platform.
 #[derive(Debug, Clone)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Lists screen when the poster grid lands (#55)"
-    )
-)]
 pub(crate) struct LocalListSource {
     db: Db,
     catalog: CatalogCache,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "wired into the Lists screen when the poster grid lands (#55)"
-    )
-)]
 impl LocalListSource {
     /// Uses `db` for entries and `catalog` for cached card text only.
     pub(crate) fn new(db: Db, catalog: CatalogCache) -> Self {
