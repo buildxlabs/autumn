@@ -25,7 +25,6 @@ tracing.workspace   = true
 tracker.workspace   = true
 
 [dev-dependencies]
-db.workspace       = true
 gpui-kit           = { features = [ "test-support" ], workspace = true }
 metadata.workspace = true
 net.workspace      = true

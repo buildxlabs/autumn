@@ -36,6 +36,10 @@ const WINDOW_HEIGHT: f32 = 800.;
 /// Where the macOS traffic lights sit: centred vertically in the 40px titlebar.
 const TRAFFIC_LIGHTS: (f32, f32) = (14., 13.);
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the composition root wires startup once, in one place"
+)]
 fn main() -> ExitCode {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()

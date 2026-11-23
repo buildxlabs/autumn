@@ -1,14 +1,18 @@
 //! The one active tracking platform, exposed to screens through ui-state
 //! (ADR 0004). Screens never depend on the tracker crate directly.
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU64, Ordering},
+use std::{
+    collections::HashSet,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 
-use domain::{ListEntry, MediaId, MediaKind};
+use db::Db;
+use domain::{AniListAccountState, AppEvent, ListEntry, MediaId, MediaKind};
 
-use crate::lists::QuickEdit;
+use crate::events::Sender;
 use tracker::{ActiveKind, ActivePlatform, AniListPlatform, Local, Platform, PlatformError};
 
 /// Why a platform request through the gateway failed.
@@ -21,6 +25,20 @@ pub enum GatewayError {
     /// The active platform failed the operation.
     #[error(transparent)]
     Platform(#[from] PlatformError),
+    /// AniList rejected the token; the account is now read-only.
+    #[error("AniList rejected the token; lists are read-only")]
+    Unauthorized,
+    /// A write was attempted while AniList is read-only.
+    #[error("AniList is read-only until you log in again")]
+    ReadOnly,
+}
+
+impl GatewayError {
+    /// Whether the UI should offer a Retry action for this failure.
+    #[must_use]
+    pub fn is_retryable(&self) -> bool {
+        !matches!(self, Self::Unauthorized | Self::ReadOnly)
+    }
 }
 
 /// A cheap handle to the active platform, shared by every screen.
@@ -31,6 +49,8 @@ pub enum GatewayError {
 pub struct PlatformGateway {
     active: Arc<Mutex<ActivePlatform>>,
     generation: Arc<AtomicU64>,
+    read_only: Arc<AtomicBool>,
+    events: Option<Sender>,
 }
 
 impl PlatformGateway {
@@ -40,6 +60,60 @@ impl PlatformGateway {
         Self {
             active: Arc::new(Mutex::new(ActivePlatform::new(local))),
             generation: Arc::new(AtomicU64::new(0)),
+            read_only: Arc::new(AtomicBool::new(false)),
+            events: None,
+        }
+    }
+
+    /// A gateway that publishes a rejected token as an expired account.
+    #[must_use]
+    pub fn with_events(local: Local, events: Sender) -> Self {
+        Self {
+            events: Some(events),
+            ..Self::new(local)
+        }
+    }
+
+    /// A gateway over the account-free Local platform backed by `db`.
+    #[must_use]
+    pub fn local(db: Db) -> Self {
+        Self::new(Local::new(db))
+    }
+
+    /// Whether AniList is read-only after a rejected token.
+    #[must_use]
+    pub fn is_read_only(&self) -> bool {
+        self.read_only.load(Ordering::SeqCst)
+    }
+
+    fn writable_platform(&self) -> Result<ActivePlatform, GatewayError> {
+        if self.is_read_only() {
+            return Err(GatewayError::ReadOnly);
+        }
+        self.active
+            .lock()
+            .map_err(|_| GatewayError::Unavailable)
+            .map(|active| active.clone())
+    }
+
+    fn classify<T>(&self, result: Result<T, PlatformError>) -> Result<T, GatewayError> {
+        match result {
+            Ok(value) => Ok(value),
+            Err(PlatformError::Unauthorized) => {
+                self.expire();
+                Err(GatewayError::Unauthorized)
+            }
+            Err(error) => Err(GatewayError::Platform(error)),
+        }
+    }
+
+    fn expire(&self) {
+        self.read_only.store(true, Ordering::SeqCst);
+        if let Some(events) = &self.events {
+            let _ = events.send(AppEvent::AccountChanged(AniListAccountState::Expired {
+                name: None,
+                avatar: None,
+            }));
         }
     }
 
@@ -60,6 +134,7 @@ impl PlatformGateway {
 
     /// Connects AniList and makes it active; Local entries stay dormant.
     pub fn connect_anilist(&self, anilist: AniListPlatform) {
+        self.read_only.store(false, Ordering::SeqCst);
         if let Ok(mut active) = self.active.lock() {
             active.connect(anilist);
             self.generation.fetch_add(1, Ordering::SeqCst);
@@ -68,6 +143,8 @@ impl PlatformGateway {
 
     /// Signs out of AniList and makes Local active again, untouched.
     pub fn sign_out(&self) {
+        // An expired AniList token must not leave Local read-only after sign-out.
+        self.read_only.store(false, Ordering::SeqCst);
         if let Ok(mut active) = self.active.lock() {
             active.sign_out();
             self.generation.fetch_add(1, Ordering::SeqCst);
@@ -86,13 +163,12 @@ impl PlatformGateway {
             .lock()
             .map_err(|_| GatewayError::Unavailable)?
             .clone();
-        let collection = platform.collection(kind).await?;
-        let mut seen = Vec::new();
+        let collection = self.classify(platform.collection(kind).await)?;
+        let mut seen = HashSet::new();
         let mut entries = Vec::new();
         for list in collection.lists {
             for entry in list.entries {
-                if !seen.contains(&entry.media) {
-                    seen.push(entry.media);
+                if seen.insert(entry.media) {
                     entries.push(entry);
                 }
             }
@@ -100,61 +176,16 @@ impl PlatformGateway {
         Ok(entries)
     }
 
-    /// Saves a full list entry on the active platform.
+    /// Saves a full list entry and returns it as stored, so a screen can patch
+    /// one card without reloading the whole collection.
     ///
     /// # Errors
     ///
-    /// Returns a gateway error when the platform rejects the write.
-    pub async fn save_entry(&self, entry: &ListEntry) -> Result<(), GatewayError> {
-        let platform = self
-            .active
-            .lock()
-            .map_err(|_| GatewayError::Unavailable)?
-            .clone();
-        platform.save_entry(entry).await?;
-        Ok(())
-    }
-
-    /// Applies a quick edit to the active platform's entry. A missing entry
-    /// is a no-op, matching the platform trait's delete contract.
-    ///
-    /// # Errors
-    ///
-    /// Returns a gateway error when the entry cannot be read or saved.
-    pub async fn edit_entry(&self, media: MediaId, edit: &QuickEdit) -> Result<(), GatewayError> {
-        let platform = self
-            .active
-            .lock()
-            .map_err(|_| GatewayError::Unavailable)?
-            .clone();
-        let mut found = None;
-        for kind in [MediaKind::Anime, MediaKind::Manga] {
-            if let Some(entry) = platform
-                .collection(kind)
-                .await?
-                .lists
-                .into_iter()
-                .flat_map(|list| list.entries)
-                .find(|entry| entry.media == media)
-            {
-                found = Some(entry);
-                break;
-            }
-        }
-        let Some(mut entry) = found else {
-            return Ok(());
-        };
-        if let Some(status) = edit.status {
-            entry.status = status;
-        }
-        if let Some(progress) = edit.progress {
-            entry.progress = progress;
-        }
-        if let Some(score) = edit.score {
-            entry.score = score;
-        }
-        platform.save_entry(&entry).await?;
-        Ok(())
+    /// Returns a gateway error when the platform rejects the write. A rejected
+    /// token makes the gateway read-only and publishes an expired account.
+    pub async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, GatewayError> {
+        let platform = self.writable_platform()?;
+        self.classify(platform.save_entry(entry).await)
     }
 
     /// Updates progress on the active platform.
@@ -163,12 +194,8 @@ impl PlatformGateway {
     ///
     /// Returns a gateway error when the platform rejects the write.
     pub async fn update_progress(&self, media: MediaId, progress: u32) -> Result<(), GatewayError> {
-        let platform = self
-            .active
-            .lock()
-            .map_err(|_| GatewayError::Unavailable)?
-            .clone();
-        platform.update_progress(media, progress).await?;
+        let platform = self.writable_platform()?;
+        self.classify(platform.update_progress(media, progress).await)?;
         Ok(())
     }
 
@@ -178,13 +205,8 @@ impl PlatformGateway {
     ///
     /// Returns a gateway error when the platform rejects the delete.
     pub async fn delete_entry(&self, media: MediaId) -> Result<(), GatewayError> {
-        let platform = self
-            .active
-            .lock()
-            .map_err(|_| GatewayError::Unavailable)?
-            .clone();
-        platform.delete_entry(media).await?;
-        Ok(())
+        let platform = self.writable_platform()?;
+        self.classify(platform.delete_entry(media).await)
     }
 }
 
@@ -193,11 +215,12 @@ mod tests {
     use std::time::SystemTime;
 
     use domain::{
-        AdvancedScores, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score,
+        AdvancedScores, AniListAccountState, AppEvent, ExternalId, FuzzyDate, ListEntry,
+        ListStatus, MediaId, MediaKind, Score,
     };
     use tracker::{ActiveKind, Local, Platform};
 
-    use super::PlatformGateway;
+    use super::{GatewayError, PlatformGateway};
 
     fn entry(media: MediaId, progress: u32) -> ListEntry {
         ListEntry {
@@ -279,5 +302,66 @@ mod tests {
             5,
             "Local entries survive untouched"
         );
+    }
+
+    #[tokio::test]
+    async fn a_rejected_token_marks_the_gateway_read_only_and_publishes_an_expired_account() {
+        let (sender, receiver) = crate::events::channel();
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = db::Db::open(&dir.path().join("autumn.db"))
+            .await
+            .expect("db");
+        let gateway = PlatformGateway::with_events(Local::new(db), sender);
+
+        let result: Result<(), tracker::PlatformError> = Err(tracker::PlatformError::Unauthorized);
+        let classified = gateway.classify(result);
+
+        assert!(matches!(classified, Err(GatewayError::Unauthorized)));
+        assert!(gateway.is_read_only(), "writes are refused from now on");
+        assert!(
+            matches!(
+                receiver.try_recv(),
+                Ok(AppEvent::AccountChanged(
+                    AniListAccountState::Expired { .. }
+                ))
+            ),
+            "the account store sees a read-only account"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_read_only_gateway_refuses_writes_without_touching_the_platform() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = db::Db::open(&dir.path().join("autumn.db"))
+            .await
+            .expect("db");
+        let minted = db
+            .media()
+            .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(154_587)])
+            .await
+            .expect("mint");
+        let gateway = PlatformGateway::local(db);
+        gateway.expire();
+
+        let error = gateway
+            .save_entry(&entry(minted.media, 9))
+            .await
+            .expect_err("read-only rejects the write");
+        assert!(matches!(error, GatewayError::ReadOnly));
+        assert!(!error.is_retryable(), "a read-only account offers no Retry");
+
+        gateway.sign_out();
+        assert!(!gateway.is_read_only(), "sign-out restores writable Local");
+        gateway
+            .save_entry(&entry(minted.media, 9))
+            .await
+            .expect("Local is writable again");
+    }
+
+    #[test]
+    fn only_transient_gateway_errors_are_retryable() {
+        assert!(GatewayError::Unavailable.is_retryable());
+        assert!(!GatewayError::Unauthorized.is_retryable());
+        assert!(!GatewayError::ReadOnly.is_retryable());
     }
 }

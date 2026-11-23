@@ -22,11 +22,19 @@ pub enum PlatformError {
     /// An operation needs AniList, but the account is signed out.
     #[error("AniList is not connected")]
     NotConnected,
+    /// AniList rejected the token on a request. The account becomes read-only
+    /// and the UI offers no retry until the user logs in again.
+    #[error("AniList rejected the token")]
+    Unauthorized,
 }
 
 impl From<metadata::Error> for PlatformError {
     fn from(error: metadata::Error) -> Self {
-        Self::Remote(error)
+        if error.is_unauthorized() {
+            Self::Unauthorized
+        } else {
+            Self::Remote(error)
+        }
     }
 }
 

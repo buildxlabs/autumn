@@ -46,3 +46,21 @@ pub enum Error {
     #[error("the latest anime-offline-database release has no asset named {0:?}")]
     MissingAsset(String),
 }
+
+impl Error {
+    /// Whether AniList rejected the token rather than failing for another
+    /// reason. All three shapes occur: a missing viewer, a GraphQL 401 and a
+    /// bare HTTP 401.
+    #[must_use]
+    pub fn is_unauthorized(&self) -> bool {
+        matches!(
+            self,
+            Self::Unauthorized
+                | Self::Api {
+                    status: Some(401),
+                    ..
+                }
+                | Self::Net(net::Error::Http { status: 401, .. })
+        )
+    }
+}

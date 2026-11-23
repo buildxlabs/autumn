@@ -42,6 +42,13 @@ struct Editing {
     status: ListStatus,
 }
 
+/// The last save that failed, kept so the error can offer a Retry action.
+#[derive(Debug, Clone, Copy)]
+struct PendingEdit {
+    media: MediaId,
+    edit: QuickEdit,
+}
+
 /// The My Lists view.
 pub(crate) struct ListsScreen {
     gateway: ui_state::PlatformGateway,
@@ -53,6 +60,7 @@ pub(crate) struct ListsScreen {
     score: Entity<InputState>,
     _search_subscription: Subscription,
     editing: Option<Editing>,
+    failed: Option<PendingEdit>,
     visible_media: Vec<MediaId>,
     error: Option<String>,
     task: Option<Task<()>>,
@@ -142,6 +150,7 @@ impl ListsScreen {
                 score,
                 _search_subscription: subscription,
                 editing: None,
+                failed: None,
                 visible_media: Vec::new(),
                 error: None,
                 task: None,
@@ -197,6 +206,7 @@ impl ListsScreen {
         loaded.set_sort(sort);
         self.session = loaded;
         self.error = None;
+        self.failed = None;
         self.sync_grid(cx);
     }
 
@@ -254,15 +264,15 @@ impl ListsScreen {
                             let screen = screen.clone();
                             move |_: &ClickEvent, _, cx| {
                                 screen.update(cx, |screen, cx| {
-                                    let next = screen
-                                        .editing
-                                        .as_ref()
-                                        .and_then(|editing| {
-                                            STATUS_ORDER
-                                                .iter()
-                                                .position(|&status| status == editing.status)
-                                        })
-                                        .map_or(0, |at| (at + 1) % STATUS_ORDER.len());
+                                    let at = screen.editing.as_ref().and_then(|editing| {
+                                        STATUS_ORDER.iter().position(|&s| s == editing.status)
+                                    });
+                                    let Some(at) = at else {
+                                        screen.error = Some("Unknown list status.".to_owned());
+                                        cx.notify();
+                                        return;
+                                    };
+                                    let next = (at + 1) % STATUS_ORDER.len();
                                     if let (Some(editing), Some(status)) =
                                         (screen.editing.as_mut(), STATUS_ORDER.get(next))
                                     {
@@ -317,11 +327,25 @@ impl ListsScreen {
         let edit = QuickEdit::new().status(editing.status);
         let edit = progress.map_or(edit, |progress| edit.progress(progress));
         let edit = score.map_or(edit, |score| edit.score(score));
+        self.submit_edit(editing.media, edit, cx);
+        window.close_dialog(cx);
+    }
+
+    fn retry_edit(&mut self, cx: &mut Context<'_, Self>) {
+        let Some(pending) = self.failed.take() else {
+            return;
+        };
+        self.submit_edit(pending.media, pending.edit, cx);
+    }
+
+    fn submit_edit(&mut self, media: MediaId, edit: QuickEdit, cx: &mut Context<'_, Self>) {
+        let pending = PendingEdit { media, edit };
         let mut session = self.session.clone();
+        self.error = None;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(cx, async move {
-                    session.quick_edit(editing.media, &edit).await?;
+                    session.quick_edit(media, &edit).await?;
                     Ok::<_, ui_state::ListSourceError>(session)
                 })
             });
@@ -329,19 +353,24 @@ impl ListsScreen {
             let _ = screen.update(cx, |screen, cx| {
                 match result {
                     Ok(Ok(session)) => screen.adopt_session(session, cx),
-                    Ok(Err(error)) => screen.error = Some(error.to_string()),
+                    Ok(Err(error)) => {
+                        if error.is_retryable() {
+                            screen.failed = Some(pending);
+                        }
+                        screen.error = Some(error.to_string());
+                    }
                     Err(error) => screen.error = Some(error.to_string()),
                 }
                 cx.notify();
             });
         }));
-        window.close_dialog(cx);
     }
 }
 
 impl Render for ListsScreen {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let can_retry = self.failed.is_some();
         let tabs = self.session.tabs();
         let selected = tabs
             .iter()
@@ -406,11 +435,22 @@ impl Render for ListsScreen {
                     .child(sort_button),
             )
             .children(self.error.as_ref().map(|error| {
-                div()
+                let mut row = div()
                     .px_8()
                     .pt_2()
+                    .flex()
+                    .gap_3()
+                    .items_center()
                     .text_color(colors.danger)
-                    .child(error.clone())
+                    .child(error.clone());
+                if can_retry {
+                    row = row.child(Button::new("lists-retry").label("Retry").on_click(
+                        cx.listener(|screen: &mut Self, _, _, cx| {
+                            screen.retry_edit(cx);
+                        }),
+                    ));
+                }
+                row
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
             .test_support()
@@ -427,7 +467,9 @@ mod tests {
         size, test::TestWindowExt,
     };
 
-    use super::ListsScreen;
+    use ui_state::QuickEdit;
+
+    use super::{ListsScreen, PendingEdit};
 
     #[gpui_kit::test]
     fn the_lists_screen_shows_tabs_and_a_grid(cx: &mut TestAppContext) {
@@ -486,7 +528,7 @@ mod tests {
             };
             gpui_kit::open_window(options, cx, |window, cx| {
                 ListsScreen::new(
-                    ui_state::PlatformGateway::new(tracker::Local::new(db.clone())),
+                    ui_state::PlatformGateway::local(db.clone()),
                     db,
                     catalog,
                     window,
@@ -527,5 +569,112 @@ mod tests {
             (screen.session.cards().len(), screen.error.clone())
         });
         assert_eq!(cards, 1, "the local entry loaded: {error:?}");
+    }
+
+    #[gpui_kit::test]
+    fn a_failed_save_offers_retry_and_retry_clears_the_error(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(1)
+            .build()
+            .expect("runtime");
+        let db = runtime
+            .block_on(db::Db::open(&dir.path().join("autumn.db")))
+            .expect("db");
+        let media = runtime.block_on(async {
+            let minted = db
+                .media()
+                .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(77)])
+                .await
+                .expect("mint");
+            let entry = ListEntry {
+                media: minted.media,
+                status: ListStatus::Current,
+                score: Score::UNSCORED,
+                progress: 2,
+                progress_volumes: 0,
+                repeat: 0,
+                started_at: FuzzyDate::UNKNOWN,
+                completed_at: FuzzyDate::UNKNOWN,
+                notes: String::new(),
+                private: false,
+                priority: 0,
+                advanced_scores: AdvancedScores::default(),
+                custom_lists: Vec::new(),
+                hidden_from_status_lists: false,
+                created_at: SystemTime::UNIX_EPOCH,
+                updated_at: SystemTime::UNIX_EPOCH,
+            };
+            db.local_list().save(&entry).await.expect("save");
+            minted.media
+        });
+        let catalog = metadata::CatalogCache::new(
+            metadata::AniList::new(net::Client::new().expect("http client")),
+            net::PosterCache::new(dir.path()).expect("poster cache"),
+        );
+
+        cx.executor().allow_parking();
+        let (window, screen) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            ui_theme::init(cx);
+            ui_state::bridge::init(cx, runtime.handle().clone());
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(0.), px(0.)),
+                    size: size(px(1000.), px(700.)),
+                })),
+                ..WindowOptions::default()
+            };
+            gpui_kit::open_window(options, cx, |window, cx| {
+                ListsScreen::new(
+                    ui_state::PlatformGateway::local(db.clone()),
+                    db,
+                    catalog,
+                    window,
+                    cx,
+                )
+            })
+            .expect("open window")
+        });
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cx.run_until_parked();
+        }
+
+        cx.update(|cx| {
+            screen.update(cx, |screen, cx| {
+                screen.error = Some("AniList request failed".to_owned());
+                screen.failed = Some(PendingEdit {
+                    media,
+                    edit: QuickEdit::new().status(ListStatus::Completed),
+                });
+                cx.notify();
+            });
+        });
+        let window = window.downcast::<Root>().expect("root window");
+        let shows_retry = cx
+            .update_window(window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find("lists-retry").is_some()
+            })
+            .expect("window is open");
+        assert!(shows_retry, "a retryable failure offers a Retry button");
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            window.click("lists-retry", cx);
+        })
+        .expect("window is open");
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cx.run_until_parked();
+        }
+        let (error, failed) = cx.update(|cx| {
+            let screen = screen.read(cx);
+            (screen.error.clone(), screen.failed)
+        });
+        assert!(error.is_none(), "the retry succeeded: {error:?}");
+        assert!(failed.is_none(), "no pending edit remains after a retry");
     }
 }

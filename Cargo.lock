@@ -8486,7 +8486,6 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
- "tracker",
  "ui-components",
  "ui-state",
  "ui-theme",
