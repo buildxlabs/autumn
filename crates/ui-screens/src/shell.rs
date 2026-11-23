@@ -28,6 +28,7 @@ use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
+    entry_store::{EntryState, EntryStore},
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
 };
 
@@ -120,6 +121,8 @@ pub struct AppShell {
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
     fetch_status: Entity<FetchStatus>,
+    /// The Anime Entry screen's store; `show` opens the current Entry.
+    entry_store: Entity<EntryStore>,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -181,6 +184,7 @@ impl AppShell {
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
+        entry_store: Entity<EntryStore>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -233,6 +237,7 @@ impl AppShell {
             palette,
             _palette_events: palette_events,
             fetch_status,
+            entry_store,
             account,
             token_input,
             login_url: login_url.into(),
@@ -273,6 +278,7 @@ impl AppShell {
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
+        entry_store: Entity<EntryStore>,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -288,6 +294,7 @@ impl AppShell {
             poster_cache,
             account_request,
             discover_loader,
+            entry_store,
             window,
             cx,
         );
@@ -382,6 +389,9 @@ impl AppShell {
     /// [`ScrollRestore`] keeps the offset so an async screen's
     /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
+        if let Route::Entry { id } = self.route() {
+            self.entry_store.update(cx, |store, cx| store.open(id, cx));
+        }
         if let Some(offset) = restore {
             self.scroll.restore(offset);
             if self.route() == Route::Discover {
@@ -651,6 +661,11 @@ impl AppShell {
                 .track_scroll(self.scroll.handle())
                 .child(self.discover_view.clone())
                 .into_any_element(),
+            Route::Entry { id } => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(self.render_entry(*id, cx))
+                .into_any_element(),
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
@@ -668,6 +683,30 @@ impl AppShell {
         self.fetch_status.update(cx, |_, cx| {
             FetchStatus::request(FetchCommand::Debug(fetch), cx);
         });
+    }
+
+    /// The Anime Entry screen: the store's loading and error states through
+    /// the fetch-status components. The placeholder shows until the hero and
+    /// characters UI lands with #55/#56.
+    fn render_entry(&self, id: u32, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let route = Route::Entry { id };
+        let entry_store = self.entry_store.clone();
+        match self.entry_store.read(cx).state() {
+            EntryState::Loading => div().child(fetch_loader()),
+            EntryState::Failed(message) => div().px_8().child(error_card(
+                "entry-error",
+                FetchError::Request(message),
+                move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+                    entry_store.update(cx, |store, cx| store.open(id, cx));
+                },
+            )),
+            EntryState::Ready { .. } => div().child(placeholder(
+                title(route),
+                rows(route),
+                colors.muted_foreground,
+            )),
+        }
     }
 
     fn render_home_posters(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
@@ -857,6 +896,7 @@ fn rail_id(route: &Route) -> String {
 pub(crate) fn title(route: &Route) -> SharedString {
     match route {
         Route::Home => "Home",
+        Route::Entry { .. } => "Entry",
         Route::Discover => "Discover",
         Route::Lists { .. } => "My Lists",
         Route::Schedule => "Schedule",
@@ -871,7 +911,7 @@ pub(crate) fn title(route: &Route) -> SharedString {
 /// Discover gets a long list so scroll restore can be tried by hand.
 fn rows(route: &Route) -> usize {
     match route {
-        Route::Discover => 100,
+        Route::Entry { .. } | Route::Discover => 100,
         Route::Home
         | Route::Lists { .. }
         | Route::Schedule
@@ -885,6 +925,7 @@ fn rows(route: &Route) -> usize {
 pub(crate) fn icon(route: &Route) -> IconName {
     match route {
         Route::Home => IconName::House,
+        Route::Entry { .. } => IconName::Clapperboard,
         Route::Discover => IconName::Compass,
         Route::Lists { .. } => IconName::List,
         Route::Schedule => IconName::Calendar,
@@ -900,13 +941,18 @@ mod tests {
     use std::{
         cell::{Cell, RefCell},
         rc::Rc,
+        sync::Arc,
         time::Duration,
     };
 
     use crate::discover::{
         DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
     };
-    use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
+    use domain::{
+        AniListAccountState, AniListWait, AppEvent, ExternalId, ListEntry, MediaId, MediaKind,
+        SectionFetch,
+    };
+    use engine::{BoxFuture, EngineError, EngineServices};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
         ScrollDelta, Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -915,6 +961,8 @@ mod tests {
         point, px, size,
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
+    use metadata::{HomeLoad, Load, MediaDetail};
+    use ui_state::entry_store::EntryStore;
     use ui_state::{
         Route, SettingsTab,
         account::AccountStore,
@@ -944,6 +992,58 @@ mod tests {
 
     const COLLAPSED: Pixels = px(64.);
     const EXPANDED: Pixels = px(260.);
+
+    /// A fake engine service: the shell tests don't exercise the stores'
+    /// data, so every call never returns.
+    struct FakeServices;
+
+    impl EngineServices for FakeServices {
+        fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn local_media(
+            &self,
+            _kind: MediaKind,
+            _ids: &[ExternalId],
+        ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn local_entry(
+            &self,
+            _media: MediaId,
+        ) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn save_entry(&self, _entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn mint(
+            &self,
+            _kind: MediaKind,
+            _ids: &[ExternalId],
+        ) -> BoxFuture<Result<MediaId, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn missed_sequels(
+            &self,
+            _kind: MediaKind,
+        ) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+    }
 
     struct Shell {
         window: WindowHandle<Root>,
@@ -995,6 +1095,7 @@ mod tests {
                     let account = cx.new(|_| {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
+                    let entry_store = cx.new(|_| EntryStore::new(Arc::new(FakeServices)));
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
@@ -1024,6 +1125,7 @@ mod tests {
                                 )]);
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
+                            entry_store,
                             window,
                             cx,
                         )

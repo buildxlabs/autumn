@@ -12,7 +12,7 @@ use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
 use domain::AppEvent;
-use engine::Engine;
+use engine::{Engine, EngineServices};
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
@@ -23,6 +23,7 @@ use ui_screens::{
 };
 use ui_state::{
     account::{AccountCommand, AccountStore},
+    entry_store::EntryStore,
     fetch_status::FetchStatus,
 };
 
@@ -109,6 +110,8 @@ fn main() -> ExitCode {
             ui_theme::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
+            let entry_store = cx.new(|_| EntryStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
@@ -130,6 +133,7 @@ fn main() -> ExitCode {
                 storage_request,
                 account_request,
                 discover_loader,
+                entry_store,
                 engine.db().clone(),
                 anilist,
                 catalog,
@@ -184,6 +188,7 @@ fn open_main_window(
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     discover_loader: DiscoverLoader,
+    entry_store: Entity<EntryStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -202,6 +207,7 @@ fn open_main_window(
                 storage_request,
                 account_request,
                 discover_loader,
+                entry_store,
                 db,
                 anilist,
                 catalog,
@@ -249,11 +255,18 @@ fn report_fatal(err: &impl Display) {
 mod tests {
     use std::rc::Rc;
 
+    use std::{rc::Rc, sync::Arc};
+
     use db::Db;
+    use engine::{BoxFuture, EngineError, EngineServices};
     use gpui_kit::{App, AppContext, Task, TestAppContext};
-    use metadata::{AniList, CatalogCache};
+    use metadata::{AniList, CatalogCache, Load, MediaDetail};
     use ui_screens::{DiscoverUpdate, RailPrefs};
-    use ui_state::{account::AccountStore, bridge::BridgeError};
+    use ui_state::{
+        account::AccountStore,
+        bridge::BridgeError,
+        entry_store::EntryStore,
+    };
 
     use super::{FetchStatus, open_main_window};
 
@@ -272,10 +285,12 @@ mod tests {
             anilist.clone(),
             net::PosterCache::new(dir.path()).expect("a test poster cache"),
         );
+        let services: Arc<dyn EngineServices> = Arc::new(EmptyServices);
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let entry_store = cx.new(|_| EntryStore::new(services));
             open_main_window(
                 RailPrefs::default(),
                 fetch_status,
@@ -287,6 +302,7 @@ mod tests {
                 Rc::new(|_: Option<String>, _: &App| {
                     Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                 }),
+                entry_store,
                 db,
                 anilist,
                 catalog,
@@ -296,6 +312,64 @@ mod tests {
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");
+    }
+
+    /// The shell tests exercise the shell, not the stores' data, so the fake
+    /// calls never return: no test waits on them.
+    struct EmptyServices;
+
+    impl EngineServices for EmptyServices {
+        fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn local_media(
+            &self,
+            _kind: domain::MediaKind,
+            _ids: &[domain::ExternalId],
+        ) -> BoxFuture<Result<Option<domain::MediaId>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn local_entry(
+            &self,
+            _media: domain::MediaId,
+        ) -> BoxFuture<Result<Option<domain::ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn save_entry(
+            &self,
+            _entry: &domain::ListEntry,
+        ) -> BoxFuture<Result<domain::ListEntry, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn mint(
+            &self,
+            _kind: domain::MediaKind,
+            _ids: &[domain::ExternalId],
+        ) -> BoxFuture<Result<domain::MediaId, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn home(&self) -> BoxFuture<Result<Load<metadata::HomeLoad>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn collection(
+            &self,
+            _kind: domain::MediaKind,
+        ) -> BoxFuture<Result<Vec<domain::ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
+
+        fn missed_sequels(
+            &self,
+            _kind: domain::MediaKind,
+        ) -> BoxFuture<Result<Vec<domain::ListEntry>, EngineError>> {
+            Box::pin(std::future::pending())
+        }
     }
 
     /// On Linux the window options request client-side decorations, so only

@@ -339,9 +339,10 @@ impl CommandPalette {
                 self.state
                     .update(cx, |state, cx| state.set_query(text, window, cx));
             }
-            // A media route arrives with the Entry screen; the row is still
-            // useful as a result today.
-            Entry::Media(_) => {}
+            // A media row opens its Anime Entry page (#58).
+            Entry::Media(media) => cx.emit(PaletteEvent::Navigate(Route::Entry {
+                id: media.anilist_id,
+            })),
         }
     }
 

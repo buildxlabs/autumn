@@ -31,6 +31,11 @@ pub enum SettingsTab {
 pub enum Route {
     /// The landing screen.
     Home,
+    /// The Anime Entry page of one anime (#58).
+    Entry {
+        /// The anime's AniList id.
+        id: u32,
+    },
     /// Browse the catalog.
     Discover,
     /// The active platform's list entries in one tab.
@@ -89,6 +94,7 @@ impl Route {
     pub fn key(&self) -> &'static str {
         match self {
             Self::Home => "home",
+            Self::Entry { .. } => "entry",
             Self::Discover => "discover",
             Self::Lists { .. } => "lists",
             Self::Schedule => "schedule",

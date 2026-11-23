@@ -6,6 +6,7 @@ pub mod account;
 pub mod actions;
 mod badges;
 pub mod bridge;
+pub mod entry_store;
 pub mod events;
 pub mod fetch_status;
 pub mod lists;
@@ -15,6 +16,7 @@ mod scroll;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
+pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };

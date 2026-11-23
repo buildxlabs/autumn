@@ -11,8 +11,10 @@ workspace = true
 
 [dependencies]
 domain.workspace    = true
+engine              = { path = "../engine" }
 flume.workspace     = true
 gpui-kit.workspace  = true
+metadata.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
 

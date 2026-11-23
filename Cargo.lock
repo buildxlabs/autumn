@@ -8451,6 +8451,7 @@ dependencies = [
  "db",
  "domain",
  "futures",
+ "engine",
  "gpui-kit",
  "metadata",
  "net",
@@ -8468,8 +8469,10 @@ name = "ui-state"
 version = "0.1.0"
 dependencies = [
  "domain",
+ "engine",
  "flume",
  "gpui-kit",
+ "metadata",
  "thiserror 2.0.21",
  "tokio",
 ]
