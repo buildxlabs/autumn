@@ -382,7 +382,11 @@ mod tests {
             .expect_err("catalog is offline");
         assert_eq!(session.results(), good.as_slice(), "old results stay put");
         assert_eq!(session.filters(), &filters("frieren"), "old filters stay");
-        assert_eq!(hits.load(Ordering::SeqCst), 1, "only the successful call hit");
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            1,
+            "only the successful call hit"
+        );
     }
 
     #[test]
@@ -391,10 +395,7 @@ mod tests {
         let second = filters("vinland");
         let mut router = RouterState::new(Route::Home);
         router.push(Route::Search(first.clone()), Point::default());
-        router.push(
-            Route::Search(second),
-            point(px(320.), px(0.)),
-        );
+        router.push(Route::Search(second), point(px(320.), px(0.)));
 
         let restore = router.back(Point::default()).expect("a previous route");
         assert_eq!(restore, point(px(320.), px(0.)), "scroll comes back");
