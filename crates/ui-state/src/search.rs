@@ -117,7 +117,7 @@ pub struct SearchFilters {
     pub season: Option<SearchSeason>,
     /// Year of that season.
     pub year: Option<u16>,
-    /// Every one of these genres must match.
+    /// Genres to match; AniList's `genre_in` matches any of them.
     pub genres: Vec<String>,
     /// ISO country of origin, such as `JP`.
     pub country: Option<String>,
@@ -232,11 +232,10 @@ impl<C: Catalog> SearchSession<C> {
         if filters == self.filters && self.page > 0 {
             return Ok(());
         }
+        // Fetch before mutating: a failed request leaves the last good
+        // results and filters on screen.
+        let page = self.catalog.search(&filters, 1).await?;
         self.filters = filters;
-        self.results.clear();
-        self.has_next = false;
-        self.page = 0;
-        let page = self.catalog.search(&self.filters, 1).await?;
         self.results = page.results;
         self.has_next = page.has_next_page;
         self.page = 1;
@@ -265,7 +264,7 @@ impl<C: Catalog> SearchSession<C> {
 mod tests {
     use std::sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     use gpui_kit::{Point, point, px};
@@ -280,6 +279,7 @@ mod tests {
         hits: Arc<AtomicUsize>,
         pages: Arc<std::sync::Mutex<Vec<(SearchFilters, u32)>>>,
         last_page: u32,
+        fail: Arc<AtomicBool>,
     }
 
     impl Catalog for FakeCatalog {
@@ -289,6 +289,9 @@ mod tests {
             page: u32,
         ) -> Result<SearchPage, CatalogError> {
             yield_now().await;
+            if self.fail.load(Ordering::SeqCst) {
+                return Err(CatalogError::new("offline"));
+            }
             self.hits.fetch_add(1, Ordering::SeqCst);
             self.pages
                 .lock()
@@ -314,6 +317,7 @@ mod tests {
                 hits: Arc::clone(&hits),
                 pages: Arc::new(std::sync::Mutex::new(Vec::new())),
                 last_page,
+                fail: Arc::new(AtomicBool::new(false)),
             },
             hits,
         )
@@ -361,6 +365,24 @@ mod tests {
 
         session.next_page().await.expect("no third page");
         assert_eq!(hits.load(Ordering::SeqCst), 2, "no request past the end");
+    }
+
+    #[tokio::test]
+    async fn a_failed_request_keeps_the_last_good_results() {
+        let (fake, hits) = catalog(3);
+        let fail = Arc::clone(&fake.fail);
+        let mut session = SearchSession::new(fake, SearchFilters::default());
+        session.apply(filters("frieren")).await.expect("first page");
+        let good = session.results().to_vec();
+
+        fail.store(true, Ordering::SeqCst);
+        session
+            .apply(filters("vinland"))
+            .await
+            .expect_err("catalog is offline");
+        assert_eq!(session.results(), good.as_slice(), "old results stay put");
+        assert_eq!(session.filters(), &filters("frieren"), "old filters stay");
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "only the successful call hit");
     }
 
     #[test]
