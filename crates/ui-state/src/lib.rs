@@ -28,6 +28,6 @@ pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};
 pub use search::{
-    Catalog, CatalogError, MediaPreview, SearchFilters, SearchFormat, SearchPage, SearchSeason,
-    SearchSession, SearchSort, SearchStatus,
+    Catalog, CatalogError, MediaPreview, RestoredPage, SearchFilters, SearchFormat, SearchPage,
+    SearchSeason, SearchSession, SearchSort, SearchStatus,
 };
