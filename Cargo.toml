@@ -10,7 +10,9 @@ version      = "0.1.0"
 
 [workspace.dependencies]
 anyhow = "1.0"
+auth = { path = "crates/auth" }
 axum = "0.8"
+base64 = "0.22"
 cynic = { default-features = false, version = "3.14" }
 cynic-codegen = "3.14"
 db = { path = "crates/db" }
@@ -19,6 +21,7 @@ domain = { path = "crates/domain" }
 flume = { default-features = false, features = [ "async" ], version = "0.12" }
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
+keyring = { features = [ "v1" ], version = "4" }
 metadata = { path = "crates/metadata" }
 net = { path = "crates/net" }
 nucleo-matcher = "0.3"
