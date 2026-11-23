@@ -47,6 +47,7 @@ tokio = { default-features = false, features = [
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3" }
+tracker = { path = "crates/tracker" }
 ui-components = { path = "crates/ui-components" }
 ui-screens = { path = "crates/ui-screens" }
 ui-state = { path = "crates/ui-state" }

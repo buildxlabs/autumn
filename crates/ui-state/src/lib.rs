@@ -9,6 +9,7 @@ pub mod bridge;
 pub mod events;
 pub mod fetch_status;
 pub mod lists;
+pub mod platform;
 mod route;
 mod router;
 mod scroll;
@@ -18,6 +19,7 @@ pub use badges::RailBadges;
 pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };
+pub use platform::{GatewayError, PlatformGateway};
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};

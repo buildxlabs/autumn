@@ -19,7 +19,7 @@ use metadata::CatalogCache;
 use ui_components::{MediaCardView, PosterGrid};
 use ui_state::{ListCard, ListSort, ListTab, ListsSession, QuickEdit, STATUS_ORDER, bridge};
 
-use crate::lists_source::LocalListSource;
+use crate::lists_source::PlatformListSource;
 
 const SORTS: [ListSort; 4] = [
     ListSort::Recent,
@@ -44,7 +44,9 @@ struct Editing {
 
 /// The My Lists view.
 pub(crate) struct ListsScreen {
-    session: ListsSession<LocalListSource>,
+    gateway: ui_state::PlatformGateway,
+    generation: u64,
+    session: ListsSession<PlatformListSource>,
     grid: Entity<PosterGrid>,
     search: Entity<InputState>,
     progress: Entity<InputState>,
@@ -108,6 +110,7 @@ fn card_view(card: &ListCard) -> MediaCardView {
 impl ListsScreen {
     /// Creates the screen over the active platform's Local source.
     pub(crate) fn new(
+        gateway: ui_state::PlatformGateway,
         db: Db,
         catalog: CatalogCache,
         window: &mut Window,
@@ -130,7 +133,9 @@ impl ListsScreen {
                 },
             );
             Self {
-                session: ListsSession::new(LocalListSource::new(db, catalog)),
+                generation: gateway.generation(),
+                session: ListsSession::new(PlatformListSource::new(gateway.clone(), db, catalog)),
+                gateway,
                 grid: PosterGrid::new(Vec::new(), cx),
                 search,
                 progress,
@@ -158,6 +163,11 @@ impl ListsScreen {
 
     /// Selects the tab named by the route.
     pub(crate) fn set_tab(&mut self, tab: ListTab, cx: &mut Context<'_, Self>) {
+        let generation = self.gateway.generation();
+        if generation != self.generation {
+            self.generation = generation;
+            self.reload(cx);
+        }
         if self.session.tab() != &tab {
             self.session.set_tab(tab);
             self.sync_grid(cx);
@@ -176,7 +186,7 @@ impl ListsScreen {
     /// the user changed while the request was in flight.
     fn adopt_session(
         &mut self,
-        mut loaded: ListsSession<LocalListSource>,
+        mut loaded: ListsSession<PlatformListSource>,
         cx: &mut Context<'_, Self>,
     ) {
         let tab = self.session.tab().clone();
@@ -475,7 +485,13 @@ mod tests {
                 ..WindowOptions::default()
             };
             gpui_kit::open_window(options, cx, |window, cx| {
-                ListsScreen::new(db, catalog, window, cx)
+                ListsScreen::new(
+                    ui_state::PlatformGateway::new(tracker::Local::new(db.clone())),
+                    db,
+                    catalog,
+                    window,
+                    cx,
+                )
             })
             .expect("open window")
         });

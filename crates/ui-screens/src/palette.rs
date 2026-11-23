@@ -17,7 +17,7 @@ use gpui_kit::{
     div,
 };
 use metadata::{AniList, MediaSummary, PageRequest, SearchFilters};
-use ui_state::{ListTab, Route, actions::COMMAND_PALETTE, bridge};
+use ui_state::{ListTab, PlatformGateway, Route, actions::COMMAND_PALETTE, bridge};
 
 use crate::{
     palette_search::{
@@ -195,6 +195,7 @@ pub(crate) struct CommandPalette {
     /// Attached by the shell once startup has opened the database and built
     /// the shared AniList client.
     db: Option<Db>,
+    gateway: Option<PlatformGateway>,
     anilist: Option<AniList>,
     /// Local platform entries of both kinds, loaded when the palette opens.
     local: Vec<MediaSummary>,
@@ -215,6 +216,7 @@ impl CommandPalette {
         Self {
             state: cx.new(|cx| CommandState::new(window, cx)),
             db: None,
+            gateway: None,
             anilist: None,
             local: Vec::new(),
             remote: None,
@@ -225,9 +227,10 @@ impl CommandPalette {
     }
 
     /// Gives the palette its account-free list source and catalog client.
-    pub(crate) fn attach_sources(&mut self, db: Db, anilist: AniList) {
+    pub(crate) fn attach_sources(&mut self, db: Db, anilist: AniList, gateway: PlatformGateway) {
         self.db = Some(db);
         self.anilist = Some(anilist);
+        self.gateway = Some(gateway);
     }
 
     /// Starts over in `mode` and focuses the query field.
@@ -245,7 +248,7 @@ impl CommandPalette {
     /// Loads the Local platform's list entries through the bridge. AniList
     /// ids from db let them be de-duplicated against remote results.
     fn start_local_load(&mut self, cx: &mut Context<'_, Self>) {
-        let Some(db) = self.db.clone() else {
+        let (Some(db), Some(gateway)) = (self.db.clone(), self.gateway.clone()) else {
             return;
         };
         self.local_load = Some(cx.spawn(async move |palette, cx| {
@@ -253,7 +256,7 @@ impl CommandPalette {
                 bridge::run(cx, async move {
                     let mut summaries = Vec::new();
                     for kind in [MediaKind::Anime, MediaKind::Manga] {
-                        if let Ok(entries) = db.local_list().entries(kind).await {
+                        if let Ok(entries) = gateway.entries(kind).await {
                             for entry in entries {
                                 if let Ok(ids) = db.media().external_ids(entry.media).await {
                                     summaries.push(local_summary(kind, &ids));

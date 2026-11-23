@@ -15,7 +15,12 @@ flume.workspace     = true
 gpui-kit.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
+tracker.workspace   = true
 
 [dev-dependencies]
-gpui-kit = { features = [ "test-support" ], workspace = true }
-tokio    = { features = [ "rt-multi-thread" ], workspace = true }
+db.workspace       = true
+gpui-kit           = { features = [ "test-support" ], workspace = true }
+metadata.workspace = true
+net.workspace      = true
+tempfile.workspace = true
+tokio              = { features = [ "macros", "rt-multi-thread" ], workspace = true }
