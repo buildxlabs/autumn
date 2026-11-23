@@ -68,18 +68,7 @@ fn main() -> ExitCode {
     let (engine_events, ui_events) = ui_state::events::channel();
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
-    let restored = handle.block_on(session.restore(SystemTime::now()));
-    if !matches!(restored, AniListAccountState::LoggedOut) {
-        let name = account::name(&restored);
-        if let Ok(Some(token)) = handle.block_on(session.token()) {
-            gateway.connect_anilist(AniListPlatform::new(
-                started.db.clone(),
-                anilist.clone(),
-                token,
-                name,
-            ));
-        }
-    }
+    let restored = restore_account(&session, &handle, &gateway, &started.db, &anilist);
     let _ = engine_events.send(AppEvent::AccountChanged(restored));
     let transfer_service = transfer::Transfers::new(
         started.db.clone(),
@@ -156,6 +145,30 @@ fn main() -> ExitCode {
             }
         });
     ExitCode::SUCCESS
+}
+
+/// Restores the saved account and connects AniList as the active platform
+/// before the event pump starts. Local entries stay untouched (ADR 0004).
+fn restore_account(
+    session: &AniListAuth,
+    handle: &tokio::runtime::Handle,
+    gateway: &PlatformGateway,
+    db: &Db,
+    anilist: &AniList,
+) -> AniListAccountState {
+    let restored = handle.block_on(session.restore(SystemTime::now()));
+    if !matches!(restored, AniListAccountState::LoggedOut) {
+        let name = account::name(&restored);
+        if let Ok(Some(token)) = handle.block_on(session.token()) {
+            gateway.connect_anilist(AniListPlatform::new(
+                db.clone(),
+                anilist.clone(),
+                token,
+                name,
+            ));
+        }
+    }
+    restored
 }
 
 /// The main window's options: the 40px transparent titlebar and centered
