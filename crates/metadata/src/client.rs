@@ -44,7 +44,7 @@ impl AniList {
         Q: DeserializeOwned,
         V: Serialize,
     {
-        self.query_with_token(operation, None).await
+        self.send_with_token(operation, None, SendMode::Read).await
     }
 
     /// Posts a query with an `Authorization: Bearer` header. The token is
@@ -58,13 +58,31 @@ impl AniList {
         Q: DeserializeOwned,
         V: Serialize,
     {
-        self.query_with_token(operation, Some(token)).await
+        self.send_with_token(operation, Some(token), SendMode::Read)
+            .await
     }
 
-    async fn query_with_token<Q, V>(
+    /// Posts a mutation once with an `Authorization: Bearer` header. A
+    /// mutation is never auto-retried, so a failed edit is reported to the
+    /// caller, which can offer the user a Retry action.
+    pub(crate) async fn mutation<Q, V>(
+        &self,
+        operation: Operation<Q, V>,
+        token: &str,
+    ) -> Result<Q, Error>
+    where
+        Q: DeserializeOwned,
+        V: Serialize,
+    {
+        self.send_with_token(operation, Some(token), SendMode::Mutation)
+            .await
+    }
+
+    async fn send_with_token<Q, V>(
         &self,
         operation: Operation<Q, V>,
         token: Option<&str>,
+        mode: SendMode,
     ) -> Result<Q, Error>
     where
         Q: DeserializeOwned,
@@ -78,7 +96,10 @@ impl AniList {
             request = request.header("Authorization", &format!("Bearer {token}"))?;
         }
         let request = request.body(body);
-        let response = self.http.read(request).await?;
+        let response = match mode {
+            SendMode::Read => self.http.read(request).await?,
+            SendMode::Mutation => self.http.mutate(request).await?,
+        };
         let bytes = response.bytes().await?;
         let envelope: Envelope<Q> = serde_json::from_slice(&bytes).map_err(Error::Decode)?;
         if let Some(error) = envelope.errors.into_iter().next() {
@@ -92,6 +113,12 @@ impl AniList {
             message: "response has no data".to_owned(),
         })
     }
+}
+
+/// Which `net` send path a request takes. Mutations are sent once.
+enum SendMode {
+    Read,
+    Mutation,
 }
 
 /// A GraphQL response. AniList puts the status at the top of each error,

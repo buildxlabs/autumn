@@ -4,11 +4,15 @@
 //! Exactly one platform is active at a time, and each keeps its own list
 //! entries per media (ADR 0004). See ARCHITECTURE §6.
 
+mod active;
+mod anilist;
 mod collection;
 mod error;
 mod local;
 mod platform;
 
+pub use active::{ActiveKind, ActivePlatform};
+pub use anilist::AniListPlatform;
 pub use collection::{Collection, List, ListName};
 pub use error::PlatformError;
 pub use local::Local;
