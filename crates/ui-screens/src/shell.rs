@@ -18,7 +18,7 @@ use gpui_kit::{
 };
 use metadata::AniList;
 use ui_components::{
-    ACCOUNT_ID, RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    ACCOUNT_ID, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -43,7 +43,7 @@ mod settings;
 
 use crate::{
     palette::{CommandPalette, Mode, PaletteEvent},
-    placeholder::{placeholder, poster_grid},
+    placeholder::{mock_media_views, placeholder},
 };
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
@@ -142,6 +142,8 @@ pub struct AppShell {
     rail_menus: usize,
     /// The counts on the rail's items.
     badges: Entity<RailBadges>,
+    /// The virtualized mock media grid on Home.
+    home_grid: Entity<PosterGrid>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -199,6 +201,7 @@ impl AppShell {
         );
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
+        let home_grid = PosterGrid::new(mock_media_views(), cx);
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -224,6 +227,7 @@ impl AppShell {
             rail_hovered: false,
             rail_menus: 0,
             badges,
+            home_grid,
         }
     }
 
@@ -558,26 +562,38 @@ impl AppShell {
     fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
-        let content = match route {
-            Route::Settings { tab } => self.render_settings(tab, cx).into_any_element(),
-            route => div()
+        let route_view = div()
+            .id("route-view")
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .test_support();
+        match route {
+            Route::Settings { tab } => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(self.render_settings(tab, cx))
+                .into_any_element(),
+            Route::Home => route_view
+                .flex()
+                .flex_col()
+                .child(div().flex_none().child(placeholder(
+                    title(route),
+                    rows(route),
+                    colors.muted_foreground,
+                )))
+                .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
+                .into_any_element(),
+            route => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
                 .child(placeholder(
                     title(route),
                     rows(route),
                     colors.muted_foreground,
                 ))
-                .children((route == Route::Home).then(|| self.render_home_posters(cx)))
                 .into_any_element(),
-        };
-        div()
-            .id("route-view")
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .overflow_y_scroll()
-            .track_scroll(self.scroll.handle())
-            .child(content)
-            .test_support()
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -588,7 +604,6 @@ impl AppShell {
     }
 
     fn render_home_posters(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let colors = cx.theme().colors;
         let state = self.fetch_status.read(cx).section(HOME_POSTERS);
         let retry = cx.listener(|shell, _: &ClickEvent, _, cx| {
             shell.fetch_status.update(cx, |_, cx| {
@@ -610,9 +625,16 @@ impl AppShell {
                 div().px_8().child(offline_empty("offline-empty", retry))
             }
             Some(SectionStatus::OfflineCached(age)) => div()
+                .flex()
+                .flex_col()
+                .size_full()
                 .child(div().px_8().pb_4().child(offline_banner(age.as_str())))
-                .child(poster_grid(colors.muted, colors.border)),
-            _ => div().child(poster_grid(colors.muted, colors.border)),
+                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
+            _ => div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
         }
     }
 }
@@ -1258,10 +1280,7 @@ mod tests {
                 has_text(window, "Offline: last updated just now"),
                 "the banner includes the cache age"
             );
-            assert!(
-                window.find("poster-1").visible(),
-                "cached content remains visible"
-            );
+            assert_grid_shown(window, "cached content remains visible");
         });
 
         show(cx, SectionFetch::Offline { last_updated: None });
@@ -1271,7 +1290,7 @@ mod tests {
                 "offline without cache has an empty state"
             );
             assert!(
-                window.try_find("poster-1").is_none(),
+                window.try_find("poster-grid-row-0").is_none(),
                 "there is no cached content"
             );
         });
@@ -1284,15 +1303,25 @@ mod tests {
 
         show(cx, SectionFetch::Ready);
         shell.act(cx, |window, _| {
-            assert!(
-                window.find("poster-1").visible(),
-                "successful fetch restores the section"
-            );
+            assert_grid_shown(window, "successful fetch restores the section");
             assert!(
                 window.try_find("offline-empty").is_none(),
                 "recovery clears the empty state"
             );
         });
+    }
+
+    /// The grid is a full-height flex child, not a zero-height auto div.
+    fn assert_grid_shown(window: &gpui_kit::Window, message: &str) {
+        assert!(window.find("poster-grid").visible(), "{message}");
+        assert!(
+            window.find("poster-grid").bounds().size.height > px(0.),
+            "the grid has room to lay out rows"
+        );
+        assert!(
+            window.try_find("poster-grid-row-0").is_some(),
+            "the first row is built"
+        );
     }
 
     fn has_text(window: &gpui_kit::Window, expected: &str) -> bool {
@@ -1308,7 +1337,7 @@ mod tests {
     #[gpui_kit::test]
     fn hovering_the_rail_expands_it_over_the_content_after_the_delay(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
-        let poster = shell.bounds(cx, "poster-1");
+        let poster = shell.bounds(cx, "poster-grid-row-0");
         assert_eq!(shell.rail_width(cx), COLLAPSED, "starts collapsed");
 
         shell.hover(cx, "rail");
@@ -1321,7 +1350,7 @@ mod tests {
         shell.wait(cx, Duration::from_millis(1));
         assert_eq!(shell.rail_width(cx), EXPANDED, "open after the delay");
         assert_eq!(
-            shell.bounds(cx, "poster-1"),
+            shell.bounds(cx, "poster-grid-row-0"),
             poster,
             "the grid behind the rail does not move"
         );
@@ -1371,7 +1400,7 @@ mod tests {
     #[gpui_kit::test]
     fn with_click_pin_the_toggle_opens_the_rail_and_pushes_the_content(cx: &mut TestAppContext) {
         let shell = Shell::open_with(cx, pinned());
-        let poster = shell.bounds(cx, "poster-1");
+        let poster = shell.bounds(cx, "poster-grid-row-0");
 
         shell.hover(cx, "rail");
         shell.wait(cx, HOVER_OPEN_DELAY);
@@ -1380,7 +1409,7 @@ mod tests {
         shell.click(cx, "rail-toggle");
         assert_eq!(shell.rail_width(cx), EXPANDED, "the toggle opens it");
         assert_eq!(
-            shell.bounds(cx, "poster-1").origin.x - poster.origin.x,
+            shell.bounds(cx, "poster-grid-row-0").origin.x - poster.origin.x,
             EXPANDED - COLLAPSED,
             "the content moves over by the extra width"
         );
@@ -1389,7 +1418,11 @@ mod tests {
         assert_eq!(shell.rail_width(cx), EXPANDED, "it stays open off the rail");
         shell.click(cx, "rail-toggle");
         assert_eq!(shell.rail_width(cx), COLLAPSED, "the toggle closes it");
-        assert_eq!(shell.bounds(cx, "poster-1"), poster, "the content is back");
+        assert_eq!(
+            shell.bounds(cx, "poster-grid-row-0"),
+            poster,
+            "the content is back"
+        );
     }
 
     #[gpui_kit::test]
