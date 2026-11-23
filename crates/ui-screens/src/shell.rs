@@ -45,7 +45,7 @@ mod settings;
 
 use crate::{
     discover::{DiscoverLoader, DiscoverView},
-    entry::{EntryEditor, render as render_entry},
+    entry::{EntryEditor, observe as observe_entry, render as render_entry},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
@@ -126,6 +126,8 @@ pub struct AppShell {
     entry_store: Entity<EntryStore>,
     /// The Entry list editor's UI state (the notes input).
     entry_editor: Entity<EntryEditor>,
+    /// Keeps the editor sync subscribed to Entry store notifications.
+    _entry_events: Subscription,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -219,6 +221,7 @@ impl AppShell {
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let entry_editor = EntryEditor::new(window, cx);
+        let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
         let home_grid = PosterGrid::new(mock_media_views(), cx);
         let user = account.read(cx).name().map(str::to_owned);
         let discover_view = DiscoverView::new(user, discover_loader, banner_cache, cx);
@@ -243,6 +246,7 @@ impl AppShell {
             fetch_status,
             entry_store,
             entry_editor,
+            _entry_events: entry_events,
             account,
             token_input,
             login_url: login_url.into(),
@@ -624,7 +628,7 @@ impl AppShell {
         }
     }
 
-    fn render_route(&self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
         let route_view = div()
@@ -675,7 +679,6 @@ impl AppShell {
                     &self.entry_editor,
                     *id,
                     &self.banner_cache,
-                    window,
                     cx,
                 ))
                 .into_any_element(),
@@ -735,7 +738,7 @@ impl AppShell {
 }
 
 impl Render for AppShell {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let expiring = self.account.read(cx).expiring();
         let expired = self.account.read(cx).expired();
@@ -750,10 +753,10 @@ impl Render for AppShell {
         // collapsed-width and the rail is drawn after the route view, so an
         // expanded rail covers the content without moving it.
         let body = if self.prefs.mode == RailMode::ClickPin {
-            body.child(rail).child(self.render_route(window, cx))
+            body.child(rail).child(self.render_route(cx))
         } else {
             body.child(div().flex_none().w(px(RAIL_WIDTH)).h_full())
-                .child(self.render_route(window, cx))
+                .child(self.render_route(cx))
                 .child(div().absolute().top_0().left_0().h_full().child(rail))
         };
         let shell = div()

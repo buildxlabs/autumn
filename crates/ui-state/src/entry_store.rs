@@ -143,6 +143,10 @@ impl EntryStore {
     /// Opens the Entry of AniList `anilist_id`: fetches the detail and the
     /// Local entry, and resets the draft to what the list holds.
     pub fn open(&mut self, anilist_id: u32, cx: &mut Context<'_, Self>) {
+        // A different Entry must not show the previous one's detail while it
+        // loads. Replacing the task already cancels the older fetch.
+        self.state = EntryState::Loading;
+        self.media = None;
         let services = Arc::clone(&self.services);
         self.open_task = Some(cx.spawn(async move |store, cx| {
             let detail = match call(cx, services.detail(anilist_id)).await {

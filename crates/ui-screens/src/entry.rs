@@ -9,7 +9,7 @@ use std::{
 use domain::{FuzzyDate, ListStatus, Score};
 use gpui_kit::{
     App, AppContext, Context, ElementId, Entity, Hsla, IntoElement, ParentElement, SharedString,
-    Styled, Window,
+    Styled, Subscription, Window,
     component::{
         ActiveTheme,
         button::Button,
@@ -101,13 +101,39 @@ impl EntryEditor {
     }
 }
 
+/// Loads the editor's notes and the carousels' item counts whenever the store
+/// finishes opening an Entry. `render` stays pure: the only entity writes are
+/// here, in a notification callback that also has a `Window` for the input.
+pub(crate) fn observe(
+    store: &Entity<EntryStore>,
+    editor: &Entity<EntryEditor>,
+    window: &mut Window,
+    cx: &mut Context<'_, AppShell>,
+) -> Subscription {
+    let editor = editor.clone();
+    cx.observe_in(store, window, move |_, store, window, cx| {
+        let ready = match store.read(cx).state() {
+            EntryState::Ready { detail, draft, .. } => (
+                detail.summary.anilist_id,
+                draft.notes.clone(),
+                detail.relations.len(),
+                detail.recommendations.len(),
+            ),
+            _ => return,
+        };
+        let (id, notes, relations, recommendations) = ready;
+        editor.update(cx, |editor, cx| {
+            editor.sync(id, &notes, relations, recommendations, window, cx);
+        });
+    })
+}
+
 /// Renders the Entry route from the store's current state.
 pub(crate) fn render(
     entry_store: &Entity<EntryStore>,
     editor: &Entity<EntryEditor>,
     id: u32,
     cache: &Entity<LruImageCache>,
-    window: &mut Window,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
     let state = entry_store.read(cx).state().clone();
@@ -142,7 +168,6 @@ pub(crate) fn render(
                 "Not on your Local list yet"
             },
             &draft,
-            window,
             cx,
         )
         .into_any_element(),
@@ -162,7 +187,6 @@ fn render_ready(
     detail: &metadata::MediaDetail,
     list_label: &str,
     draft: &EntryDraft,
-    window: &mut Window,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
     let relations = detail
@@ -171,16 +195,6 @@ fn render_ready(
         .map(|relation| &relation.media)
         .collect::<Vec<_>>();
     let recommendations = detail.recommendations.iter().collect::<Vec<_>>();
-    editor.update(cx, |editor, cx| {
-        editor.sync(
-            id,
-            &draft.notes,
-            relations.len(),
-            recommendations.len(),
-            window,
-            cx,
-        );
-    });
     let colors = cx.theme().colors;
     let summary = &detail.summary;
     let title = title_of(summary).to_owned();
