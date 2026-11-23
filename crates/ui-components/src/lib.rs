@@ -5,10 +5,12 @@
 pub mod fetch_status;
 mod image_cache;
 mod media_card;
+mod poster_grid;
 mod rail;
 
 pub use image_cache::{LruImageCache, POSTER_IMAGE_CAPACITY};
 pub use media_card::{
     MEDIA_CARD_HEIGHT, MEDIA_POSTER_HEIGHT, MediaCard, MediaCardView, MediaFormat,
 };
+pub use poster_grid::{POSTER_GAP, POSTER_WIDTH, PosterGrid, poster_columns};
 pub use rail::{ACCOUNT_ID, RAIL_EXPANDED_WIDTH, RAIL_WIDTH, Rail, RailExpansion, RailItem};
