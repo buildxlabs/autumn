@@ -1,5 +1,7 @@
 //! The places the route view can show. See ARCHITECTURE §5.
 
+use crate::lists::ListTab;
+
 /// A page in Settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[expect(
@@ -19,7 +21,7 @@ pub enum SettingsTab {
 ///
 /// ARCHITECTURE §5 lists the full set; a variant is added when its screen
 /// exists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[expect(
     clippy::exhaustive_enums,
     reason = "screens match every route, so a new route must not compile until it has a screen"
@@ -29,6 +31,11 @@ pub enum Route {
     Home,
     /// Browse the catalog.
     Discover,
+    /// The active platform's list entries in one tab.
+    Lists {
+        /// The selected status or custom list.
+        status: ListTab,
+    },
     /// The airing schedule.
     Schedule,
     /// Manga library and sources.
@@ -60,10 +67,11 @@ impl Route {
 
     /// A stable name for storing the route in settings. Never change one:
     /// saved settings refer to it.
-    pub fn key(self) -> &'static str {
+    pub fn key(&self) -> &'static str {
         match self {
             Self::Home => "home",
             Self::Discover => "discover",
+            Self::Lists { .. } => "lists",
             Self::Schedule => "schedule",
             Self::Manga => "manga",
             Self::Extensions => "extensions",
@@ -74,19 +82,37 @@ impl Route {
 
     /// The route stored under `key`, if any.
     pub fn from_key(key: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|route| route.key() == key)
+        Self::ALL.iter().find(|route| route.key() == key).cloned()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::lists::ListTab;
+
     use super::Route;
 
     #[test]
     fn every_route_round_trips_through_its_key() {
         for route in Route::ALL {
-            assert_eq!(Route::from_key(route.key()), Some(route), "{route:?}");
+            assert_eq!(
+                Route::from_key(route.key()).as_ref(),
+                Some(&route),
+                "{route:?}"
+            );
         }
         assert_eq!(Route::from_key("retired"), None, "unknown keys are ignored");
+    }
+
+    #[test]
+    fn list_tabs_are_distinct_route_values() {
+        let favourites = Route::Lists {
+            status: ListTab::Custom("Favourites".to_owned()),
+        };
+        let watching = Route::Lists {
+            status: ListTab::default(),
+        };
+        assert_eq!(favourites.key(), "lists", "the rail key ignores the tab");
+        assert_ne!(favourites, watching, "each tab keeps its own scroll slot");
     }
 }

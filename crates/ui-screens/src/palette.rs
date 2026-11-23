@@ -118,7 +118,7 @@ enum Entry {
 impl Entry {
     fn item(self) -> CommandItem {
         match self {
-            Self::Route(route) => CommandItem::new().label(title(route)).icon(icon(route)),
+            Self::Route(route) => CommandItem::new().label(title(&route)).icon(icon(&route)),
             Self::Mode(mode) => CommandItem::new()
                 .label(mode.command())
                 .icon(IconName::Search),
@@ -172,7 +172,7 @@ fn entries_for(
 }
 
 /// What the palette asks its host to do.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum PaletteEvent {
     /// The user picked a route; the host navigates and closes the palette.
     Navigate(Route),

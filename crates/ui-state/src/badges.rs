@@ -24,8 +24,8 @@ impl RailBadges {
     }
 
     /// The badge for `route`; `None` when it has no count or the count is 0.
-    pub fn count(&self, route: Route) -> Option<u32> {
-        self.counts.get(&route).copied().filter(|&count| count > 0)
+    pub fn count(&self, route: &Route) -> Option<u32> {
+        self.counts.get(route).copied().filter(|&count| count > 0)
     }
 
     /// Sets the count for `route`; 0 hides its badge.
@@ -43,10 +43,10 @@ mod tests {
     fn a_zero_count_shows_no_badge() {
         let mut badges = RailBadges::default();
         badges.set(Route::Schedule, 2);
-        assert_eq!(badges.count(Route::Schedule), Some(2));
+        assert_eq!(badges.count(&Route::Schedule), Some(2));
 
         badges.set(Route::Schedule, 0);
-        assert_eq!(badges.count(Route::Schedule), None);
-        assert_eq!(badges.count(Route::Home), None, "never set");
+        assert_eq!(badges.count(&Route::Schedule), None);
+        assert_eq!(badges.count(&Route::Home), None, "never set");
     }
 }
