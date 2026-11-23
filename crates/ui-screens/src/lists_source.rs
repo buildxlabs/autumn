@@ -188,4 +188,58 @@ mod tests {
         assert_eq!(card.entry.progress, 9, "progress persists");
         assert_eq!(card.entry.score.raw(), 75, "score persists");
     }
+
+    #[tokio::test]
+    async fn loading_entries_sends_no_anilist_requests() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        use axum::{Json, Router, extract::State, routing::post};
+        use serde_json::Value;
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route(
+                "/",
+                post(
+                    move |State(hits): State<Arc<AtomicUsize>>, Json(_): Json<Value>| {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        async { Json(serde_json::json!({"data": {}})) }
+                    },
+                ),
+            )
+            .with_state(Arc::clone(&hits));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind mock");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move { axum::serve(listener, app).await.expect("serve") });
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = Db::open(&dir.path().join("autumn.db")).await.expect("db");
+        let minted = db
+            .media()
+            .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(154_587)])
+            .await
+            .expect("mint");
+        db.local_list()
+            .save(&entry(minted.media, ListStatus::Current, 3))
+            .await
+            .expect("save entry");
+
+        let http = net::Client::builder()
+            .max_retries(0)
+            .build()
+            .expect("http client");
+        let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
+        let disk = net::PosterCache::new(dir.path()).expect("cache dir");
+        let source = LocalListSource::new(db, metadata::CatalogCache::new(anilist, disk));
+        let mut session = ListsSession::new(source);
+        session.reload().await.expect("load entries");
+
+        assert_eq!(session.cards().len(), 1, "the entry was loaded");
+        assert_eq!(hits.load(Ordering::SeqCst), 0, "Local made no requests");
+    }
 }

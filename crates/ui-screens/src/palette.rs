@@ -4,7 +4,7 @@
 //! Rows are one ungrouped list, so a confirmed `IndexPath` is a row number.
 
 use db::Db;
-use domain::MediaKind;
+use domain::{ListStatus, MediaKind};
 use gpui_kit::{
     App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
     Render, SharedString, Styled, Task, TestSupportExt, Window,
@@ -17,7 +17,7 @@ use gpui_kit::{
     div,
 };
 use metadata::{AniList, MediaSummary, PageRequest, SearchFilters};
-use ui_state::{Route, actions::COMMAND_PALETTE, bridge};
+use ui_state::{ListTab, Route, actions::COMMAND_PALETTE, bridge};
 
 use crate::{
     palette_search::{
@@ -29,7 +29,15 @@ use crate::{
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
+const ROUTES: [Route; 5] = [
+    Route::Home,
+    Route::Discover,
+    Route::Lists {
+        status: ListTab::Status(ListStatus::Current),
+    },
+    Route::Schedule,
+    Route::Manga,
+];
 
 /// What the palette lists, chosen by a slash command at the start of the query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -16,7 +16,7 @@ use gpui_kit::{
     div,
 };
 use metadata::CatalogCache;
-use ui_components::{MediaCardView, MediaFormat, PosterGrid};
+use ui_components::{MediaCardView, PosterGrid};
 use ui_state::{ListCard, ListSort, ListTab, ListsSession, QuickEdit, bridge};
 
 use crate::lists_source::LocalListSource;
@@ -105,7 +105,7 @@ fn card_view(card: &ListCard) -> MediaCardView {
             .as_ref()
             .map(|url| Resource::Uri(url.clone().into())),
         title: card.title.clone().into(),
-        format: Some(MediaFormat::Anime),
+        format: None,
         score: card.entry.score.to_point_10_decimal(),
         progress: card.entry.progress,
         total: None,
@@ -179,6 +179,24 @@ impl ListsScreen {
         self.grid.update(cx, |grid, cx| grid.set_items(views, cx));
     }
 
+    /// Swaps in freshly loaded entries without undoing a tab, query or sort
+    /// the user changed while the request was in flight.
+    fn adopt_session(
+        &mut self,
+        mut loaded: ListsSession<LocalListSource>,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let tab = self.session.tab().clone();
+        let query = self.session.query().to_owned();
+        let sort = self.session.sort();
+        loaded.set_tab(tab);
+        loaded.set_query(query);
+        loaded.set_sort(sort);
+        self.session = loaded;
+        self.error = None;
+        self.sync_grid(cx);
+    }
+
     fn reload(&mut self, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
         self.task = Some(cx.spawn(async move |screen, cx| {
@@ -188,11 +206,7 @@ impl ListsScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 match result {
-                    Ok(Ok(session)) => {
-                        screen.session = session;
-                        screen.error = None;
-                        screen.sync_grid(cx);
-                    }
+                    Ok(Ok(session)) => screen.adopt_session(session, cx),
                     Ok(Err(error)) => screen.error = Some(error.to_string()),
                     Err(error) => screen.error = Some(error.to_string()),
                 }
@@ -216,23 +230,27 @@ impl ListsScreen {
         };
         let status = card.entry.status;
         self.editing = Some(Editing { media, status });
-        let screen = cx.entity().downgrade();
+        let screen = cx.entity();
         let progress = self.progress.clone();
         let score = self.score.clone();
-        window.open_dialog(cx, move |dialog, _window, _cx| {
+        window.open_dialog(cx, move |dialog, _window, cx| {
             let screen = screen.clone();
             let progress = progress.clone();
             let score = score.clone();
+            let shown = screen
+                .read(cx)
+                .editing
+                .map_or(status, |editing| editing.status);
             dialog
                 .title("Quick edit")
                 .child(Label::new("Status"))
                 .child(
                     Button::new("edit-status")
-                        .label(status_label(status))
+                        .label(status_label(shown))
                         .on_click({
                             let screen = screen.clone();
                             move |_: &ClickEvent, _, cx| {
-                                let _ = screen.update(cx, |screen, cx| {
+                                screen.update(cx, |screen, cx| {
                                     let next = screen
                                         .editing
                                         .as_ref()
@@ -258,7 +276,7 @@ impl ListsScreen {
                 .child(Input::new(&score).aria_label("Score"))
                 .child(Button::new("edit-save").label("Save").on_click({
                     move |_: &ClickEvent, window, cx| {
-                        let _ = screen.update(cx, |screen, cx| screen.save_edit(window, cx));
+                        screen.update(cx, |screen, cx| screen.save_edit(window, cx));
                     }
                 }))
                 .child(
@@ -301,10 +319,7 @@ impl ListsScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 match result {
-                    Ok(Ok(session)) => {
-                        screen.session = session;
-                        screen.sync_grid(cx);
-                    }
+                    Ok(Ok(session)) => screen.adopt_session(session, cx),
                     Ok(Err(error)) => screen.error = Some(error.to_string()),
                     Err(error) => screen.error = Some(error.to_string()),
                 }
