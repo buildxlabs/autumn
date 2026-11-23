@@ -102,7 +102,7 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn home(&self) -> Result<Load<HomeLoad>, Error> {
         let anilist = self.anilist.clone();
-        self.load("home".to_owned(), CATALOG_TTL, async move {
+        self.section("home".to_owned(), CATALOG_TTL, async move {
             anilist.home_load().await
         })
         .await
@@ -117,7 +117,7 @@ impl CatalogCache {
         let anilist = self.anilist.clone();
         let user = missed_sequels_user.to_owned();
         let key = format!("discover:{user}");
-        self.load(key, CATALOG_TTL, async move {
+        self.section(key, CATALOG_TTL, async move {
             anilist.discover_load(&user).await
         })
         .await
@@ -130,7 +130,7 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn airing_schedule(&self) -> Result<Load<Vec<AiringEpisode>>, Error> {
         let anilist = self.anilist.clone();
-        self.load("airing_schedule".to_owned(), AIRING_TTL, async move {
+        self.section("airing_schedule".to_owned(), AIRING_TTL, async move {
             anilist.airing_schedule().await
         })
         .await
@@ -152,7 +152,7 @@ impl CatalogCache {
     /// Only on a cache miss: the fetch's error.
     pub async fn media(&self, anilist_id: u32) -> Result<Load<MediaDetail>, Error> {
         let anilist = self.anilist.clone();
-        self.load(format!("media:{anilist_id}"), ENTRY_TTL, async move {
+        self.section(format!("media:{anilist_id}"), ENTRY_TTL, async move {
             anilist.media(anilist_id).await
         })
         .await
@@ -160,7 +160,20 @@ impl CatalogCache {
 
     /// Serve `key` from disk, fetching with `fetch` on a miss and
     /// refreshing with it once the entry is older than `ttl`.
-    async fn load<T, Fut>(&self, key: String, ttl: Duration, fetch: Fut) -> Result<Load<T>, Error>
+    ///
+    /// Callers that show several independent values should give each one
+    /// its own key, so a failing fetch leaves the others renderable.
+    ///
+    /// # Errors
+    ///
+    /// On a cache miss: the fetch's error. On a stale hit, a failed refresh
+    /// is reported by the returned [`Refresh`] instead.
+    pub async fn section<T, Fut>(
+        &self,
+        key: String,
+        ttl: Duration,
+        fetch: Fut,
+    ) -> Result<Load<T>, Error>
     where
         T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<T, Error>> + Send + 'static,
@@ -356,7 +369,7 @@ mod tests {
             &self,
             fetch: impl Future<Output = Result<String, Error>> + Send + 'static,
         ) -> Result<Load<String>, Error> {
-            self.cache.load(KEY.to_owned(), TTL, fetch).await
+            self.cache.section(KEY.to_owned(), TTL, fetch).await
         }
 
         fn fetches(&self) -> usize {
