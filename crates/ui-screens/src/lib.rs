@@ -7,6 +7,7 @@ mod lists_source;
 mod palette;
 mod palette_search;
 mod placeholder;
+mod search;
 mod search_catalog;
 mod shell;
 

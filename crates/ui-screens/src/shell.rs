@@ -24,7 +24,7 @@ use ui_components::{
     },
 };
 use ui_state::{
-    RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
+    RailBadges, Route, RouterState, ScrollRestore, SearchFilters, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
@@ -45,6 +45,7 @@ use crate::{
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
+    search::{SearchEvent, SearchScreen},
 };
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
@@ -148,6 +149,8 @@ pub struct AppShell {
     /// My Lists is built only when startup supplied a catalog cache.
     lists: Option<Entity<ListsScreen>>,
     lists_events: Option<Subscription>,
+    search: Option<Entity<SearchScreen>>,
+    search_events: Option<Subscription>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -234,6 +237,8 @@ impl AppShell {
             home_grid,
             lists: None,
             lists_events: None,
+            search: None,
+            search_events: None,
         }
     }
 
@@ -268,9 +273,9 @@ impl AppShell {
             window,
             cx,
         );
-        shell
-            .palette
-            .update(cx, |palette, _| palette.attach_sources(db.clone(), anilist));
+        shell.palette.update(cx, |palette, _| {
+            palette.attach_sources(db.clone(), anilist.clone());
+        });
         let lists = ListsScreen::new(db, catalog, window, cx);
         let events = cx.subscribe(&lists, |shell, _, event: &ListsEvent, cx| {
             let ListsEvent::SelectTab(status) = event;
@@ -284,6 +289,17 @@ impl AppShell {
         cx.observe(&lists, |_, _, cx| cx.notify()).detach();
         shell.lists = Some(lists);
         shell.lists_events = Some(events);
+
+        let search = SearchScreen::new(SearchFilters::default(), anilist, window, cx);
+        let events = cx.subscribe(&search, |shell, _, event: &SearchEvent, cx| match event {
+            SearchEvent::Filters(filters) => {
+                shell.navigate(Route::Search(filters.clone()), cx);
+            }
+            SearchEvent::Loaded => shell.scroll.content_loaded(),
+        });
+        cx.observe(&search, |_, _, cx| cx.notify()).detach();
+        shell.search = Some(search);
+        shell.search_events = Some(events);
         shell
     }
 
@@ -371,6 +387,9 @@ impl AppShell {
             }
             if let (Route::Lists { status }, Some(lists)) = (self.route(), &self.lists) {
                 lists.update(cx, |lists, cx| lists.set_tab(status, cx));
+            }
+            if let (Route::Search(filters), Some(search)) = (self.route(), &self.search) {
+                search.update(cx, |search, cx| search.set_filters(filters, cx));
             }
             cx.notify();
         }
@@ -607,6 +626,18 @@ impl AppShell {
                 )))
                 .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
                 .into_any_element(),
+            Route::Search(_) => match &self.search {
+                Some(search) => route_view.child(search.clone()).into_any_element(),
+                None => route_view
+                    .overflow_y_scroll()
+                    .track_scroll(self.scroll.handle())
+                    .child(placeholder(
+                        title(&route),
+                        rows(&route),
+                        colors.muted_foreground,
+                    ))
+                    .into_any_element(),
+            },
             Route::Lists { .. } => match &self.lists {
                 Some(lists) => route_view.child(lists.clone()).into_any_element(),
                 None => route_view
