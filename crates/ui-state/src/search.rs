@@ -97,7 +97,7 @@ pub enum SearchSeason {
 /// The full AniList filter set from decision #23. Stored by value in
 /// [`Route::Search`], so Back restores the filters along with the scroll
 /// offset keyed by that route value.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[expect(
     clippy::exhaustive_structs,
     reason = "the AniList filter set is fixed by decision #23 and the route owns it"
@@ -123,6 +123,29 @@ pub struct SearchFilters {
     pub country: Option<String>,
     /// Whether to show adult media.
     pub adult: bool,
+}
+
+impl SearchFilters {
+    /// The empty filter set, used both at startup and for the default Search
+    /// route so the two cannot drift apart.
+    pub const EMPTY: Self = Self {
+        query: None,
+        kind: None,
+        sort: None,
+        format: None,
+        status: None,
+        season: None,
+        year: None,
+        genres: Vec::new(),
+        country: None,
+        adult: false,
+    };
+}
+
+impl Default for SearchFilters {
+    fn default() -> Self {
+        Self::EMPTY
+    }
 }
 
 /// One result card's catalog text.

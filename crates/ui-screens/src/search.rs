@@ -6,10 +6,11 @@ use std::{collections::HashMap, time::Duration};
 
 use domain::MediaKind;
 use gpui_kit::{
-    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
-    Render, Resource, Styled, Subscription, Task, TestSupportExt, Window,
+    AnyWindowHandle, App, AppContext, Context, Entity, EventEmitter, InteractiveElement,
+    IntoElement, ParentElement, Pixels, Point, Render, Resource, Styled, Subscription, Task,
+    TestSupportExt, Window,
     component::{
-        ActiveTheme, Disableable,
+        ActiveTheme,
         button::Button,
         input::{Input, InputEvent, InputState},
         switch::Switch,
@@ -44,6 +45,9 @@ pub(crate) struct SearchScreen {
     /// Last loaded pages per committed filter set, so Back restores a prior
     /// search without re-fetching or clamping its scroll offset.
     cache: HashMap<SearchFilters, RestoredPage>,
+    /// The window handle lets a restored route write text into the inputs
+    /// even when the shell navigates without a `Window` in hand.
+    window: AnyWindowHandle,
     grid: Entity<PosterGrid>,
     query: Entity<InputState>,
     genres: Entity<InputState>,
@@ -52,6 +56,10 @@ pub(crate) struct SearchScreen {
     _subscriptions: Vec<Subscription>,
     error: Option<String>,
     task: Option<Task<()>>,
+    /// The page a request is in flight for, so scrolling cannot start two.
+    requested_page: u32,
+    /// The saved grid offset to re-apply once restored results are drawn.
+    scroll_pending: Option<Point<Pixels>>,
 }
 
 impl std::fmt::Debug for SearchScreen {
@@ -152,6 +160,39 @@ fn card_view(media: &ui_state::MediaPreview) -> MediaCardView {
     }
 }
 
+/// Plain text restored into the four filter inputs.
+struct InputText {
+    query: String,
+    genres: String,
+    country: String,
+    year: String,
+}
+
+/// The input handles, cloned so restoration can be deferred to another turn.
+struct InputEntities {
+    query: Entity<InputState>,
+    genres: Entity<InputState>,
+    country: Entity<InputState>,
+    year: Entity<InputState>,
+}
+
+impl InputEntities {
+    fn write(&self, text: &InputText, window: &mut Window, cx: &mut App) {
+        self.query.update(cx, |input, cx| {
+            input.set_value(text.query.clone(), window, cx);
+        });
+        self.genres.update(cx, |input, cx| {
+            input.set_value(text.genres.clone(), window, cx);
+        });
+        self.country.update(cx, |input, cx| {
+            input.set_value(text.country.clone(), window, cx);
+        });
+        self.year.update(cx, |input, cx| {
+            input.set_value(text.year.clone(), window, cx);
+        });
+    }
+}
+
 impl SearchScreen {
     /// Creates the screen with the filters carried by the route.
     pub(crate) fn new(
@@ -184,6 +225,7 @@ impl SearchScreen {
             Self {
                 session: SearchSession::new(AniListCatalog::new(anilist), filters),
                 cache: HashMap::new(),
+                window: window.window_handle(),
                 grid: PosterGrid::new(Vec::new(), cx),
                 query,
                 genres,
@@ -192,40 +234,154 @@ impl SearchScreen {
                 _subscriptions: subscriptions,
                 error: None,
                 task: None,
+                requested_page: 0,
+                scroll_pending: None,
             }
         });
-        screen.update(cx, SearchScreen::apply_now);
+        let weak = screen.downgrade();
+        screen.update(cx, |screen, cx| {
+            screen.grid.update(cx, |grid, cx| {
+                grid.on_near_end(move |_, app| {
+                    let _ = weak.update(app, SearchScreen::maybe_next_page);
+                });
+                cx.notify();
+            });
+        });
+        // No request here: creation happens at startup. The first page is
+        // fetched when the Search route is first shown.
         screen
     }
 
     /// Applies filters from a restored route without navigating again.
     pub(crate) fn set_filters(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
-        if self.session.filters() != &filters {
-            if let Some(loaded) = self.cache.get(&filters).cloned() {
-                self.session.restore(filters, loaded);
-                self.sync_grid(cx);
-                cx.emit(SearchEvent::Loaded);
-                cx.notify();
-                return;
-            }
-            let mut session = self.session.clone();
-            self.task = Some(cx.spawn(async move |screen, cx| {
-                let task = cx.update(|cx| {
-                    bridge::run(
-                        cx,
-                        async move { session.apply(filters).await.map(|()| session) },
-                    )
-                });
-                let result = task.await;
-                let _ = screen.update(cx, |screen, cx| {
-                    if let Ok(Ok(session)) = result {
+        self.write_inputs(&filters, cx);
+        let first_show = self.session.page() == 0;
+        if self.session.filters() == &filters && !first_show {
+            return;
+        }
+        if let Some(loaded) = self.cache.get(&filters).cloned() {
+            self.session.restore(filters, loaded);
+            self.requested_page = self.session.page();
+            self.error = None;
+            self.sync_grid(cx);
+            cx.emit(SearchEvent::Loaded);
+            cx.notify();
+            return;
+        }
+        self.load(filters, cx);
+    }
+
+    /// Writes restored text into the inputs. `set_value` emits no Change
+    /// event, so the next keystroke sees the restored text without re-applying
+    /// the filters here.
+    fn write_inputs(&self, filters: &SearchFilters, cx: &mut Context<'_, Self>) {
+        let text = InputText {
+            query: filters.query.clone().unwrap_or_default(),
+            genres: filters.genres.join(", "),
+            country: filters.country.clone().unwrap_or_default(),
+            year: filters
+                .year
+                .map_or_else(String::new, |year| year.to_string()),
+        };
+        let inputs = self.input_entities();
+        let window = self.window;
+        if window
+            .update(cx, |_, window, app| inputs.write(&text, window, app))
+            .is_err()
+        {
+            // A Back keypress is handled inside `update_window`, which locks
+            // the window against a nested update. Retry once it is free.
+            cx.spawn(async move |_, cx| {
+                let _ = window.update(cx, |_, window, app| inputs.write(&text, window, app));
+            })
+            .detach();
+        }
+    }
+
+    fn input_entities(&self) -> InputEntities {
+        InputEntities {
+            query: self.query.clone(),
+            genres: self.genres.clone(),
+            country: self.country.clone(),
+            year: self.year.clone(),
+        }
+    }
+
+    /// Fetches page one for `filters` without publishing a route change.
+    fn load(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
+        let mut session = self.session.clone();
+        self.requested_page = 1;
+        self.task = Some(cx.spawn(async move |screen, cx| {
+            let task = cx.update(|cx| {
+                bridge::run(
+                    cx,
+                    async move { session.apply(filters).await.map(|()| session) },
+                )
+            });
+            let result = task.await;
+            let _ = screen.update(cx, |screen, cx| {
+                match result {
+                    Ok(Ok(session)) => {
                         screen.session = session;
+                        screen.requested_page = screen.session.page();
+                        screen.error = None;
+                        screen.remember();
                         screen.sync_grid(cx);
                         cx.emit(SearchEvent::Loaded);
                     }
-                    cx.notify();
-                });
-            }));
+                    Ok(Err(error)) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
+                    Err(error) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        }));
+    }
+
+    /// Test seam: the query currently shown in the input.
+    #[cfg(test)]
+    pub(crate) fn query_text(&self, cx: &App) -> String {
+        self.query.read(cx).value().to_string()
+    }
+
+    /// Test seam: types into the query without going through the keyboard.
+    #[cfg(test)]
+    pub(crate) fn set_query_text(&self, text: &str, cx: &mut Context<'_, Self>) {
+        let query = self.query.clone();
+        let value = text.to_owned();
+        let window = self.window;
+        let _ = window.update(cx, |_, window, app| {
+            query.update(app, |input, cx| input.set_value(value, window, cx));
+        });
+    }
+
+    /// The grid's scroll offset, saved into the route when leaving Search.
+    pub(crate) fn scroll_offset(&self, cx: &App) -> Point<Pixels> {
+        self.grid.read(cx).scroll_offset()
+    }
+
+    /// Sets a saved offset and keeps it for the next `content_loaded`.
+    pub(crate) fn restore_scroll(&mut self, offset: Point<Pixels>, cx: &mut Context<'_, Self>) {
+        self.grid.read(cx).set_scroll_offset(offset);
+        self.scroll_pending = Some(offset);
+    }
+
+    /// Re-applies the saved offset once restored results have been drawn.
+    pub(crate) fn content_loaded(&mut self, cx: &mut Context<'_, Self>) {
+        if let Some(offset) = self.scroll_pending.take() {
+            self.grid.read(cx).set_scroll_offset(offset);
+        }
+    }
+
+    /// Pages when the user scrolls near the end of the loaded results.
+    fn maybe_next_page(&mut self, cx: &mut Context<'_, Self>) {
+        if self.session.has_next() && self.session.page() >= self.requested_page {
+            self.next_page(cx);
         }
     }
 
@@ -281,6 +437,7 @@ impl SearchScreen {
     ) {
         let filters = self.collected(query, genres, country, year, cx);
         let mut session = self.session.clone();
+        self.requested_page = 1;
         self.task = Some(cx.spawn(async move |screen, cx| {
             cx.background_executor().timer(DEBOUNCE).await;
             let task = cx.update(|cx| {
@@ -293,6 +450,7 @@ impl SearchScreen {
             let _ = screen.update(cx, |screen, cx| match result {
                 Ok(Ok(session)) => {
                     screen.session = session;
+                    screen.requested_page = screen.session.page();
                     screen.error = None;
                     screen.remember();
                     cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
@@ -301,10 +459,12 @@ impl SearchScreen {
                     cx.notify();
                 }
                 Ok(Err(error)) => {
+                    screen.requested_page = screen.session.page();
                     screen.error = Some(error.to_string());
                     cx.notify();
                 }
                 Err(error) => {
+                    screen.requested_page = screen.session.page();
                     screen.error = Some(error.to_string());
                     cx.notify();
                 }
@@ -317,6 +477,7 @@ impl SearchScreen {
     /// earlier filter or page request.
     fn apply_with(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
+        self.requested_page = 1;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(
@@ -329,6 +490,7 @@ impl SearchScreen {
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
+                        screen.requested_page = screen.session.page();
                         screen.error = None;
                         screen.remember();
                         // Publish the route before resizing the grid: the
@@ -337,25 +499,33 @@ impl SearchScreen {
                         screen.sync_grid(cx);
                         cx.emit(SearchEvent::Loaded);
                     }
-                    Ok(Err(error)) => screen.error = Some(error.to_string()),
-                    Err(error) => screen.error = Some(error.to_string()),
+                    Ok(Err(error)) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
+                    Err(error) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
                 }
                 cx.notify();
             });
         }));
     }
 
-    /// Commits the current filters once, used for the initial page.
-    fn apply_now(&mut self, cx: &mut Context<'_, Self>) {
-        let filters = self.session.filters().clone();
-        self.apply_with(filters, cx);
-    }
-
     fn change<F>(&mut self, cx: &mut Context<'_, Self>, update: F)
     where
         F: FnOnce(&mut SearchFilters),
     {
-        let mut filters = self.session.filters().clone();
+        // Fold in text still waiting out the debounce, so a quick button
+        // click cannot drop the last typed edit.
+        let (q, g, c, y) = (
+            self.query.clone(),
+            self.genres.clone(),
+            self.country.clone(),
+            self.year.clone(),
+        );
+        let mut filters = self.collected(&q, &g, &c, &y, cx);
         update(&mut filters);
         self.apply_with(filters, cx);
     }
@@ -363,6 +533,7 @@ impl SearchScreen {
     /// Loads one more page; the retained Task cancels an older page request.
     fn next_page(&mut self, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
+        self.requested_page = session.page() + 1;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(
@@ -375,13 +546,20 @@ impl SearchScreen {
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
+                        screen.requested_page = screen.session.page();
                         screen.error = None;
                         screen.remember();
                         screen.sync_grid(cx);
                         cx.emit(SearchEvent::Loaded);
                     }
-                    Ok(Err(error)) => screen.error = Some(error.to_string()),
-                    Err(error) => screen.error = Some(error.to_string()),
+                    Ok(Err(error)) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
+                    Err(error) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                    }
                 }
                 cx.notify();
             });
@@ -470,16 +648,6 @@ impl Render for SearchScreen {
                     .child(error.clone())
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
-            .child(
-                div().p_4().flex().justify_center().child(
-                    Button::new("search-more")
-                        .label(format!("Load more (page {})", self.session.page() + 1))
-                        .disabled(!self.session.has_next())
-                        .on_click(cx.listener(|screen: &mut Self, _, _, cx| {
-                            screen.next_page(cx);
-                        })),
-                ),
-            )
             .test_support()
     }
 }
