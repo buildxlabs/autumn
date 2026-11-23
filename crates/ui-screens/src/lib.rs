@@ -3,6 +3,7 @@
 //! See ARCHITECTURE §2 and §5.
 
 mod discover;
+mod entry;
 mod lists;
 mod lists_source;
 mod palette;

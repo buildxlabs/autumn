@@ -28,7 +28,7 @@ use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
-    entry_store::{EntryState, EntryStore},
+    entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
 };
 
@@ -45,6 +45,7 @@ mod settings;
 
 use crate::{
     discover::{DiscoverLoader, DiscoverView},
+    entry::{EntryEditor, render as render_entry},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
@@ -123,6 +124,8 @@ pub struct AppShell {
     fetch_status: Entity<FetchStatus>,
     /// The Anime Entry screen's store; `show` opens the current Entry.
     entry_store: Entity<EntryStore>,
+    /// The Entry list editor's UI state (the notes input).
+    entry_editor: Entity<EntryEditor>,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -215,6 +218,7 @@ impl AppShell {
         );
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
+        let entry_editor = EntryEditor::new(window, cx);
         let home_grid = PosterGrid::new(mock_media_views(), cx);
         let user = account.read(cx).name().map(str::to_owned);
         let discover_view = DiscoverView::new(user, discover_loader, banner_cache, cx);
@@ -238,6 +242,7 @@ impl AppShell {
             _palette_events: palette_events,
             fetch_status,
             entry_store,
+            entry_editor,
             account,
             token_input,
             login_url: login_url.into(),
@@ -618,7 +623,7 @@ impl AppShell {
         }
     }
 
-    fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render_route(&self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
         let route_view = div()
@@ -664,7 +669,13 @@ impl AppShell {
             Route::Entry { id } => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
-                .child(self.render_entry(*id, cx))
+                .child(render_entry(
+                    &self.entry_store,
+                    &self.entry_editor,
+                    *id,
+                    window,
+                    cx,
+                ))
                 .into_any_element(),
             route => route_view
                 .overflow_y_scroll()
@@ -683,30 +694,6 @@ impl AppShell {
         self.fetch_status.update(cx, |_, cx| {
             FetchStatus::request(FetchCommand::Debug(fetch), cx);
         });
-    }
-
-    /// The Anime Entry screen: the store's loading and error states through
-    /// the fetch-status components. The placeholder shows until the hero and
-    /// characters UI lands with #55/#56.
-    fn render_entry(&self, id: u32, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let colors = cx.theme().colors;
-        let route = Route::Entry { id };
-        let entry_store = self.entry_store.clone();
-        match self.entry_store.read(cx).state() {
-            EntryState::Loading => div().child(fetch_loader()),
-            EntryState::Failed(message) => div().px_8().child(error_card(
-                "entry-error",
-                FetchError::Request(message),
-                move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
-                    entry_store.update(cx, |store, cx| store.open(id, cx));
-                },
-            )),
-            EntryState::Ready { .. } => div().child(placeholder(
-                title(route),
-                rows(route),
-                colors.muted_foreground,
-            )),
-        }
     }
 
     fn render_home_posters(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
@@ -746,7 +733,7 @@ impl AppShell {
 }
 
 impl Render for AppShell {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let expiring = self.account.read(cx).expiring();
         let expired = self.account.read(cx).expired();
@@ -761,10 +748,10 @@ impl Render for AppShell {
         // collapsed-width and the rail is drawn after the route view, so an
         // expanded rail covers the content without moving it.
         let body = if self.prefs.mode == RailMode::ClickPin {
-            body.child(rail).child(self.render_route(cx))
+            body.child(rail).child(self.render_route(window, cx))
         } else {
             body.child(div().flex_none().w(px(RAIL_WIDTH)).h_full())
-                .child(self.render_route(cx))
+                .child(self.render_route(window, cx))
                 .child(div().absolute().top_0().left_0().h_full().child(rail))
         };
         let shell = div()
