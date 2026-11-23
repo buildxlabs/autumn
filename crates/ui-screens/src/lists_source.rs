@@ -1,13 +1,14 @@
-//! The account-free Local platform behind My Lists (ticket #60).
+//! The active platform behind My Lists (tickets #60 and #66).
 //!
-//! Entries come from SQLite and their card text from the stale-first catalog
-//! cache. Reading the cache never fetches, so this screen makes zero network
-//! requests while the Local platform is active.
+//! Entries and edits go through ui-state's `PlatformGateway`, so this screen
+//! never names the tracker crate. Card text comes from the stale-first cache
+//! and only needs SQLite for external-id cross-references; a cache miss never
+//! fetches, so the Local platform still makes zero network requests.
 
 use db::Db;
 use domain::{ExternalId, ListEntry, MediaId, MediaKind};
 use metadata::CatalogCache;
-use ui_state::{ListCard, ListSource, ListSourceError, QuickEdit};
+use ui_state::{ListCard, ListSource, ListSourceError, PlatformGateway, QuickEdit};
 
 use crate::palette_search::display_label;
 
@@ -15,17 +16,23 @@ fn source_error(error: impl std::fmt::Display) -> ListSourceError {
     ListSourceError::new(error.to_string())
 }
 
-/// Reads and writes list entries on the Local platform.
+/// Reads and writes list entries on whichever platform is active.
 #[derive(Debug, Clone)]
-pub(crate) struct LocalListSource {
+pub(crate) struct PlatformListSource {
+    gateway: PlatformGateway,
     db: Db,
     catalog: CatalogCache,
 }
 
-impl LocalListSource {
-    /// Uses `db` for entries and `catalog` for cached card text only.
-    pub(crate) fn new(db: Db, catalog: CatalogCache) -> Self {
-        Self { db, catalog }
+impl PlatformListSource {
+    /// Uses `gateway` for entries and edits, `db` only for external ids and
+    /// `catalog` for cached card text.
+    pub(crate) fn new(gateway: PlatformGateway, db: Db, catalog: CatalogCache) -> Self {
+        Self {
+            gateway,
+            db,
+            catalog,
+        }
     }
 
     /// The title and poster already on disk for `entry`, or a fallback.
@@ -58,17 +65,11 @@ impl LocalListSource {
     }
 }
 
-impl ListSource for LocalListSource {
+impl ListSource for PlatformListSource {
     async fn load(&self) -> Result<Vec<ListCard>, ListSourceError> {
         let mut cards = Vec::new();
         for kind in [MediaKind::Anime, MediaKind::Manga] {
-            let entries = self
-                .db
-                .local_list()
-                .entries(kind)
-                .await
-                .map_err(source_error)?;
-            for entry in entries {
+            for entry in self.gateway.entries(kind).await.map_err(source_error)? {
                 cards.push(self.card(entry).await?);
             }
         }
@@ -76,28 +77,10 @@ impl ListSource for LocalListSource {
     }
 
     async fn save(&self, media: MediaId, edit: &QuickEdit) -> Result<(), ListSourceError> {
-        let mut entry = self
-            .db
-            .local_list()
-            .entry(media)
+        self.gateway
+            .edit_entry(media, edit)
             .await
-            .map_err(source_error)?
-            .ok_or_else(|| ListSourceError::new("no list entry for that media"))?;
-        if let Some(status) = edit.status {
-            entry.status = status;
-        }
-        if let Some(progress) = edit.progress {
-            entry.progress = progress;
-        }
-        if let Some(score) = edit.score {
-            entry.score = score;
-        }
-        self.db
-            .local_list()
-            .save(&entry)
-            .await
-            .map_err(source_error)?;
-        Ok(())
+            .map_err(source_error)
     }
 }
 
@@ -109,9 +92,9 @@ mod tests {
     use domain::{
         AdvancedScores, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score,
     };
-    use ui_state::{ListTab, ListsSession, QuickEdit};
+    use ui_state::{ListTab, ListsSession, PlatformGateway, QuickEdit};
 
-    use super::LocalListSource;
+    use super::PlatformListSource;
 
     fn entry(media: MediaId, status: ListStatus, progress: u32) -> ListEntry {
         ListEntry {
@@ -134,14 +117,15 @@ mod tests {
         }
     }
 
-    fn source(db: Db, cache_dir: &std::path::Path) -> LocalListSource {
+    fn source(db: Db, cache_dir: &std::path::Path) -> PlatformListSource {
         let http = net::Client::builder()
             .max_retries(0)
             .build()
             .expect("test client");
         let anilist = metadata::AniList::new(http);
         let disk = net::PosterCache::new(cache_dir).expect("test cache dir");
-        LocalListSource::new(db, metadata::CatalogCache::new(anilist, disk))
+        let gateway = PlatformGateway::new(tracker::Local::new(db.clone()));
+        PlatformListSource::new(gateway, db, metadata::CatalogCache::new(anilist, disk))
     }
 
     #[tokio::test]
@@ -235,7 +219,9 @@ mod tests {
             .expect("http client");
         let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
         let disk = net::PosterCache::new(dir.path()).expect("cache dir");
-        let source = LocalListSource::new(db, metadata::CatalogCache::new(anilist, disk));
+        let gateway = PlatformGateway::new(tracker::Local::new(db.clone()));
+        let source =
+            PlatformListSource::new(gateway, db, metadata::CatalogCache::new(anilist, disk));
         let mut session = ListsSession::new(source);
         session.reload().await.expect("load entries");
 

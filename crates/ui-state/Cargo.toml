@@ -13,6 +13,7 @@ workspace = true
 test-util = [  ]
 
 [dependencies]
+db.workspace        = true
 domain.workspace    = true
 engine.workspace    = true
 flume.workspace     = true
@@ -21,7 +22,12 @@ metadata.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
 tracing.workspace   = true
+tracker.workspace   = true
 
 [dev-dependencies]
-gpui-kit = { features = [ "test-support" ], workspace = true }
-tokio    = { features = [ "rt-multi-thread" ], workspace = true }
+db.workspace       = true
+gpui-kit           = { features = [ "test-support" ], workspace = true }
+metadata.workspace = true
+net.workspace      = true
+tempfile.workspace = true
+tokio              = { features = [ "macros", "rt-multi-thread" ], workspace = true }

@@ -11,6 +11,7 @@ pub mod events;
 pub mod fetch_status;
 pub mod home_store;
 pub mod lists;
+pub mod platform;
 mod route;
 mod router;
 mod scroll;
@@ -24,6 +25,7 @@ pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };
+pub use platform::{GatewayError, PlatformGateway};
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};

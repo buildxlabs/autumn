@@ -11,7 +11,7 @@ use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 
 use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
-use domain::AppEvent;
+use domain::{AniListAccountState, AppEvent};
 use engine::{Engine, EngineServices};
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
@@ -22,6 +22,7 @@ use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
 use ui_state::{
+    AniListHandle, PlatformGateway,
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
@@ -76,11 +77,47 @@ fn main() -> ExitCode {
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), engine.poster_cache());
     let (engine_events, ui_events) = ui_state::events::channel();
+    let gateway = PlatformGateway::with_events(engine.db().clone(), engine_events.clone());
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
-    let restored = handle.block_on(session.restore(SystemTime::now()));
+    let mut restored = handle.block_on(session.restore(SystemTime::now()));
+    let mut keychain_error = None;
+    if !matches!(restored, AniListAccountState::LoggedOut) {
+        let name = account::name(&restored);
+        match handle.block_on(session.token()) {
+            Ok(Some(token)) => {
+                gateway.connect_anilist(AniListHandle::new(
+                    engine.db().clone(),
+                    anilist.clone(),
+                    token,
+                    name,
+                ));
+                if matches!(restored, AniListAccountState::Expired { .. }) {
+                    gateway.mark_read_only();
+                }
+            }
+            // Without a token Local serves the lists, so the account must
+            // not be shown as connected.
+            Ok(None) => restored = AniListAccountState::LoggedOut,
+            Err(error) => {
+                // Surface a keychain failure instead of silently using Local.
+                keychain_error = Some(error.to_string());
+                restored = AniListAccountState::LoggedOut;
+            }
+        }
+    }
     let _ = engine_events.send(AppEvent::AccountChanged(restored));
-    let account_request = account::request(session, engine_events.clone());
+    // After the state change, which clears any earlier account error.
+    if let Some(message) = keychain_error {
+        let _ = engine_events.send(AppEvent::AccountError(message));
+    }
+    let account_request = account::request(
+        session,
+        gateway.clone(),
+        engine.db().clone(),
+        anilist.clone(),
+        engine_events.clone(),
+    );
     handle.spawn({
         let client = client.clone();
         let events = engine_events.clone();
@@ -140,6 +177,7 @@ fn main() -> ExitCode {
                 engine.db().clone(),
                 anilist,
                 catalog,
+                gateway,
                 cx,
             ) {
                 // Logging is up, so this also reaches stderr.
@@ -196,6 +234,7 @@ fn open_main_window(
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
+    gateway: PlatformGateway,
     cx: &mut App,
 ) -> gpui_kit::Result<()> {
     let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
@@ -216,6 +255,7 @@ fn open_main_window(
                 db,
                 anilist,
                 catalog,
+                gateway,
                 window,
                 cx,
             )
@@ -263,6 +303,7 @@ mod tests {
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
     use ui_screens::{DiscoverUpdate, RailPrefs};
+    use ui_state::PlatformGateway;
     use ui_state::{
         account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
         test_support::pending_services,
@@ -305,9 +346,10 @@ mod tests {
                 }),
                 entry_store,
                 home_store,
-                db,
+                db.clone(),
                 anilist,
                 catalog,
+                PlatformGateway::new(db),
                 cx,
             )
             .expect("the test platform opens windows");
