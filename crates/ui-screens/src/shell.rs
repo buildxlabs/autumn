@@ -11,6 +11,7 @@ use gpui_kit::{
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
+        carousel::CarouselState,
         input::InputState,
         label::Label,
     },
@@ -18,8 +19,8 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, LruImageCache, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
-    RailItem,
+    ACCOUNT_ID, LruImageCache, MediaCarousel, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail,
+    RailExpansion, RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -156,8 +157,12 @@ pub struct AppShell {
     /// My Lists is built only when startup supplied a catalog cache.
     lists: Option<Entity<ListsScreen>>,
     lists_events: Option<Subscription>,
-    /// Bounded decoded-image cache shared by the banner and, later, posters.
+    /// Bounded decoded-image cache shared by the banner and carousel.
     banner_cache: Entity<LruImageCache>,
+    /// The mock carousel's paging state, owned here so it survives redraws.
+    media_carousel: Entity<CarouselState>,
+    /// The cards shown in the mock carousel.
+    carousel_items: Vec<ui_components::MediaCardView>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -217,6 +222,8 @@ impl AppShell {
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let home_grid = PosterGrid::new(mock_media_views(), cx);
+        let carousel_items = mock_media_views().into_iter().take(12).collect::<Vec<_>>();
+        let media_carousel = cx.new(|_| CarouselState::new(carousel_items.len()));
         Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
@@ -246,6 +253,8 @@ impl AppShell {
             lists: None,
             lists_events: None,
             banner_cache,
+            media_carousel,
+            carousel_items,
         }
     }
 
@@ -739,6 +748,18 @@ impl AppShell {
                 colors.accent,
                 colors.background,
                 actions(),
+            ))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child("Media carousel — drag, use the arrows, or Alt+wheel"),
+            )
+            .child(MediaCarousel::new(
+                "discover-carousel",
+                self.media_carousel.clone(),
+                self.carousel_items.clone(),
+                self.banner_cache.clone(),
             ))
     }
 }
@@ -2026,5 +2047,41 @@ mod tests {
             !shell.shows(cx, "hero-without-image"),
             "a media without a bannerImage gets the gradient, not an img"
         );
+    }
+
+    #[gpui_kit::test]
+    fn the_mock_carousel_renders_cards_and_its_arrow_pages(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-discover");
+
+        assert!(
+            shell.shows(cx, "discover-carousel"),
+            "the carousel is on screen"
+        );
+        assert!(
+            shell.shows(cx, "discover-carousel-card-0"),
+            "the first media card is drawn"
+        );
+        let selected = |cx: &mut TestAppContext| {
+            shell.view.read_with(cx, |shell, cx| {
+                shell
+                    .media_carousel
+                    .read_with(cx, |state, _| state.selected_index())
+            })
+        };
+        assert_eq!(selected(cx), Some(0));
+
+        // The placeholder's long list puts the arrows below the fold.
+        shell.act(cx, |window, cx| {
+            window.scroll(
+                "route-view",
+                ScrollDelta::Pixels(point(px(0.), px(-520.))),
+                cx,
+            );
+        });
+        shell.click(cx, "discover-carousel-next");
+        assert_eq!(selected(cx), Some(1), "the next arrow paged one card");
+        shell.click(cx, "discover-carousel-previous");
+        assert_eq!(selected(cx), Some(0), "the previous arrow paged back");
     }
 }

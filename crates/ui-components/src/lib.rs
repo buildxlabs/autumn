@@ -10,6 +10,7 @@ mod media_card;
 mod poster_grid;
 mod rail;
 
+pub use carousel::{MediaCarousel, PageDirection, alt_wheel_delta, page};
 pub use image_cache::{LruImageCache, POSTER_IMAGE_CAPACITY};
 pub use media_card::{
     MEDIA_CARD_HEIGHT, MEDIA_POSTER_HEIGHT, MediaCard, MediaCardView, MediaFormat,
