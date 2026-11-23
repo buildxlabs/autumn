@@ -2,12 +2,17 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+pub mod carousel;
 pub mod fetch_status;
+pub mod hero;
 mod image_cache;
 mod media_card;
 mod poster_grid;
 mod rail;
 
+pub use carousel::{
+    CarouselWheel, MediaCarousel, PageDirection, WHEEL_PAGE_THRESHOLD, alt_wheel_delta, page,
+};
 pub use image_cache::{LruImageCache, POSTER_IMAGE_CAPACITY};
 pub use media_card::{
     MEDIA_CARD_HEIGHT, MEDIA_POSTER_HEIGHT, MediaCard, MediaCardView, MediaFormat,
