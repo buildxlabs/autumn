@@ -60,12 +60,6 @@ impl ActivePlatform {
     pub fn active(&self) -> ActiveKind {
         self.active
     }
-
-    /// The dormant Local platform, for the reviewed list transfer.
-    #[must_use]
-    pub fn local(&self) -> &Local {
-        &self.local
-    }
 }
 
 impl Platform for ActivePlatform {

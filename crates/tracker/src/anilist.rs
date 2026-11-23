@@ -140,7 +140,8 @@ impl Platform for AniListPlatform {
         // AniList caps a collection at its 11,000 most recently updated
         // entries. Collection has no room for the flag, so keep it here for
         // the UI instead of pretending the list is complete.
-        self.truncated.store(data.has_next_chunk, Ordering::SeqCst);
+        self.truncated
+            .fetch_or(data.has_next_chunk, Ordering::SeqCst);
         let mut merged: Vec<(MediaId, ListEntry)> = Vec::new();
         for group in &data.lists {
             for entry in &group.entries {
@@ -233,8 +234,20 @@ impl Platform for AniListPlatform {
     }
 
     async fn delete_entry(&self, media: MediaId) -> Result<(), PlatformError> {
-        let Some(id) = self.entry_id(media) else {
-            return Ok(()); // deleting an absent entry is a no-op
+        let id = if let Some(id) = self.entry_id(media) {
+            id
+        } else {
+            // Cold start, or an entry past the 11k cap: find its list entry
+            // id before deciding the entry is absent. A wrong "no-op" here
+            // would leave the entry undeletable.
+            self.collection(MediaKind::Anime).await?;
+            if self.entry_id(media).is_none() {
+                self.collection(MediaKind::Manga).await?;
+            }
+            let Some(id) = self.entry_id(media) else {
+                return Ok(());
+            };
+            id
         };
         self.client.delete_list_entry(&self.token, id).await?;
         if let Ok(mut ids) = self.ids.lock() {
