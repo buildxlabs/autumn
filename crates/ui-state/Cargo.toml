@@ -20,6 +20,7 @@ gpui-kit.workspace  = true
 metadata.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
+tracing.workspace   = true
 
 [dev-dependencies]
 gpui-kit = { features = [ "test-support" ], workspace = true }

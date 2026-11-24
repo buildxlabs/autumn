@@ -848,7 +848,7 @@ impl DiscoverView {
     }
 }
 
-fn title_of(media: &MediaSummary) -> String {
+pub(crate) fn title_of(media: &MediaSummary) -> String {
     media
         .title
         .english
@@ -858,7 +858,7 @@ fn title_of(media: &MediaSummary) -> String {
         .unwrap_or_default()
 }
 
-fn media_card(media: &MediaSummary) -> MediaCardView {
+pub(crate) fn media_card(media: &MediaSummary) -> MediaCardView {
     let format = match media.kind {
         Some(MediaKind::Anime) => Some(CardFormat::Anime),
         Some(MediaKind::Manga) => Some(CardFormat::Manga),

@@ -30,6 +30,7 @@ use ui_state::{
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
+    home_store::HomeStore,
 };
 
 #[cfg(debug_assertions)]
@@ -46,6 +47,7 @@ mod settings;
 use crate::{
     discover::{DiscoverLoader, DiscoverView},
     entry::{EntryEditor, observe as observe_entry, render as render_entry},
+    home::{HomeCarousels, observe as observe_home, render as render_home},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
@@ -128,6 +130,12 @@ pub struct AppShell {
     entry_editor: Entity<EntryEditor>,
     /// Keeps the editor sync subscribed to Entry store notifications.
     _entry_events: Subscription,
+    /// The Home screen's store; `show` opens Home's sections.
+    home_store: Entity<HomeStore>,
+    /// Paging state for Home's carousels.
+    home_carousels: Entity<HomeCarousels>,
+    /// Keeps the carousel counts subscribed to Home store notifications.
+    _home_events: Subscription,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -153,8 +161,9 @@ pub struct AppShell {
     rail_menus: usize,
     /// The counts on the rail's items.
     badges: Entity<RailBadges>,
-    /// The virtualized mock media grid on Home.
-    home_grid: Entity<PosterGrid>,
+    /// The virtualized mock media grid behind the debug fetch-status demo:
+    /// built, and shown on Home, once a debug fetch reports on it.
+    home_grid: Option<Entity<PosterGrid>>,
     /// My Lists is built only when startup supplied a catalog cache.
     lists: Option<Entity<ListsScreen>>,
     lists_events: Option<Subscription>,
@@ -192,6 +201,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        home_store: Entity<HomeStore>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -211,7 +221,13 @@ impl AppShell {
         let badges = cx.new(|_| RailBadges::placeholder());
         let banner_cache = LruImageCache::new(POSTER_IMAGE_CAPACITY, cx);
         cx.observe(&badges, |_, _, cx| cx.notify()).detach();
-        cx.observe(&fetch_status, |_, _, cx| cx.notify()).detach();
+        cx.observe(&fetch_status, |shell, status, cx| {
+            if shell.home_grid.is_none() && status.read(cx).section(HOME_POSTERS).is_some() {
+                shell.home_grid = Some(PosterGrid::new(mock_media_views(), cx));
+            }
+            cx.notify();
+        })
+        .detach();
         cx.observe(&account, |_, _, cx| cx.notify()).detach();
         let account_events = cx.subscribe_in(
             &account,
@@ -224,9 +240,26 @@ impl AppShell {
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let entry_editor = EntryEditor::new(window, cx);
         let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
-        let home_grid = PosterGrid::new(mock_media_views(), cx);
+        let home_carousels = HomeCarousels::new(cx);
+        let home_events = observe_home(&home_store, &home_carousels, cx);
+        // A list save can land after the user is back on Home: reload the
+        // list sections when the Entry store changes while Home is shown.
+        cx.observe(&entry_store, |shell, _, cx| {
+            if shell.route() == Route::Home {
+                shell.home_store.update(cx, HomeStore::reload_lists);
+            }
+        })
+        .detach();
+        // Home is the first route: load it now, as `show` does on return.
+        home_store.update(cx, HomeStore::open);
         let user = account.read(cx).name().map(str::to_owned);
         let discover_view = DiscoverView::new(user, discover_loader, banner_cache.clone(), cx);
+        let shell = cx.entity().downgrade();
+        discover_view.update(cx, |view, _| {
+            view.set_on_open(move |id, _, cx| {
+                let _ = shell.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+            });
+        });
         // Missed Sequels reads the signed-in account's collection, so a new
         // account replaces the old data instead of showing it under a new name.
         cx.observe(&account, |shell, account, cx| {
@@ -249,6 +282,9 @@ impl AppShell {
             entry_store,
             entry_editor,
             _entry_events: entry_events,
+            home_store,
+            home_carousels,
+            _home_events: home_events,
             account,
             token_input,
             login_url: login_url.into(),
@@ -267,7 +303,7 @@ impl AppShell {
             rail_hovered: false,
             rail_menus: 0,
             badges,
-            home_grid,
+            home_grid: None,
             lists: None,
             lists_events: None,
             discover_view,
@@ -291,6 +327,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        home_store: Entity<HomeStore>,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -307,6 +344,7 @@ impl AppShell {
             account_request,
             discover_loader,
             entry_store,
+            home_store,
             window,
             cx,
         );
@@ -402,8 +440,14 @@ impl AppShell {
     /// [`ScrollRestore`] keeps the offset so an async screen's
     /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
-        if let Route::Entry { id } = self.route() {
-            self.entry_store.update(cx, |store, cx| store.open(id, cx));
+        match self.route() {
+            Route::Entry { id } => {
+                self.entry_store.update(cx, |store, cx| store.open(id, cx));
+            }
+            Route::Home => {
+                self.home_store.update(cx, HomeStore::open);
+            }
+            _ => {}
         }
         if let Some(offset) = restore {
             self.scroll.restore(offset);
@@ -647,16 +691,30 @@ impl AppShell {
                 .track_scroll(self.scroll.handle())
                 .child(self.render_settings(*tab, cx))
                 .into_any_element(),
-            Route::Home => route_view
-                .flex()
-                .flex_col()
-                .child(div().flex_none().child(placeholder(
-                    title(&route),
-                    rows(&route),
-                    colors.muted_foreground,
-                )))
-                .child(div().flex_1().min_h_0().child(self.render_home_posters(cx)))
-                .into_any_element(),
+            Route::Home => {
+                let mut home = route_view
+                    .flex()
+                    .flex_col()
+                    .overflow_y_scroll()
+                    .track_scroll(self.scroll.handle());
+                // The debug fetch-status demo grid appears, above the
+                // widgets, once a debug fetch has reported on it.
+                if let Some(grid) = self.home_grid.clone() {
+                    home = home.child(
+                        div()
+                            .flex_none()
+                            .h(px(480.))
+                            .child(self.render_home_posters(grid, cx)),
+                    );
+                }
+                home.child(render_home(
+                    &self.home_store,
+                    &self.home_carousels,
+                    &self.banner_cache,
+                    cx,
+                ))
+                .into_any_element()
+            }
             Route::Lists { .. } => match &self.lists {
                 Some(lists) => route_view.child(lists.clone()).into_any_element(),
                 None => route_view
@@ -704,7 +762,11 @@ impl AppShell {
         });
     }
 
-    fn render_home_posters(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render_home_posters(
+        &self,
+        grid: Entity<PosterGrid>,
+        cx: &mut Context<'_, Self>,
+    ) -> impl IntoElement {
         let state = self.fetch_status.read(cx).section(HOME_POSTERS);
         let retry = cx.listener(|shell, _: &ClickEvent, _, cx| {
             shell.fetch_status.update(cx, |_, cx| {
@@ -730,12 +792,12 @@ impl AppShell {
                 .flex_col()
                 .size_full()
                 .child(div().px_8().pb_4().child(offline_banner(age.as_str())))
-                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
+                .child(div().flex_1().min_h_0().child(grid)),
             _ => div()
                 .flex()
                 .flex_col()
                 .size_full()
-                .child(div().flex_1().min_h_0().child(self.home_grid.clone())),
+                .child(div().flex_1().min_h_0().child(grid)),
         }
     }
 }
@@ -971,6 +1033,7 @@ mod tests {
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
     use ui_state::entry_store::EntryStore;
+    use ui_state::home_store::HomeStore;
     use ui_state::test_support::pending_services;
     use ui_state::{
         Route, SettingsTab,
@@ -1053,6 +1116,7 @@ mod tests {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
                     let entry_store = cx.new(|_| EntryStore::new(pending_services()));
+                    let home_store = cx.new(|_| HomeStore::new(pending_services()));
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
@@ -1083,6 +1147,7 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
                             entry_store,
+                            home_store,
                             window,
                             cx,
                         )
@@ -1404,7 +1469,9 @@ mod tests {
                 "the shell still renders"
             );
         });
-        shell.click(cx, "fetch-retry");
+        shell.act(cx, |window, cx| {
+            window.within("fetch-error").click("fetch-retry", cx);
+        });
 
         show(cx, SectionFetch::AniListUnavailable);
         shell.act(cx, |window, _| {
@@ -1413,7 +1480,9 @@ mod tests {
                 "403 has a dedicated message"
             );
         });
-        shell.click(cx, "fetch-retry");
+        shell.act(cx, |window, cx| {
+            window.within("fetch-error").click("fetch-retry", cx);
+        });
 
         show(
             cx,
@@ -1444,7 +1513,9 @@ mod tests {
                 "there is no cached content"
             );
         });
-        shell.click(cx, "fetch-retry");
+        shell.act(cx, |window, cx| {
+            window.within("offline-empty").click("fetch-retry", cx);
+        });
         assert_eq!(
             *retries.borrow(),
             [FetchCommand::Retry(HOME_POSTERS); 3],
@@ -1487,7 +1558,7 @@ mod tests {
     #[gpui_kit::test]
     fn hovering_the_rail_expands_it_over_the_content_after_the_delay(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
-        let poster = shell.bounds(cx, "poster-grid-row-0");
+        let content = shell.bounds(cx, "home-view").origin;
         assert_eq!(shell.rail_width(cx), COLLAPSED, "starts collapsed");
 
         shell.hover(cx, "rail");
@@ -1500,9 +1571,9 @@ mod tests {
         shell.wait(cx, Duration::from_millis(1));
         assert_eq!(shell.rail_width(cx), EXPANDED, "open after the delay");
         assert_eq!(
-            shell.bounds(cx, "poster-grid-row-0"),
-            poster,
-            "the grid behind the rail does not move"
+            shell.bounds(cx, "home-view").origin,
+            content,
+            "the content behind the rail does not move"
         );
     }
 
@@ -1550,7 +1621,7 @@ mod tests {
     #[gpui_kit::test]
     fn with_click_pin_the_toggle_opens_the_rail_and_pushes_the_content(cx: &mut TestAppContext) {
         let shell = Shell::open_with(cx, pinned());
-        let poster = shell.bounds(cx, "poster-grid-row-0");
+        let content = shell.bounds(cx, "home-view").origin;
 
         shell.hover(cx, "rail");
         shell.wait(cx, HOVER_OPEN_DELAY);
@@ -1559,7 +1630,7 @@ mod tests {
         shell.click(cx, "rail-toggle");
         assert_eq!(shell.rail_width(cx), EXPANDED, "the toggle opens it");
         assert_eq!(
-            shell.bounds(cx, "poster-grid-row-0").origin.x - poster.origin.x,
+            shell.bounds(cx, "home-view").origin.x - content.x,
             EXPANDED - COLLAPSED,
             "the content moves over by the extra width"
         );
@@ -1569,8 +1640,8 @@ mod tests {
         shell.click(cx, "rail-toggle");
         assert_eq!(shell.rail_width(cx), COLLAPSED, "the toggle closes it");
         assert_eq!(
-            shell.bounds(cx, "poster-grid-row-0"),
-            poster,
+            shell.bounds(cx, "home-view").origin,
+            content,
             "the content is back"
         );
     }

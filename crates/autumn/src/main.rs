@@ -25,6 +25,7 @@ use ui_state::{
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
+    home_store::HomeStore,
 };
 
 /// Initial width of the main window in logical pixels; the user can resize it.
@@ -111,6 +112,7 @@ fn main() -> ExitCode {
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
             let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
+            let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
@@ -134,6 +136,7 @@ fn main() -> ExitCode {
                 account_request,
                 discover_loader,
                 entry_store,
+                home_store,
                 engine.db().clone(),
                 anilist,
                 catalog,
@@ -189,6 +192,7 @@ fn open_main_window(
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     discover_loader: DiscoverLoader,
     entry_store: Entity<EntryStore>,
+    home_store: Entity<HomeStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -208,6 +212,7 @@ fn open_main_window(
                 account_request,
                 discover_loader,
                 entry_store,
+                home_store,
                 db,
                 anilist,
                 catalog,
@@ -253,13 +258,13 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    use std::{rc::Rc, sync::Arc};
 
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::{
-        account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
+        account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
         test_support::pending_services,
     };
 
@@ -285,6 +290,7 @@ mod tests {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(services));
             open_main_window(
                 RailPrefs::default(),
@@ -298,6 +304,7 @@ mod tests {
                     Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                 }),
                 entry_store,
+                home_store,
                 db,
                 anilist,
                 catalog,
