@@ -518,14 +518,17 @@ mod tests {
             Box::pin(std::future::pending())
         }
 
-        fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+        fn collection(
+            &self,
+            _kind: MediaKind,
+        ) -> BoxFuture<Result<Vec<engine::ListedEntry>, EngineError>> {
             Box::pin(std::future::pending())
         }
 
         fn missed_sequels(
             &self,
             _kind: MediaKind,
-        ) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+        ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
             Box::pin(std::future::pending())
         }
     }

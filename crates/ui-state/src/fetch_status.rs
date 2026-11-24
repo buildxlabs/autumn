@@ -184,7 +184,10 @@ impl FetchStatus {
     }
 }
 
-fn cache_age(updated: SystemTime) -> String {
+/// How long ago `updated` was, for the offline banner: "just now",
+/// "5 minutes ago", "2 days ago".
+#[must_use]
+pub fn cache_age(updated: SystemTime) -> String {
     let minutes = updated.elapsed().unwrap_or_default().as_secs() / 60;
     match minutes {
         0 => "just now".into(),

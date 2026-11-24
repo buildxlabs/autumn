@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 use domain::{ExternalId, ListEntry, MediaId, MediaKind};
-use engine::{BoxFuture, EngineError, EngineServices};
+use engine::{BoxFuture, EngineError, EngineServices, ListedEntry};
 use metadata::{HomeLoad, Load, MediaDetail};
 
 /// An engine service whose calls never resolve, for tests that only need a
@@ -26,11 +26,16 @@ pub fn pending_services() -> Arc<dyn EngineServices> {
     Arc::new(PendingServices)
 }
 
-/// An engine fake that serves one Entry detail and records its saves.
+/// An engine fake that serves one Entry detail and records its saves. The
+/// Home calls stay pending unless a test configures them.
 #[derive(Debug, Clone)]
 pub struct CannedServices {
     detail: MediaDetail,
     saved: Arc<Mutex<Vec<ListEntry>>>,
+    /// Whether the Home catalog load fails; otherwise it stays pending.
+    home_fails: bool,
+    /// The Home collection, when a test serves one.
+    collection: Option<Vec<ListedEntry>>,
 }
 
 impl CannedServices {
@@ -40,7 +45,23 @@ impl CannedServices {
         Self {
             detail,
             saved: Arc::new(Mutex::new(Vec::new())),
+            home_fails: false,
+            collection: None,
         }
+    }
+
+    /// Fails the Home catalog load, so its three sections show errors.
+    #[must_use]
+    pub fn home_fails(mut self) -> Self {
+        self.home_fails = true;
+        self
+    }
+
+    /// Serves `entries` as the Home collection, and no missed sequels.
+    #[must_use]
+    pub fn collection(mut self, entries: Vec<ListedEntry>) -> Self {
+        self.collection = Some(entries);
+        self
     }
 
     /// The entries handed to `save_entry`, oldest first.
@@ -105,15 +126,29 @@ impl EngineServices for CannedServices {
     }
 
     fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
-        Box::pin(std::future::pending())
+        if self.home_fails {
+            Box::pin(async { Err(EngineError::Metadata(metadata::Error::NotFound)) })
+        } else {
+            Box::pin(std::future::pending())
+        }
     }
 
-    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-        Box::pin(std::future::pending())
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
+        match self.collection.clone() {
+            Some(entries) => Box::pin(async move { Ok(entries) }),
+            None => Box::pin(std::future::pending()),
+        }
     }
 
-    fn missed_sequels(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-        Box::pin(std::future::pending())
+    fn missed_sequels(
+        &self,
+        _kind: MediaKind,
+    ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
+        if self.collection.is_some() {
+            Box::pin(async { Ok(Vec::new()) })
+        } else {
+            Box::pin(std::future::pending())
+        }
     }
 }
 
@@ -150,11 +185,14 @@ impl EngineServices for PendingServices {
         Box::pin(std::future::pending())
     }
 
-    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
         Box::pin(std::future::pending())
     }
 
-    fn missed_sequels(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+    fn missed_sequels(
+        &self,
+        _kind: MediaKind,
+    ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
         Box::pin(std::future::pending())
     }
 }

@@ -9,11 +9,11 @@
 
 mod settings_store;
 
-use std::{future::Future, pin::Pin};
+use std::{collections::HashSet, future::Future, pin::Pin};
 
 use db::Db;
 use domain::{ExternalId, ListEntry, ListStatus, MediaId, MediaKind};
-use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail};
+use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
 use net::{Client, PosterCache};
 use settings::{AppPaths, Settings};
 use tokio::runtime::Runtime;
@@ -21,6 +21,10 @@ use tracker::{Local, Platform, PlatformError};
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+/// A list entry with the card text already on disk: `None` when the media
+/// was never opened, so no summary is cached.
+pub type ListedEntry = (ListEntry, Option<MediaSummary>);
 
 /// Why an engine service call failed.
 #[derive(Debug, thiserror::Error)]
@@ -63,10 +67,14 @@ pub trait EngineServices: Send + Sync + 'static {
     fn mint(&self, kind: MediaKind, ids: &[ExternalId]) -> BoxFuture<Result<MediaId, EngineError>>;
     /// The Home catalog load, stale-first (6 h TTL).
     fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>>;
-    /// The active platform's entries for `kind`, most recently updated first.
-    fn collection(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>>;
-    /// The active platform's completed entries: the account-free missed-sequels feed.
-    fn missed_sequels(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>>;
+    /// The active platform's entries for `kind`, most recently updated
+    /// first, each with its cached summary. Reads the cache only: no
+    /// network request.
+    fn collection(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>>;
+    /// The sequels of the user's completed `kind` entries that are not on
+    /// their list, from the cached Entry relations. Reads the cache only:
+    /// no network request.
+    fn missed_sequels(&self, kind: MediaKind) -> BoxFuture<Result<Vec<MediaSummary>, EngineError>>;
 }
 
 /// The engine: owns the database, the shared client, the catalog cache and
@@ -188,29 +196,77 @@ impl EngineServices for Engine {
         Box::pin(async move { catalog.home().await.map_err(EngineError::from) })
     }
 
-    fn collection(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-        let platform = self.platform.clone();
+    fn collection(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
+        let engine = self.clone();
         Box::pin(async move {
-            let collection = platform.collection(kind).await?;
-            Ok(collection
-                .lists
-                .into_iter()
-                .flat_map(|list| list.entries)
-                .collect())
+            let mut listed = Vec::new();
+            for entry in engine.entries(kind).await? {
+                let summary = match engine.anilist_id(entry.media).await? {
+                    Some(id) => engine
+                        .catalog
+                        .cached_media(id)
+                        .await
+                        .map(|cached| cached.value.summary),
+                    None => None,
+                };
+                listed.push((entry, summary));
+            }
+            Ok(listed)
         })
     }
 
-    fn missed_sequels(&self, kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
-        let platform = self.platform.clone();
+    fn missed_sequels(&self, kind: MediaKind) -> BoxFuture<Result<Vec<MediaSummary>, EngineError>> {
+        let engine = self.clone();
         Box::pin(async move {
-            let collection = platform.collection(kind).await?;
-            Ok(collection
-                .lists
-                .into_iter()
-                .flat_map(|list| list.entries)
-                .filter(|entry| entry.status == ListStatus::Completed)
-                .collect())
+            let entries = engine.entries(kind).await?;
+            let mut on_list = HashSet::new();
+            let mut completed = Vec::new();
+            for entry in &entries {
+                if let Some(id) = engine.anilist_id(entry.media).await? {
+                    on_list.insert(id);
+                    if entry.status == ListStatus::Completed {
+                        completed.push(id);
+                    }
+                }
+            }
+            let mut sequels = Vec::new();
+            for id in completed {
+                let Some(cached) = engine.catalog.cached_media(id).await else {
+                    continue;
+                };
+                for relation in cached.value.relations {
+                    if relation.relation == Some(MediaRelation::Sequel)
+                        && on_list.insert(relation.media.anilist_id)
+                    {
+                        sequels.push(relation.media);
+                    }
+                }
+            }
+            Ok(sequels)
         })
+    }
+}
+
+impl Engine {
+    /// The active platform's `kind` entries, most recently updated first.
+    async fn entries(&self, kind: MediaKind) -> Result<Vec<ListEntry>, EngineError> {
+        let collection = self.platform.collection(kind).await?;
+        let mut entries: Vec<ListEntry> = collection
+            .lists
+            .into_iter()
+            .flat_map(|list| list.entries)
+            .collect();
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.updated_at));
+        Ok(entries)
+    }
+
+    /// The AniList id `media` is known by, if any.
+    async fn anilist_id(&self, media: MediaId) -> Result<Option<u32>, EngineError> {
+        let ids = self.db.media().external_ids(media).await?;
+        Ok(ids.into_iter().find_map(|id| match id {
+            ExternalId::AniList(id) => Some(id),
+            _ => None,
+        }))
     }
 }
 
@@ -288,5 +344,21 @@ mod tests {
             .expect("the list entry is still there");
         assert_eq!(saved.status, ListStatus::Current, "Watching survived");
         assert_eq!(saved.progress, 3, "progress survived");
+
+        // Home reads the same entry back through the active platform.
+        let home = runtime
+            .block_on(reopened.collection(MediaKind::Anime))
+            .expect("the Home collection");
+        assert_eq!(
+            home.iter()
+                .map(|(entry, _)| (entry.media, entry.progress))
+                .collect::<Vec<_>>(),
+            [(media, 3)],
+            "the show is on Home after the restart"
+        );
+        assert!(
+            home.first().is_some_and(|(_, summary)| summary.is_none()),
+            "never opened, so no summary is cached; the read made no request"
+        );
     }
 }
