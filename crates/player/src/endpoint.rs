@@ -24,6 +24,14 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
+    /// An HTTP base URL for players without IPC, such as VLC and MPC-HC.
+    #[must_use]
+    pub fn http(base: impl Into<String>) -> Self {
+        Self {
+            address: base.into(),
+        }
+    }
+
     /// An endpoint at a known address, for transport tests.
     #[cfg(test)]
     pub(crate) fn at(address: impl Into<String>) -> Self {

@@ -34,8 +34,8 @@ pub(crate) const OBSERVED: &[&str] = &[
 /// One command awaiting the player's reply.
 #[derive(Debug)]
 pub(crate) struct Request {
-    command: Vec<Value>,
-    reply: oneshot::Sender<Result<Value>>,
+    pub(crate) command: Vec<Value>,
+    pub(crate) reply: oneshot::Sender<Result<Value>>,
 }
 
 /// The command side of a running IPC session.
