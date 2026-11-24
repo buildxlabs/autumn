@@ -192,7 +192,8 @@ impl AppShell {
     /// Storage requests.
     #[expect(
         clippy::too_many_arguments,
-        reason = "the shell receives its engine-side collaborators once, at construction"
+        clippy::too_many_lines,
+        reason = "the shell receives its engine-side collaborators and wires their observers once, at construction"
     )]
     #[expect(
         clippy::too_many_lines,
