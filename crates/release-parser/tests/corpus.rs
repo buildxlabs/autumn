@@ -2,8 +2,13 @@
 //!
 //! The corpus is blocks of `key: value` lines separated by blank lines. Each
 //! block starts with `name:`. A field the block leaves out is expected to be
-//! absent, and `kind` defaults to `episode`. Lines starting with `#` are
-//! comments. See `fixtures/SOURCES.md` for where the names come from.
+//! absent, `kind` defaults to `episode` and `batch` to false. Lines starting
+//! with `#` are comments. See `fixtures/SOURCES.md` for where the names come
+//! from.
+//!
+//! The technical tag fields are checked only in blocks that give at least one
+//! of them, or `tags: none` for a name without tags. Lists such as `audio` are
+//! comma-separated, in the order the name gives them.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -12,18 +17,33 @@ use release_parser::{Release, parse};
 
 const CORPUS: &str = include_str!("fixtures/corpus.txt");
 
-const FIELDS: [&str; 11] = [
+/// Fields every block is checked on.
+const FIELDS: [&str; 15] = [
     "title",
     "group",
     "season",
+    "last_season",
     "episode",
+    "last_episode",
     "version",
+    "volume",
+    "batch",
     "episode_title",
     "kind",
     "resolution",
     "year",
     "checksum",
     "extension",
+];
+
+/// Fields checked only in blocks that opt in with a tag field or `tags: none`.
+const TAG_FIELDS: [&str; 6] = [
+    "video_codec",
+    "bit_depth",
+    "audio",
+    "source",
+    "streaming",
+    "subtitles",
 ];
 
 /// One corpus entry: the release name and its expected fields.
@@ -52,7 +72,7 @@ fn cases() -> Vec<Case> {
             continue;
         }
         assert!(
-            FIELDS.contains(&key),
+            FIELDS.contains(&key) || TAG_FIELDS.contains(&key) || line == "tags: none",
             "corpus line {line_number}: unknown field {key:?}"
         );
         assert!(
@@ -73,18 +93,54 @@ fn cases() -> Vec<Case> {
 /// Each field rendered the way the corpus writes it.
 fn actual(release: &Release) -> BTreeMap<&'static str, Option<String>> {
     let number = |n: Option<u32>| n.map(|n| n.to_string());
+    let name = |debug: String| debug.to_lowercase();
+    let list = |names: Vec<String>| (!names.is_empty()).then(|| names.join(", "));
     BTreeMap::from([
         ("title", release.title.clone()),
         ("group", release.group.clone()),
         ("season", number(release.season)),
+        ("last_season", number(release.last_season)),
         ("episode", number(release.episode)),
+        ("last_episode", number(release.last_episode)),
         ("version", number(release.version)),
+        ("volume", number(release.volume)),
+        ("batch", release.batch.then(|| "true".to_owned())),
         ("episode_title", release.episode_title.clone()),
         ("kind", Some(format!("{:?}", release.kind).to_lowercase())),
         ("resolution", number(release.resolution)),
         ("year", number(release.year)),
         ("checksum", release.checksum.map(|crc| format!("{crc:08X}"))),
         ("extension", release.extension.clone()),
+        (
+            "video_codec",
+            release.video_codec.map(|c| name(format!("{c:?}"))),
+        ),
+        ("bit_depth", number(release.bit_depth)),
+        (
+            "audio",
+            list(
+                release
+                    .audio
+                    .iter()
+                    .map(|a| name(format!("{a:?}")))
+                    .collect(),
+            ),
+        ),
+        ("source", release.source.map(|s| name(format!("{s:?}")))),
+        (
+            "streaming",
+            release.streaming.map(|s| name(format!("{s:?}"))),
+        ),
+        (
+            "subtitles",
+            list(
+                release
+                    .subtitles
+                    .iter()
+                    .map(|s| name(format!("{s:?}")))
+                    .collect(),
+            ),
+        ),
     ])
 }
 
@@ -96,7 +152,12 @@ fn every_corpus_name_parses_to_its_expected_fields() {
     for case in &cases {
         let actual = actual(&parse(&case.name));
         let mut mismatches = String::new();
-        for field in FIELDS {
+        let tags_checked = case.expected.contains_key("tags")
+            || TAG_FIELDS.iter().any(|f| case.expected.contains_key(*f));
+        let checked = FIELDS
+            .iter()
+            .chain(TAG_FIELDS.iter().filter(|_| tags_checked));
+        for &field in checked {
             let expected = match case.expected.get(field) {
                 Some(value) => Some(value.as_str()),
                 None if field == "kind" => Some("episode"),
@@ -124,7 +185,7 @@ fn every_corpus_name_parses_to_its_expected_fields() {
 }
 
 #[test]
-fn corpus_holds_at_least_150_distinct_names() {
+fn corpus_holds_at_least_500_distinct_names_from_40_groups() {
     let cases = cases();
     let mut seen = BTreeMap::new();
     for case in &cases {
@@ -137,5 +198,10 @@ fn corpus_holds_at_least_150_distinct_names() {
             first.unwrap_or_default()
         );
     }
-    assert!(cases.len() >= 150, "only {} names", cases.len());
+    assert!(cases.len() >= 500, "only {} names", cases.len());
+    let groups: std::collections::BTreeSet<&str> = cases
+        .iter()
+        .filter_map(|case| case.expected.get("group").map(String::as_str))
+        .collect();
+    assert!(groups.len() >= 40, "only {} release groups", groups.len());
 }
