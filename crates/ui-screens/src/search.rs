@@ -254,12 +254,16 @@ impl SearchScreen {
 
     /// Applies filters from a restored route without navigating again.
     pub(crate) fn set_filters(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
-        self.write_inputs(&filters, cx);
         let first_show = self.session.page() == 0;
         if self.session.filters() == &filters && !first_show {
             return;
         }
+        if self.session.filters() != &filters {
+            self.write_inputs(&filters, cx);
+        }
         if let Some(loaded) = self.cache.get(&filters).cloned() {
+            // A cache hit is synchronous: cancel any request still in flight.
+            self.task = None;
             self.session.restore(filters, loaded);
             self.requested_page = self.session.page();
             self.error = None;
@@ -320,6 +324,7 @@ impl SearchScreen {
             });
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
+                screen.task = None;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -341,6 +346,12 @@ impl SearchScreen {
                 cx.notify();
             });
         }));
+    }
+
+    /// Test seam: the error currently shown, if any.
+    #[cfg(test)]
+    pub(crate) fn error_text(&self) -> Option<&str> {
+        self.error.as_deref()
     }
 
     /// Test seam: the query currently shown in the input.
@@ -380,7 +391,10 @@ impl SearchScreen {
 
     /// Pages when the user scrolls near the end of the loaded results.
     fn maybe_next_page(&mut self, cx: &mut Context<'_, Self>) {
-        if self.session.has_next() && self.session.page() >= self.requested_page {
+        if self.task.is_none()
+            && self.session.has_next()
+            && self.session.page() >= self.requested_page
+        {
             self.next_page(cx);
         }
     }
@@ -447,26 +461,29 @@ impl SearchScreen {
                 )
             });
             let result = task.await;
-            let _ = screen.update(cx, |screen, cx| match result {
-                Ok(Ok(session)) => {
-                    screen.session = session;
-                    screen.requested_page = screen.session.page();
-                    screen.error = None;
-                    screen.remember();
-                    cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
-                    screen.sync_grid(cx);
-                    cx.emit(SearchEvent::Loaded);
-                    cx.notify();
-                }
-                Ok(Err(error)) => {
-                    screen.requested_page = screen.session.page();
-                    screen.error = Some(error.to_string());
-                    cx.notify();
-                }
-                Err(error) => {
-                    screen.requested_page = screen.session.page();
-                    screen.error = Some(error.to_string());
-                    cx.notify();
+            let _ = screen.update(cx, |screen, cx| {
+                screen.task = None;
+                match result {
+                    Ok(Ok(session)) => {
+                        screen.session = session;
+                        screen.requested_page = screen.session.page();
+                        screen.error = None;
+                        screen.remember();
+                        cx.emit(SearchEvent::Filters(screen.session.filters().clone()));
+                        screen.sync_grid(cx);
+                        cx.emit(SearchEvent::Loaded);
+                        cx.notify();
+                    }
+                    Ok(Err(error)) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        screen.requested_page = screen.session.page();
+                        screen.error = Some(error.to_string());
+                        cx.notify();
+                    }
                 }
             });
         }));
@@ -487,6 +504,7 @@ impl SearchScreen {
             });
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
+                screen.task = None;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -543,6 +561,7 @@ impl SearchScreen {
             });
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
+                screen.task = None;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -642,10 +661,12 @@ impl Render for SearchScreen {
             )
             .children(self.error.as_ref().map(|error| {
                 div()
+                    .id("search-error")
                     .px_8()
                     .pt_2()
                     .text_color(colors.danger)
                     .child(error.clone())
+                    .test_support()
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
             .test_support()

@@ -1093,7 +1093,7 @@ mod tests {
     use crate::discover::{
         DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
     };
-    use axum::{Json, Router, extract::State, routing::post};
+    use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
     use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
@@ -2254,6 +2254,13 @@ mod tests {
         );
     }
 
+    /// How the loopback AniList answers Search requests.
+    #[derive(Clone, Copy)]
+    enum SearchResponse {
+        Success,
+        Failure,
+    }
+
     /// A shell whose Search screen talks to a loopback AniList that records
     /// every request and returns enough cards to scroll.
     struct SearchShell {
@@ -2266,14 +2273,26 @@ mod tests {
 
     impl SearchShell {
         fn open(cx: &mut TestAppContext) -> Self {
-            Self::open_with_pages(cx, 1)
+            Self::open_with_options(cx, 1, SearchResponse::Success)
+        }
+
+        fn open_with_pages(cx: &mut TestAppContext, pages: u32) -> Self {
+            Self::open_with_options(cx, pages, SearchResponse::Success)
+        }
+
+        fn open_failing(cx: &mut TestAppContext) -> Self {
+            Self::open_with_options(cx, 1, SearchResponse::Failure)
         }
 
         #[expect(
             clippy::too_many_lines,
             reason = "one test harness builds a mock AniList server and its window"
         )]
-        fn open_with_pages(cx: &mut TestAppContext, pages: u32) -> Self {
+        fn open_with_options(
+            cx: &mut TestAppContext,
+            pages: u32,
+            response: SearchResponse,
+        ) -> Self {
             let dir = tempfile::tempdir().expect("temp dir");
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -2296,7 +2315,11 @@ mod tests {
                 .route(
                     "/",
                     post(
-                        move |State((hits, pages)): State<(Arc<AtomicUsize>, u32)>,
+                        move |State((hits, pages, mode)): State<(
+                            Arc<AtomicUsize>,
+                            u32,
+                            SearchResponse,
+                        )>,
                               Json(request): Json<Value>| {
                             hits.fetch_add(1, Ordering::SeqCst);
                             let page = request["variables"]["page"].as_u64().unwrap_or(1);
@@ -2307,17 +2330,23 @@ mod tests {
                                     card
                                 })
                                 .collect();
-                            let response = json!({
+                            let body = json!({
                                 "data": {"Page": {
                                     "pageInfo": {"hasNextPage": page < u64::from(pages)},
                                     "media": media,
                                 }}
                             });
-                            async move { Json(response) }
+                            async move {
+                                if matches!(mode, SearchResponse::Failure) {
+                                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({})))
+                                } else {
+                                    (StatusCode::OK, Json(body))
+                                }
+                            }
                         },
                     ),
                 )
-                .with_state((Arc::clone(&requests), pages));
+                .with_state((Arc::clone(&requests), pages, response));
             let listener = runtime
                 .block_on(TcpListener::bind("127.0.0.1:0"))
                 .expect("bind");
@@ -2589,5 +2618,38 @@ mod tests {
                 "the button's change was applied too"
             );
         }
+    }
+
+    #[gpui_kit::test]
+    fn a_failed_first_load_shows_the_error(cx: &mut TestAppContext) {
+        let shell = SearchShell::open_failing(cx);
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(SearchFilters::EMPTY), cx);
+        });
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            1,
+            "exactly one request was made"
+        );
+        let message = shell.view.read_with(cx, |shell, cx| {
+            shell.search.as_ref().and_then(|search| {
+                search.read_with(cx, |search, _| search.error_text().map(str::to_owned))
+            })
+        });
+        assert!(
+            message
+                .as_deref()
+                .is_some_and(|text| text.contains("HTTP 500")),
+            "the cache-miss failure is kept: {message:?}"
+        );
+        let shown = cx
+            .update_window(shell.window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                window.find("search-error").visible()
+            })
+            .expect("window is open");
+        assert!(shown, "a cache-miss failure is surfaced in the UI");
     }
 }

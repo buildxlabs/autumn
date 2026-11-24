@@ -32,18 +32,7 @@ use crate::{
 const ROUTES: [Route; 6] = [
     Route::Home,
     Route::Discover,
-    Route::Search(ui_state::SearchFilters {
-        query: None,
-        kind: None,
-        sort: None,
-        format: None,
-        status: None,
-        season: None,
-        year: None,
-        genres: Vec::new(),
-        country: None,
-        adult: false,
-    }),
+    Route::Search(ui_state::SearchFilters::EMPTY),
     Route::Lists {
         status: ListTab::Status(ListStatus::Current),
     },
