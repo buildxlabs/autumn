@@ -8,6 +8,7 @@
 //! crate: no GPUI.
 
 mod anime_offline_database;
+mod anizip;
 mod cache;
 mod catalog;
 mod client;
@@ -22,6 +23,7 @@ mod viewer;
 pub use anime_offline_database::{
     AnimeOfflineDatabase, AnimeOfflineIds, ODBL_CREDIT, OfflineAnime,
 };
+pub use anizip::{ANIZIP_ENDPOINT, Aging, AniZip, EntryKind, Episode, Mappings, Media};
 pub use cache::{AIRING_TTL, CATALOG_TTL, Cached, CatalogCache, Load, Lookup, Refresh};
 pub use catalog::{AiringEpisode, CountryTrends, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
