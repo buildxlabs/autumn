@@ -192,7 +192,10 @@ fn property_change(
         }
         "duration" => {
             state.duration = data.and_then(Value::as_f64);
-            Translation::Ignore
+            match state.duration {
+                Some(seconds) => Translation::Events(vec![PlayerEvent::Duration { seconds }]),
+                None => Translation::Ignore,
+            }
         }
         "path" => {
             state.path = data.and_then(Value::as_str).map(str::to_owned);

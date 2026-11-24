@@ -5,6 +5,7 @@ mod fetch_status;
 mod http_client;
 mod logging;
 mod playback;
+mod playback_sync;
 mod rail_prefs;
 mod startup;
 
@@ -28,6 +29,7 @@ use ui_state::{
     entry_store::EntryStore,
     fetch_status::FetchStatus,
     home_store::HomeStore,
+    playback_store::PlaybackStore,
 };
 
 /// Initial width of the main window in logical pixels; the user can resize it.
@@ -60,9 +62,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let (engine_events, ui_events) = ui_state::events::channel();
     // The engine owns the database, settings, shared client, poster cache
     // and Local platform; the one runtime is shared by everything below.
-    let engine = match Engine::new(&runtime, &started.paths) {
+    let engine = match Engine::new(&runtime, &started.paths, engine_events.clone()) {
         Ok(engine) => engine,
         Err(err) => {
             report_fatal(&format_args!("the engine failed to start: {err}"));
@@ -81,12 +84,14 @@ fn main() -> ExitCode {
     // My Lists reads card text from the stale-first cache only, so it makes
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), engine.poster_cache());
-    let (engine_events, ui_events) = ui_state::events::channel();
     let engine = engine.with_events(engine_events.clone());
     if let Err(err) = engine.apply_library_settings(engine.settings()) {
         tracing::warn!(%err, "the library watcher could not start");
     }
     let gateway = PlatformGateway::with_events(engine.db().clone(), engine_events.clone());
+    // Playback writes progress through the same gateway the screens use, so
+    // switching platforms changes where watched episodes are recorded.
+    engine.set_progress_sync(Arc::new(playback_sync::GatewaySync::new(gateway.clone())));
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
     let mut restored = handle.block_on(session.restore(SystemTime::now()));
@@ -165,15 +170,18 @@ fn main() -> ExitCode {
             let account = cx.new(|_| AccountStore::default());
             let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
-            let entry_store = cx.new(|_| EntryStore::new(services));
+            let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
+            let playback_store = cx.new(|_| PlaybackStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
                 let store = fetch_status.clone();
                 let account = account.clone();
+                let playback = playback_store;
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
-                    account.update(cx, |store, cx| store.apply(event, cx));
+                    account.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    playback.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
             .detach();

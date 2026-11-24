@@ -15,6 +15,15 @@ impl Local {
     pub fn new(db: Db) -> Self {
         Self { db }
     }
+
+    /// The entry for `media`, if it is on the Local list.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::PlatformError`] when the entry cannot be read.
+    pub async fn entry(&self, media: MediaId) -> Result<Option<ListEntry>, crate::PlatformError> {
+        Ok(self.db.local_list().entry(media).await?)
+    }
 }
 
 impl Platform for Local {

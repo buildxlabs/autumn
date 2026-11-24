@@ -12,6 +12,7 @@ pub mod fetch_status;
 pub mod home_store;
 pub mod lists;
 pub mod platform;
+pub mod playback_store;
 mod route;
 mod router;
 mod scroll;
@@ -26,6 +27,7 @@ pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };
 pub use platform::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, PlatformGateway};
+pub use playback_store::{PlaybackError, PlaybackStore};
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};

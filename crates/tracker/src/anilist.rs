@@ -104,6 +104,27 @@ impl AniListPlatform {
         &self.user_name
     }
 
+    /// The account's entry for `media` without downloading the whole
+    /// collection, including entries past the 11,000-entry cap.
+    ///
+    /// # Errors
+    ///
+    /// [`PlatformError::NoAniListId`] when the media has no AniList id, or
+    /// [`PlatformError`] when the lookup fails.
+    pub async fn entry(&self, media: MediaId) -> Result<Option<ListEntry>, PlatformError> {
+        let anilist_id = self.anilist_id(media).await?;
+        let found = self
+            .client
+            .list_entry(&self.token, &self.user_name, anilist_id)
+            .await?;
+        Ok(found.map(|data| {
+            if let Ok(mut cache) = self.entries.lock() {
+                cache.insert(media, (None, data.id));
+            }
+            Self::to_entry(&data, media)
+        }))
+    }
+
     /// Whether the latest `kind` collection hit AniList's 11,000-entry cap
     /// and was therefore incomplete. The UI can show this instead of
     /// pretending the list is whole.

@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §6, and ADR 0001 for media identity.
 
+mod continuity;
 mod error;
 mod local_file;
 mod local_list;
@@ -17,6 +18,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 };
 
+pub use continuity::{Continuity, ContinuityRepo};
 pub use error::DbError;
 pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
 pub use local_list::LocalListRepo;
@@ -62,6 +64,11 @@ impl Db {
     /// Media identity and cross-references.
     pub fn media(&self) -> MediaRepo<'_> {
         MediaRepo::new(&self.pool)
+    }
+
+    /// Resume positions for episodes that are not watched yet.
+    pub fn continuity(&self) -> ContinuityRepo<'_> {
+        ContinuityRepo::new(&self.pool)
     }
 
     /// The Local platform's list entries.

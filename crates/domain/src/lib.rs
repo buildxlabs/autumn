@@ -8,6 +8,7 @@ mod account;
 mod fuzzy_date;
 mod list_entry;
 mod media;
+mod playback;
 mod score;
 mod transfer;
 
@@ -15,6 +16,7 @@ pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
+pub use playback::{PlaybackState, StreamSource};
 pub use score::{Score, ScoreError};
 pub use transfer::{
     TransferChoice, TransferDirection, TransferItem, TransferPreview, TransferProgress,
@@ -58,6 +60,21 @@ pub enum AppEvent {
     TransferPreview(Option<TransferPreview>),
     /// A background list transfer processed another entry.
     TransferProgress(TransferProgress),
+    /// The one active session's position changed.
+    PlaybackState(PlaybackState),
+    /// The session ended, so the HUD has nothing to show.
+    PlaybackStopped,
+    /// Progress sync failed; the UI can offer Retry when it is transient.
+    PlaybackError {
+        /// The media whose progress was not saved.
+        media: MediaId,
+        /// The episode whose progress was not saved.
+        episode: u32,
+        /// A message suitable for display in a toast.
+        message: String,
+        /// Whether a Retry action can succeed.
+        retryable: bool,
+    },
 }
 
 /// The next opportunity to start an AniList request.

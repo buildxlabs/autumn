@@ -30,6 +30,11 @@ pub enum PlayerEvent {
         /// Seconds from the start of the file.
         seconds: f64,
     },
+    /// The file's duration arrived after `MediaReady`.
+    Duration {
+        /// Duration in seconds, as reported by the player.
+        seconds: f64,
+    },
     /// Pause state changed.
     Paused(bool),
     /// The player reached the end of the file.
