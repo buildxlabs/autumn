@@ -1,0 +1,106 @@
+{
+  "titles": {
+    "x-jat": "OP TV",
+    "en": "One Piece"
+  },
+  "episodes": {
+    "9": {
+      "tvdbShowId": 81797,
+      "tvdbId": 361897,
+      "seasonNumber": 2,
+      "episodeNumber": 1,
+      "absoluteEpisodeNumber": 9,
+      "title": {
+        "ja": "正義のうそつき? キャプテンウソップ",
+        "en": "The Honorable Liar? Captain Usopp!",
+        "fr": "Le Justicier menteur : Capitaine Usopp",
+        "it": "Un simpatico bugiardo",
+        "es": "¿Mentiroso honorable? El capitán Usopp",
+        "ru": "Честный врун? Капитан Усопп!",
+        "ar": "كاذب العدالة؟ القبطان أوسوب!",
+        "th": "จอมโกหกของหมู่บ้าน! กัปตันอุซป!",
+        "x-jat": "Seigi no Usotsuki? Captain Usopp",
+        "zh-Hans": "正义的骗子？乌索普船长"
+      },
+      "airDate": "2000-01-12",
+      "airDateUtc": "2000-01-12T14:15:00Z",
+      "runtime": 25,
+      "overview": "Luffy, Zoro, and Nami arrive at an island hoping to obtain a ship and crew, but the three are quickly confronted with the blustering Captain Usopp - who has a connection to Luffy's past.",
+      "image": "https://artworks.thetvdb.com/banners/v4/episode/361897/screencap/604dfc9500a38.jpg",
+      "episode": "9",
+      "anidbEid": 972,
+      "length": 25,
+      "airdate": "2000-01-12",
+      "rating": "4.78",
+      "summary": "Luffy, Zoro, and Nami arrive at an island hoping to obtain a ship and crew, but the three are quickly confronted with the blustering Captain Usopp - who has a connection to Luffy`s past.\nSource: crunchyroll"
+    },
+    "100": {
+      "episode": "100",
+      "anidbEid": 7858,
+      "length": 25,
+      "airdate": "2002-02-10",
+      "rating": "4.43",
+      "title": {
+        "ja": "反乱軍戦士コーザ! ビビに誓った夢!",
+        "en": "Rebel Warrior Koza! The Dream Vowed to Vivi!",
+        "fr": "Koza, guerrier rebelle ! La promesse faite à Vivi !",
+        "it": "Il capo dei rivoltosi",
+        "es": "¡El guerrero rebelde, Kohza! ¡El sueño jurado a Vivi!",
+        "ru": "Повстанец Кодза! Мечта, обещанная Виви!",
+        "ar": "محارب المتمرّدين كوزا! الحلم الّذي أُقسم به لفيفي",
+        "th": "นักรบแห่งกองกำลังปฏิวัติ โคซ่า ความฝันที่สาบานไว้กับวีวี่",
+        "x-jat": "Hanrangun Senshi Kouza! Vivi ni Chikatta Yume!"
+      },
+      "summary": "The Straw Hats continue their journey to Yuba, where a bittersweet reunion with a childhood friend awaits Princess Vivi.\nSource: crunchyroll"
+    },
+    "S1": {
+      "tvdbShowId": 81797,
+      "tvdbId": 1711991,
+      "seasonNumber": 0,
+      "episodeNumber": 27,
+      "airedBeforeSeasonNumber": 1,
+      "airedBeforeEpisodeNumber": 6,
+      "title": {
+        "ja": "総集編",
+        "en": "Episode 01-05 Summary",
+        "x-jat": "Soushuuhen"
+      },
+      "airDate": "1999-12-22",
+      "airDateUtc": "1999-12-22T14:15:00Z",
+      "runtime": 25,
+      "overview": "This is the first recapitulation episode, covering the first five episodes with only the difference being that the episode follows the manga storyline and begins with Luffy and Shanks at the bar. Also, in the ending, the current Straw Hats have a small conversation about their goals.",
+      "image": "https://artworks.thetvdb.com/banners/v4/episode/1711991/screencap/66c1c5234d131.jpg",
+      "episode": "S1",
+      "anidbEid": 29955,
+      "length": 25,
+      "airdate": "1999-12-22",
+      "rating": "3.09"
+    },
+    "O1": {
+      "episode": "O1",
+      "anidbEid": 248666,
+      "length": 1,
+      "airdate": "2020-03-16",
+      "rating": "4.31",
+      "title": {
+        "en": "Keep Clean & Healthy: Awareness Message from the Straw Hat Pirates of One Piece!"
+      }
+    }
+  },
+  "episodeCount": 1184,
+  "specialCount": 51,
+  "mappings": {
+    "animeplanet_id": "one-piece",
+    "kitsu_id": 12,
+    "mal_id": 21,
+    "type": "TV",
+    "anilist_id": 21,
+    "anisearch_id": 2227,
+    "anidb_id": 69,
+    "notifymoe_id": null,
+    "livechart_id": 321,
+    "thetvdb_id": 81797,
+    "imdb_id": "tt0388629",
+    "themoviedb_id": "37854"
+  }
+}
