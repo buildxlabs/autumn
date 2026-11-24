@@ -6,9 +6,13 @@
 //! episode marker such as `- 01` or `S01E05`) the episode title, then the
 //! technical tail that starts at the first tag such as `1080p` or `x265`.
 //! Brackets anywhere can carry the group, resolution, checksum or year.
+//! Technical tags are read from the words and brackets outside the title.
 
 mod tag;
+mod tech;
 mod token;
+
+pub use tech::{Audio, Source, Streaming, Subtitle, VideoCodec};
 
 use tag::{EpisodePrefix, Numbered};
 use token::{Dots, Token};
@@ -23,8 +27,18 @@ pub struct Release {
     pub group: Option<String>,
     /// The season, from `S02`, `Season 2` or `2nd Season`. `S00` is specials.
     pub season: Option<u32>,
+    /// The last season of a season range such as `S01-S03`.
+    pub last_season: Option<u32>,
     /// The number within its [`kind`](Self::kind): episode 5, `SP01`, `NCOP2`.
+    /// For a range such as `01-12`, the first episode.
     pub episode: Option<u32>,
+    /// The last episode of a range such as `01-12` or `S01E14-E26`.
+    pub last_episode: Option<u32>,
+    /// The volume, from `Vol.1` or `Vol 1`.
+    pub volume: Option<u32>,
+    /// Whether the name is a batch of episodes: a range, `Batch`, `Complete`
+    /// or a volume.
+    pub batch: bool,
     /// The release version, from `01v2`.
     pub version: Option<u32>,
     /// The episode's own title, after the episode number.
@@ -39,6 +53,18 @@ pub struct Release {
     pub year: Option<u32>,
     /// What kind of video the file is.
     pub kind: EpisodeKind,
+    /// The video codec.
+    pub video_codec: Option<VideoCodec>,
+    /// The video bit depth: 10 for `10bit` or `Hi10P`.
+    pub bit_depth: Option<u32>,
+    /// Audio codecs and track layouts, in the order the name gives them.
+    pub audio: Vec<Audio>,
+    /// Where the video was taken from.
+    pub source: Option<Source>,
+    /// The streaming service of a web release.
+    pub streaming: Option<Streaming>,
+    /// Subtitle language tags, in the order the name gives them.
+    pub subtitles: Vec<Subtitle>,
 }
 
 /// What kind of video a release is.
@@ -81,6 +107,8 @@ pub fn parse(name: &str) -> Release {
         zone: Zone::Title,
         title: Vec::new(),
         episode_title: Vec::new(),
+        tech_words: Vec::new(),
+        title_closed: false,
     };
     walk.run(&tokens);
     walk.finish(&tokens)
@@ -105,6 +133,13 @@ struct Walk {
     zone: Zone,
     title: Vec<Part>,
     episode_title: Vec<String>,
+    /// Words outside the title that may be technical tags. An empty word
+    /// separates brackets.
+    tech_words: Vec<String>,
+    /// A bracket of technical tags followed the title, as in
+    /// `Title (BD 1080p) - TV + SP`: later words can still be episode markers,
+    /// but they no longer join the title or set the kind.
+    title_closed: bool,
 }
 
 impl Walk {
@@ -120,7 +155,9 @@ impl Walk {
                     0
                 }
                 (Zone::Title, Token::Slash) => {
-                    self.title.push(Part::Slash);
+                    if !self.title_closed {
+                        self.title.push(Part::Slash);
+                    }
                     0
                 }
                 (Zone::EpisodeTitle, Token::Word(word)) => {
@@ -139,6 +176,10 @@ impl Walk {
                 }
                 (_, Token::Bracket { open, content }) => {
                     self.bracket(*open, content.trim(), later);
+                    0
+                }
+                (Zone::Tail, Token::Word(word)) => {
+                    self.tech_words.push(word.clone());
                     0
                 }
                 (Zone::Tail, _) => 0,
@@ -168,84 +209,18 @@ impl Walk {
 
     /// Handles a word in the title zone. Returns how many following tokens it used.
     fn title_word(&mut self, word: &str, next: Option<&Token>) -> usize {
-        if let Some(found) = tag::season_episode(word) {
-            self.release.season = Some(found.season);
-            if let Some((episode, version)) = found.episode {
-                self.start_episode(episode, version);
-                if found.season == 0 {
-                    self.release.kind = EpisodeKind::Special;
-                }
-            }
-            if let Some((kind, numbered)) = found.kind {
-                self.start_kind(kind, numbered);
-            }
-            if !found.rest.is_empty() {
-                self.episode_title.push(found.rest.to_owned());
-            }
-            return 0;
+        if let Some(used) = self.range_marker(word, next) {
+            return used;
         }
-        if let Some(season) = tag::season(word) {
-            self.release.season = Some(season);
-            return 0;
+        if let Some(used) = self.episode_marker(word, next) {
+            return used;
         }
-        if word.eq_ignore_ascii_case("season")
-            && let Some((season, None)) = next_number(next)
-        {
-            self.release.season = Some(season);
-            return 1;
-        }
-        if let Some(season) = tag::ordinal(word)
-            && matches!(next, Some(Token::Word(w)) if w.eq_ignore_ascii_case("season"))
-        {
-            self.release.season = Some(season);
-            return 1;
-        }
-        match tag::episode_prefix(word) {
-            Some(EpisodePrefix::Numbered((episode, version))) => {
-                self.start_episode(episode, version);
-                return 0;
-            }
-            Some(EpisodePrefix::NumberFollows) => {
-                if let Some((episode, version)) = next_number(next) {
-                    self.start_episode(episode, version);
-                    return 1;
-                }
-            }
-            None => {}
-        }
-        if let Some(episode) = tag::japanese_episode(word) {
-            self.start_episode(episode, None);
-            return 0;
-        }
-        if word.eq_ignore_ascii_case("nc")
-            && let Some(Token::Word(next_word)) = next
-            && let Some((kind @ (EpisodeKind::Ncop | EpisodeKind::Nced), numbered)) =
-                tag::kind_word(next_word)
-        {
-            self.start_kind(kind, numbered);
-            return 1;
-        }
-        let segment_start = matches!(self.title.last(), None | Some(Part::Slash));
-        if word.eq_ignore_ascii_case("gekijouban") && segment_start {
-            self.release.kind = EpisodeKind::Movie;
-            return 0;
-        }
-        if let Some((kind, numbered)) = tag::kind_word(word) {
-            if numbered.is_some() {
-                self.start_kind(kind, numbered);
-                return 0;
-            }
-            if closes_kind_word(next) && self.kind_word_fits(word, next) {
-                if kind == EpisodeKind::Movie && self.last_title_word_is("the") {
-                    self.title.pop();
-                }
-                let numbered = next_number(next);
-                self.start_kind(kind, numbered);
-                return usize::from(numbered.is_some());
-            }
+        if let Some(used) = self.kind_marker(word, next) {
+            return used;
         }
         if tag::ends_title(word) {
             self.zone = Zone::Tail;
+            self.tech_words.push(word.to_owned());
             return 0;
         }
         if tag::number(word).is_some() && self.has_title() {
@@ -260,8 +235,160 @@ impl Walk {
                 return 0;
             }
         }
+        if self.title_closed {
+            self.tech_words.push(word.to_owned());
+            return 0;
+        }
         self.title.push(Part::Word(word.to_owned()));
         0
+    }
+
+    /// Season-and-episode words, season and episode ranges, seasons, batch
+    /// markers, versions and volumes.
+    fn range_marker(&mut self, word: &str, next: Option<&Token>) -> Option<usize> {
+        if let Some(found) = tag::season_episode(word) {
+            self.release.season = Some(found.season);
+            if let Some((episode, version)) = found.episode {
+                self.start_episode(episode, version);
+                if found.season == 0 {
+                    self.release.kind = EpisodeKind::Special;
+                }
+            }
+            if let Some(last) = found.last_episode {
+                self.release.last_episode = Some(last);
+                self.release.batch = true;
+            }
+            if let Some((kind, numbered)) = found.kind {
+                self.start_kind(kind, numbered);
+            }
+            if !found.rest.is_empty() {
+                self.episode_title.push(found.rest.to_owned());
+            }
+            return Some(0);
+        }
+        if let Some((first, last)) = tag::season_range(word) {
+            self.release.season = Some(first);
+            self.release.last_season = Some(last);
+            self.release.batch = true;
+            return Some(0);
+        }
+        if let Some(season) = tag::season(word) {
+            self.release.season = Some(season);
+            return Some(0);
+        }
+        if tag::is_batch(word) && self.has_title() && closes_batch_word(next) {
+            self.release.batch = true;
+            self.zone = Zone::Tail;
+            return Some(0);
+        }
+        if self.has_title()
+            && let Some(version) = tag::version_word(word)
+        {
+            self.release.version = Some(version);
+            return Some(0);
+        }
+        if let Some(volume) = tag::volume(word) {
+            self.start_volume(volume);
+            return Some(0);
+        }
+        if tag::is_volume_keyword(word)
+            && let Some(Token::Word(next_word)) = next
+            && let Some(volume) = tag::volume_number(next_word)
+        {
+            self.start_volume(volume);
+            return Some(1);
+        }
+        if self.has_title()
+            && closes_batch_word(next)
+            && let Some((first, last)) = tag::episode_range(word)
+        {
+            self.start_episode(first, None);
+            self.release.last_episode = Some(last);
+            self.release.batch = true;
+            return Some(0);
+        }
+        None
+    }
+
+    /// `Season 2`, `2nd Season`, `EP 01`, `E01` and `第01話`.
+    fn episode_marker(&mut self, word: &str, next: Option<&Token>) -> Option<usize> {
+        if word.eq_ignore_ascii_case("season")
+            && let Some(Token::Word(next_word)) = next
+            && let Some((first, last)) = tag::episode_range(next_word)
+        {
+            self.release.season = Some(first);
+            self.release.last_season = Some(last);
+            self.release.batch = true;
+            return Some(1);
+        }
+        if word.eq_ignore_ascii_case("season")
+            && let Some((season, None)) = next_number(next)
+        {
+            self.release.season = Some(season);
+            return Some(1);
+        }
+        if let Some(season) = tag::ordinal(word)
+            && matches!(next, Some(Token::Word(w)) if w.eq_ignore_ascii_case("season"))
+        {
+            self.release.season = Some(season);
+            return Some(1);
+        }
+        match tag::episode_prefix(word) {
+            Some(EpisodePrefix::Numbered((episode, version))) => {
+                self.start_episode(episode, version);
+                return Some(0);
+            }
+            Some(EpisodePrefix::NumberFollows) => {
+                if let Some((episode, version)) = next_number(next) {
+                    self.start_episode(episode, version);
+                    return Some(1);
+                }
+            }
+            None => {}
+        }
+        if let Some(episode) = tag::japanese_episode(word) {
+            self.start_episode(episode, None);
+            return Some(0);
+        }
+        None
+    }
+
+    /// `NC OP`, a leading `Gekijouban` and kind words such as `OVA` or `Movie`.
+    fn kind_marker(&mut self, word: &str, next: Option<&Token>) -> Option<usize> {
+        if word.eq_ignore_ascii_case("nc")
+            && let Some(Token::Word(next_word)) = next
+            && let Some((kind @ (EpisodeKind::Ncop | EpisodeKind::Nced), numbered)) =
+                tag::kind_word(next_word)
+        {
+            self.start_kind(kind, numbered);
+            return Some(1);
+        }
+        let segment_start = matches!(self.title.last(), None | Some(Part::Slash));
+        if word.eq_ignore_ascii_case("gekijouban") && segment_start {
+            self.release.kind = EpisodeKind::Movie;
+            return Some(0);
+        }
+        if !self.title_closed
+            && let Some((kind, numbered)) = tag::kind_word(word)
+        {
+            if numbered.is_some() {
+                self.start_kind(kind, numbered);
+                return Some(0);
+            }
+            // `the Movie` marks a movie whatever follows: `the Movie Part III`.
+            let the_movie = kind == EpisodeKind::Movie && self.last_title_word_is("the");
+            if (the_movie || closes_kind_word(next)) && self.kind_word_fits(word, next) {
+                if the_movie {
+                    self.title.pop();
+                }
+                // `Movie 2023` is a year, not the movie's number.
+                let year_follows = matches!(next, Some(Token::Word(w)) if tag::year(w).is_some());
+                let numbered = next_number(next).filter(|_| !year_follows);
+                self.start_kind(kind, numbered);
+                return Some(usize::from(numbered.is_some()));
+            }
+        }
+        None
     }
 
     /// Whether a bare dictionary kind word such as `Ending` marks the kind here,
@@ -273,6 +400,8 @@ impl Walk {
             || self.title.last() == Some(&Part::Dash)
             || self.last_title_word_is("the")
             || matches!(next, Some(Token::Word(w)) if tag::number(w).is_some() || tag::is_tech(w))
+            // `Title Movie (2019)`: `Movie` is rarely the last word of a title.
+            || (word.eq_ignore_ascii_case("movie") && matches!(next, None | Some(Token::Bracket { .. })))
     }
 
     fn last_title_word_is(&self, word: &str) -> bool {
@@ -280,8 +409,20 @@ impl Walk {
     }
 
     fn episode_title_word(&mut self, word: &str, next: Option<&Token>) {
+        if self.episode_title.is_empty()
+            && let Some(version) = tag::version_word(word)
+        {
+            self.release.version = Some(version);
+            return;
+        }
+        if tag::is_batch(word) {
+            self.release.batch = true;
+            self.zone = Zone::Tail;
+            return;
+        }
         if tag::is_tech(word) {
             self.zone = Zone::Tail;
+            self.tech_words.push(word.to_owned());
             return;
         }
         // A kind word closing the episode title: `Title - 05 Preview [1080p]`,
@@ -293,6 +434,14 @@ impl Walk {
             && !matches!(next, Some(Token::Dash))
         {
             self.release.kind = kind;
+            return;
+        }
+        if self.release.kind == EpisodeKind::Movie
+            && self.release.year.is_none()
+            && self.episode_title.is_empty()
+            && let Some(year) = tag::year(word)
+        {
+            self.release.year = Some(year);
             return;
         }
         if self.release.episode.is_none()
@@ -316,6 +465,17 @@ impl Walk {
             .split([' ', ',', ';'])
             .filter(|w| !w.is_empty())
             .collect();
+        let tech_mark = self.tech_words.len();
+        self.tech_words
+            .extend(words.iter().map(|w| (*w).to_owned()));
+        self.tech_words.push(String::new());
+        let batch_word = words.iter().any(|w| tag::is_batch(w));
+        if batch_word {
+            self.release.batch = true;
+        }
+        if self.bracket_ranges(&words) || (batch_word && words.len() == 1) {
+            return;
+        }
         // A kind in its own bracket: `Title (OVA) - 01`, `Title - 01 (OVA)`.
         if let [word] = words.as_slice()
             && self.release.kind == EpisodeKind::Episode
@@ -346,6 +506,18 @@ impl Walk {
                     && let Some((episode, version)) = tag::number(content)
                 {
                     self.start_episode(episode, version);
+                } else if self.release.episode.is_none()
+                    && let [prefix, number] = words.as_slice()
+                    && tag::episode_prefix(prefix) == Some(EpisodePrefix::NumberFollows)
+                    && let Some((episode, version)) = tag::number(number)
+                {
+                    self.start_episode(episode, version);
+                } else if self.has_title()
+                    && words
+                        .iter()
+                        .any(|w| tag::is_tech(w) || tag::resolution(w).is_some())
+                {
+                    self.title_closed = true;
                 } else if open == '('
                     && self.has_title()
                     && !words.iter().any(|w| tag::is_tech(w))
@@ -353,9 +525,15 @@ impl Walk {
                 {
                     // A parenthesis inside the title, as in `Nekomonogatari (Kuro) - 01`.
                     self.title.push(Part::Word(format!("({content})")));
+                    self.tech_words.truncate(tech_mark);
                 }
             }
             Zone::EpisodeTitle => {
+                if self.release.year.is_none()
+                    && let Some(year) = tag::year(content)
+                {
+                    self.release.year = Some(year);
+                }
                 if open == '「' && self.episode_title.is_empty() {
                     self.episode_title.push(content.to_owned());
                 }
@@ -365,9 +543,63 @@ impl Walk {
         }
     }
 
+    /// Reads a volume, season range, season or leading episode range from a
+    /// bracket's words: `(Vol. 1-2)`, `(S01-S02)`, `(S2 Complete)`,
+    /// `[01-12 Batch]`. Returns whether an episode range was found.
+    fn bracket_ranges(&mut self, words: &[&str]) -> bool {
+        if self.release.volume.is_none() {
+            let volume = match words {
+                [keyword, number, ..] if tag::is_volume_keyword(keyword) => {
+                    tag::volume_number(number)
+                }
+                [word, ..] => tag::volume(word),
+                [] => None,
+            };
+            if let Some(volume) = volume {
+                self.release.volume = Some(volume);
+                self.release.batch = true;
+            }
+        }
+        if self.release.season.is_none() {
+            let spelled_out = match words {
+                [keyword, range, ..] if keyword.eq_ignore_ascii_case("season") => {
+                    tag::episode_range(range)
+                }
+                _ => None,
+            };
+            if let Some((first, last)) =
+                spelled_out.or_else(|| words.iter().find_map(|w| tag::season_range(w)))
+            {
+                self.release.season = Some(first);
+                self.release.last_season = Some(last);
+                self.release.batch = true;
+            } else if let Some(season) = words.iter().find_map(|w| tag::season(w)) {
+                self.release.season = Some(season);
+            }
+        }
+        if self.release.episode.is_none()
+            && let Some((first, last)) = words.first().and_then(|w| tag::episode_range(w))
+        {
+            self.release.episode = Some(first);
+            self.release.last_episode = Some(last);
+            self.release.batch = true;
+            if self.zone == Zone::Title {
+                self.zone = Zone::EpisodeTitle;
+            }
+            return true;
+        }
+        false
+    }
+
+    fn start_volume(&mut self, volume: u32) {
+        self.release.volume = Some(volume);
+        self.release.batch = true;
+        self.zone = Zone::Tail;
+    }
+
     fn start_episode(&mut self, episode: u32, version: Option<u32>) {
         self.release.episode = Some(episode);
-        self.release.version = version;
+        self.release.version = version.or(self.release.version);
         self.zone = Zone::EpisodeTitle;
     }
 
@@ -396,6 +628,7 @@ impl Walk {
             self.title.pop();
         }
         self.release.title = assemble_title(&self.title);
+        tech::read(&self.tech_words, &mut self.release);
         let episode_title = self.episode_title.join(" ");
         let episode_title = episode_title.trim_end_matches([' ', '-']);
         self.release.episode_title = (!episode_title.is_empty()).then(|| episode_title.to_owned());
@@ -469,6 +702,17 @@ fn next_number(next: Option<&Token>) -> Option<Numbered> {
     match next {
         Some(Token::Word(word)) => tag::number(word),
         _ => None,
+    }
+}
+
+/// Whether a bare `Batch`, `Complete` or range followed by `next` ends the
+/// title, rather than being part of it (`Complete Clear - 01`, `Ranma 1-2 (2024)`).
+fn closes_batch_word(next: Option<&Token>) -> bool {
+    match next {
+        None => true,
+        Some(Token::Bracket { content, .. }) => tag::year(content.trim()).is_none(),
+        Some(Token::Word(word)) => tag::is_batch(word) || tag::is_tech(word),
+        Some(Token::Dash | Token::Slash) => false,
     }
 }
 

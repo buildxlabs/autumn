@@ -11,6 +11,11 @@
 # - checksum is the eight-digit CRC32, written in capitals.
 # - For a movie marked `Title: The Movie - Subtitle`, the subtitle is the
 #   episode title.
+# - For a range such as 01-12, episode is the first and last_episode the
+#   last; a range, Batch, Complete or a volume makes batch true. A season on
+#   its own (S2, Season 2) is not a batch.
+# - A dash written as an en dash in the name shows as - in the title.
+# - Tag values are the enum names in lowercase: h265, dualaudio, webdl.
 
 # ---------------------------------------------------------------------------
 # From reference/seanime tests (GPL-3.0)
@@ -1996,3 +2001,2134 @@ name: [D3] Today's Menu for the Emiya Family (BD 1080p x264 FLAC) (Emiya-san Chi
 title: Today's Menu for the Emiya Family
 group: D3
 resolution: 1080
+
+# ---------------------------------------------------------------------------
+# From Nyaa RSS searches for batches, volumes, season ranges and absolute
+# numbering (q=01-12, batch, complete, Vol, S01-S0, One Piece), all
+# categories (2026-11-24). Tags are checked on every name from here on.
+# ---------------------------------------------------------------------------
+
+name: [SubsPlease] Tensei Kizoku, Kantei Skill de Nariagaru (01-12) (1080p) [Batch]
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Hyouken no Majutsushi ga Sekai wo Suberu (01-12) (720p) [Batch]
+title: Hyouken no Majutsushi ga Sekai wo Suberu
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 720
+tags: none
+
+name: [SubsPlease] Otome Game Sekai wa Mob ni Kibishii Sekai desu S2 (01-12) (1080p) [Batch]
+title: Otome Game Sekai wa Mob ni Kibishii Sekai desu
+group: SubsPlease
+season: 2
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Sasaki to Pii-chan (01-12) (480p) [Batch]
+title: Sasaki to Pii-chan
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 480
+tags: none
+
+name: [SubsPlease] Link Click S3 (01-12) (1080p) [Batch]
+title: Link Click
+group: SubsPlease
+season: 3
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Grand Blue S2 (01-12) (720p) [Batch]
+title: Grand Blue
+group: SubsPlease
+season: 2
+episode: 1
+last_episode: 12
+batch: true
+resolution: 720
+tags: none
+
+name: [SubsPlease] Vinland Saga S2 (01-24) (720p) [Batch]
+title: Vinland Saga
+group: SubsPlease
+season: 2
+episode: 1
+last_episode: 24
+batch: true
+resolution: 720
+tags: none
+
+name: [SubsPlease] Kusuriya no Hitorigoto (25-48) (1080p) [Batch]
+title: Kusuriya no Hitorigoto
+group: SubsPlease
+episode: 25
+last_episode: 48
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Yamato yo Towa ni - Rebel 3199 (23-26) (1080p) [Batch]
+title: Yamato yo Towa ni - Rebel 3199
+group: SubsPlease
+episode: 23
+last_episode: 26
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Tensei Shitara Slime Datta Ken S4 (01-24) (1080p) [Batch]
+title: Tensei Shitara Slime Datta Ken
+group: SubsPlease
+season: 4
+episode: 1
+last_episode: 24
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Tensei Shitara Slime Datta Ken (49-72) (480p) [Batch]
+title: Tensei Shitara Slime Datta Ken
+group: SubsPlease
+episode: 49
+last_episode: 72
+batch: true
+resolution: 480
+tags: none
+
+name: [SubsPlease] Gensou Suikoden (01-06) (1080p) [Batch]
+title: Gensou Suikoden
+group: SubsPlease
+episode: 1
+last_episode: 6
+batch: true
+resolution: 1080
+tags: none
+
+name: [LoliHouse] 炒翻天 / 铁锅料理王 / Tetsunabe no Jan! [01-12 合集][WebRip 1080p HEVC-10bit AAC][简繁内封字幕][Fin]
+title: Tetsunabe no Jan!
+group: LoliHouse
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+source: webrip
+
+name: MAO S01E14-E26 1080p DSNP WEB-DL DUAL AAC2.0 H.264 (Cour 2, English Dub, Japanese Dub) [BATCH]
+title: MAO
+season: 1
+episode: 14
+last_episode: 26
+batch: true
+resolution: 1080
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: disneyplus
+
+name: [Bird] Cardfight!! Vanguard Divinez Unmei Seisen-hen  (1080p) [Batch]
+title: Cardfight!! Vanguard Divinez Unmei Seisen-hen
+group: Bird
+batch: true
+resolution: 1080
+tags: none
+
+name: [URD] Tensei Kizoku, Kantei Skill de Nariagaru (As a Reincarnated Aristocrat I'll Use My Appraisal Skill to Rise in the World) (Season 02) (Batch) [1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: URD
+season: 2
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: english
+
+name: [URD] Tensei Shitara Dragon no Tamago Datta (Reincarnated as a Dragon Hatchling) (Season 01) (Batch) [1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]
+title: Tensei Shitara Dragon no Tamago Datta
+group: URD
+season: 1
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: english
+
+name: Cyberpunk Edgerunners - Season 1 (1080p) [HEVC x265 10bit] [ENG] (Batch)
+title: Cyberpunk Edgerunners
+season: 1
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+
+name: [Judas] Honzuki no Gekokujou: Shisho ni Naru Tame ni wa Shudan o Erande Iraremasen (Ascendance of a Bookworm) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)
+title: Honzuki no Gekokujou: Shisho ni Naru Tame ni wa Shudan o Erande Iraremasen
+group: Judas
+season: 4
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: multi
+
+name: [Judas] Cyberpunk Edgerunners (Season 2) [1080p][HEVC x265 10bit][Multi-Audio][Multi-Subs] (Batch)
+title: Cyberpunk Edgerunners
+group: Judas
+season: 2
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: multiaudio
+subtitles: multi
+
+name: [Unfucked] The Elusive Samurai S02 (1080p CR WEB-DL AVC AAC 2.0) [Multi-Subs, Dual-Audio] [Batch] | Nige Jouzu no Wakagimi (2026)
+title: The Elusive Samurai
+group: Unfucked
+season: 2
+batch: true
+resolution: 1080
+video_codec: h264
+audio: aac, dualaudio
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Doomdos] - Quanqiu Gao Wu - S01 [4K HEVC Tencent WEB-DL] (BATCH Complete Season)
+title: Quanqiu Gao Wu
+group: Doomdos
+season: 1
+batch: true
+resolution: 2160
+video_codec: h265
+source: webdl
+
+name: [RUBaDUB] My Gift Lvl 9999 Unlimited Gacha (Complete) (1080p) (Dual Audio)
+title: My Gift Lvl 9999 Unlimited Gacha
+group: RUBaDUB
+batch: true
+resolution: 1080
+audio: dualaudio
+
+name: [RUBaDUB] Call of the Night (S2 Complete) (1080p) (Dual Audio)
+title: Call of the Night
+group: RUBaDUB
+season: 2
+batch: true
+resolution: 1080
+audio: dualaudio
+
+name: [RUBaDUB] I Was Reincarnated as the 7th Prince (S1 Complete) (1080p) (Dual Audio)
+title: I Was Reincarnated as the 7th Prince
+group: RUBaDUB
+season: 1
+batch: true
+resolution: 1080
+audio: dualaudio
+
+name: [RUBaDUB] The 100 Girlfriends Who Really Love You (S2 Complete) (1080p) (Dual Audio)
+title: The 100 Girlfriends Who Really Love You
+group: RUBaDUB
+season: 2
+batch: true
+resolution: 1080
+audio: dualaudio
+
+name: [RUBaDUB] City Hunter 2 (Complete) (1080p) (SUB)
+title: City Hunter 2
+group: RUBaDUB
+batch: true
+resolution: 1080
+tags: none
+
+name: [SavI0r] Bye Bye, Earth Complete [BD][1080p][AV1][OPUS][Dual Audio]
+title: Bye Bye, Earth
+group: SavI0r
+batch: true
+resolution: 1080
+video_codec: av1
+audio: opus, dualaudio
+source: bluray
+
+name: [AEOG] Dragon Ball (Complete) (1080p) (Dual Audio)
+title: Dragon Ball
+group: AEOG
+batch: true
+resolution: 1080
+audio: dualaudio
+
+name: [Doomdos] Seasons of Blossom (2026) S01 1080p KBS TV-DL AAC2.0 H.264 (BATCH Complete Season) (Cheongchun Blossom: Uriui Bom)
+title: Seasons of Blossom
+group: Doomdos
+season: 1
+batch: true
+resolution: 1080
+year: 2026
+video_codec: h264
+audio: aac
+source: tv
+
+name: [kneelack] Lupin the Third Part II COMPLETE (001-155) [480p] [USBD Remux] [DD] | Lupin III / ルパン三世 Part 2
+title: Lupin the Third Part II
+group: kneelack
+episode: 1
+last_episode: 155
+batch: true
+resolution: 480
+audio: ac3
+source: bluray
+
+name: [Doomdos] - All Saints Street Special The Secret of the Old Castle - Specials [1080p BILIBILI COM WEB-DL] (BATCH)
+title: All Saints Street Special The Secret of the Old Castle
+group: Doomdos
+kind: special
+batch: true
+resolution: 1080
+source: webdl
+streaming: bilibili
+
+name: [LonelyChaser-Inka] Tongari Boushi no Memoru 14-25 Batch
+title: Tongari Boushi no Memoru
+group: LonelyChaser-Inka
+episode: 14
+last_episode: 25
+batch: true
+tags: none
+
+name: [ReinForce] Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken 2 Vol 4 (BDRip 1920x1080 x264 FLAC)
+title: Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken 2
+group: ReinForce
+volume: 4
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bdrip
+
+name: [ReinForce] Marriagetoxin Vol 1 (BDRip 1920x1080 x264 FLAC)
+title: Marriagetoxin
+group: ReinForce
+volume: 1
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bdrip
+
+name: [ReinForce] Re - Zero kara Hajimeru Isekai Seikatsu S4 Vol 3 (BDRip 1920x1080 x264 FLAC)
+title: Re - Zero kara Hajimeru Isekai Seikatsu
+group: ReinForce
+season: 4
+volume: 3
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bdrip
+
+name: [ReinForce] Re - Zero kara Hajimeru Isekai Seikatsu S4 Vol 1-2 (BDRip 1920x1080 x264 FLAC)
+title: Re - Zero kara Hajimeru Isekai Seikatsu
+group: ReinForce
+season: 4
+volume: 1
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bdrip
+
+name: [Almighty] Re:Zero kara Hajimeru Isekai Seikatsu S4 - Vol.3 [BD 1920x1080 x264 FLAC][Multi Subs]
+title: Re:Zero kara Hajimeru Isekai Seikatsu
+group: Almighty
+season: 4
+volume: 3
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bluray
+subtitles: multi
+
+name: [Almighty] Re:Zero kara Hajimeru Isekai Seikatsu S4 - Vol.2 [BD 1920x1080 x264 FLAC][Multi Subs]
+title: Re:Zero kara Hajimeru Isekai Seikatsu
+group: Almighty
+season: 4
+volume: 2
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bluray
+subtitles: multi
+
+name: Charley & Mimmo - VOL 3 [PT-BR] [VHS] [480p]
+title: Charley & Mimmo
+volume: 3
+batch: true
+resolution: 480
+subtitles: portuguese
+
+name: Blue Archive the Animation 10-12 (BD 1080p) (Vol. 4)
+title: Blue Archive the Animation
+episode: 10
+last_episode: 12
+volume: 4
+batch: true
+resolution: 1080
+source: bluray
+
+name: Blue Archive the Animation 01-06 (BD 1080p) (Vol. 1-2)
+title: Blue Archive the Animation
+episode: 1
+last_episode: 6
+volume: 1
+batch: true
+resolution: 1080
+source: bluray
+
+name: The Apothecary Diaries S03E04 The Last Volume 1080p CR WEB-DL MULTi AAC2.0 H.264-VARYG (Kusuriya no Hitorigoto 3rd Season, Multi-Audio, Multi-Subs)
+title: The Apothecary Diaries
+group: VARYG
+season: 3
+episode: 4
+episode_title: The Last Volume
+resolution: 1080
+video_codec: h264
+audio: multiaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: The Apothecary Diaries S03E04 The Last Volume 1080p NF WEB-DL AAC2.0 H.264-VARYG (Kusuriya no Hitorigoto 3rd Season, Multi-Subs)
+title: The Apothecary Diaries
+group: VARYG
+season: 3
+episode: 4
+episode_title: The Last Volume
+resolution: 1080
+video_codec: h264
+audio: aac
+source: webdl
+streaming: netflix
+subtitles: multi
+
+name: [SFSub] 關於我在無意間被隔壁的天使變成廢柴這件事2 / 关于邻家的天使大人不知不觉把我惯成了废人这档子事2 / Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken 2 Vol.2~3 [BDRip 1080p x264 10bit FLAC ASSx2 MKV][CHS&CHT&JPN]
+title: Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken 2
+group: SFSub
+volume: 2
+batch: true
+resolution: 1080
+video_codec: h264
+bit_depth: 10
+audio: flac
+source: bdrip
+subtitles: chinesesimplified, chinesetraditional
+
+name: 2.43.Seiin.High.School.Boys.Volleyball.Team.S01.1080p.BluRay.Dual-Audio.Opus2.0.10Bit.x264-Headpatter
+title: 2.43 Seiin High School Boys Volleyball Team
+group: Headpatter
+season: 1
+resolution: 1080
+video_codec: h264
+bit_depth: 10
+audio: dualaudio, opus
+source: bluray
+
+name: 2.43.Seiin.High.School.Boys.Volleyball.Team.S01.1080p.BluRay.Remux.AVC.Dual-Audio.FLAC2.0-Headpatter
+title: 2.43 Seiin High School Boys Volleyball Team
+group: Headpatter
+season: 1
+resolution: 1080
+video_codec: h264
+audio: dualaudio, flac
+source: bluray
+
+name: [Khaoklong] Magic Knight Rayearth (1994) S01-S02 [BD Remux 1080p AVC] [Dual Audio]
+title: Magic Knight Rayearth
+group: Khaoklong
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+year: 1994
+video_codec: h264
+audio: dualaudio
+source: bluray
+
+name: [Gecko] iii icecrin - S01-S02 (iiiあいすくりん) [CTHP.WEB-DL 1080P AVC, AAC, M-SUB][BATCH]
+title: iii icecrin
+group: Gecko
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: h264
+audio: aac
+source: webdl
+subtitles: multi
+
+name: [FLAV1N] Fumetsu no Anata e - S01-S02 (BD 1080p AV1 Opus) [Multi-Subs] | To Your Eternity
+title: Fumetsu no Anata e
+group: FLAV1N
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: av1
+audio: opus
+source: bluray
+subtitles: multi
+
+name: [Gecko] God Troubles Me - S01-S04 (汉化日记; Hanhua Riji) [BILI/YTB.WEB-DL 1080P AVC, AAC, M-SUB][BATCH]
+title: God Troubles Me
+group: Gecko
+season: 1
+last_season: 4
+batch: true
+resolution: 1080
+video_codec: h264
+audio: aac
+source: webdl
+streaming: bilibili
+subtitles: multi
+
+name: [WF] Dandadan (S01-S02) [BD 1080p x265 OPUS][Multi-Áudio][PT-BR] (DAN DA DAN)
+title: Dandadan
+group: WF
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: h265
+audio: opus, multiaudio
+source: bluray
+subtitles: portuguese
+
+name: [WF] Yofukashi no Uta (S01-S02) [BD 1080p x265 OPUS][PT-BR] (Call of the Night | Season 2 | よふかしのうた)
+title: Yofukashi no Uta
+group: WF
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bluray
+subtitles: portuguese
+
+name: [Sokudo] Arknights S01-S02 [1080p BD AV1]
+title: Arknights
+group: Sokudo
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: av1
+source: bluray
+
+name: [Sokudo] The King's Avatar S01-S02 [1080p AV1]
+title: The King's Avatar
+group: Sokudo
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: av1
+
+name: BAKI 2018 S01-S02 1080p NF WEB-DL MULTi AAC2.0 H 264-VARYG (Multi-Audio, Multi-Subs)
+title: BAKI
+group: VARYG
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+year: 2018
+video_codec: h264
+audio: multiaudio, aac
+source: webdl
+streaming: netflix
+subtitles: multi
+
+name: [ToonsHub] Gag Manga Biyori S01-S04 1080p AMZN WEB-DL DDP2.0 H.264 (Masuda Kousuke Gekijou Gag Manga Biyori, English-Sub) [BATCH]
+title: Gag Manga Biyori
+group: ToonsHub
+season: 1
+last_season: 4
+batch: true
+resolution: 1080
+video_codec: h264
+audio: eac3
+source: webdl
+streaming: amazon
+subtitles: english
+
+name: [QM] Hakkenden: Touhou Hakken Ibun / Eight Dogs of the East S01-S02 (BD 1080p 10bit x264 FLAC) [Dual-Audio]
+title: Hakkenden: Touhou Hakken Ibun
+group: QM
+season: 1
+last_season: 2
+batch: true
+resolution: 1080
+video_codec: h264
+bit_depth: 10
+audio: flac, dualaudio
+source: bluray
+
+name: [Techmod] The Seven Deadly Sins - Four Knights of the Apocalypse s01-s02
+title: The Seven Deadly Sins - Four Knights of the Apocalypse
+group: Techmod
+season: 1
+last_season: 2
+batch: true
+tags: none
+
+name: [LuRenDian] Fabulous Beasts (You Shou Yan) S01-S06 (EP01-72) 1080p WEB-DL HEVC AAC [subs in 7 languages]
+title: Fabulous Beasts (You Shou Yan)
+group: LuRenDian
+season: 1
+last_season: 6
+episode: 1
+last_episode: 72
+batch: true
+resolution: 1080
+video_codec: h265
+audio: aac
+source: webdl
+
+name: [Mehul] Katekyo Hitman Reborn! 001-203 (S01-S09) (BD Remux 480p AVC AC3 2.0) | 家庭教師ヒットマンREBORN!
+title: Katekyo Hitman Reborn!
+group: Mehul
+season: 1
+last_season: 9
+episode: 1
+last_episode: 203
+batch: true
+resolution: 480
+video_codec: h264
+audio: ac3
+source: bluray
+
+name: [NanakoRaws] One Piece - 997 (BS8 TV 1080p HEVC AAC)
+title: One Piece
+group: NanakoRaws
+episode: 997
+resolution: 1080
+video_codec: h265
+audio: aac
+source: tv
+
+name: [NanakoRaws] One Piece - 574 (FujiTV TWO TV 1080p HEVC AAC)
+title: One Piece
+group: NanakoRaws
+episode: 574
+resolution: 1080
+video_codec: h265
+audio: aac
+source: tv
+
+name: [AnoZu] One Piece S23E05 1080p CR WEB-DL Dual-Audio DDP 2.0 H.264
+title: One Piece
+group: AnoZu
+season: 23
+episode: 5
+resolution: 1080
+video_codec: h264
+audio: dualaudio, eac3
+source: webdl
+streaming: crunchyroll
+
+name: [ToonsHub] One Piece EP1160 1080p CR WEB-DL DUAL AAC2.0 H.264 (Dual-Audio, Multi-Subs)
+title: One Piece
+group: ToonsHub
+episode: 1160
+resolution: 1080
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: One Piece S01E1160 An Encounter on a Snowfield-Loki the Accursed Prince 1080p CR WEB-DL DUAL AAC2.0 H.264-VARYG (Dual-Audio, Multi-Subs)
+title: One Piece
+group: VARYG
+season: 1
+episode: 1160
+episode_title: An Encounter on a Snowfield-Loki the Accursed Prince
+resolution: 1080
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: One Piece S01E1158 A Quest in the Land of Mystery The Secret of the Sun God 1080p CR WEB-DL DUAL AAC2.0 H.264-VARYG (Dual-Audio, Multi-Subs)
+title: One Piece
+group: VARYG
+season: 1
+episode: 1158
+episode_title: A Quest in the Land of Mystery The Secret of the Sun God
+resolution: 1080
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Yameii] ONE PIECE - S23E05 [English Dub] [CR WEB-DL 1080p H264 AAC] [7B51F66C]
+title: ONE PIECE
+group: Yameii
+season: 23
+episode: 5
+resolution: 1080
+checksum: 7B51F66C
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+
+name: [Yameii] ONE PIECE - S23E04 [English Dub] [CR WEB-DL 720p H264 AAC] [12A4AEFD]
+title: ONE PIECE
+group: Yameii
+season: 23
+episode: 4
+resolution: 720
+checksum: 12A4AEFD
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+
+name: [Judas] Dragon Ball Super - Beerus - S01E07 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Dragon Ball Super - Beerus
+group: Judas
+season: 1
+episode: 7
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] Tempal: Item no Chikara (Overgeared) - S01E09 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Weekly)
+title: Tempal: Item no Chikara (Overgeared)
+group: Judas
+season: 1
+episode: 9
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: multi
+
+name: [Judas] Dia no Ace (Ace of the Diamond) - S04E20 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Dia no Ace (Ace of the Diamond)
+group: Judas
+season: 4
+episode: 20
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] Ao no Hako (Blue Box) - S02E07 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Weekly)
+title: Ao no Hako (Blue Box)
+group: Judas
+season: 2
+episode: 7
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: multi
+
+name: [Judas] Magical Explorer - S01E09 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Magical Explorer
+group: Judas
+season: 1
+episode: 9
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] Black Clover - S02E08 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Black Clover
+group: Judas
+season: 2
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] Tokyo Revengers - S04E08 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Weekly)
+title: Tokyo Revengers
+group: Judas
+season: 4
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: multi
+
+name: [Judas] Tougen Anki - S02E08 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Tougen Anki
+group: Judas
+season: 2
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] Hotaru no Yomeiri (Firefly Wedding) - S01E07 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Hotaru no Yomeiri (Firefly Wedding)
+group: Judas
+season: 1
+episode: 7
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Judas] JoJo's Bizarre Adventure (JoJo no Kimyou na Bouken) - S06E10 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Weekly)
+title: JoJo's Bizarre Adventure (JoJo no Kimyou na Bouken)
+group: Judas
+season: 6
+episode: 10
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: multi
+
+name: [Judas] Kusuriya no Hitorigoto (The Apothecary Diaries) - S03E08 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Kusuriya no Hitorigoto (The Apothecary Diaries)
+group: Judas
+season: 3
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [EMBER] Frieren: Beyond Journey's End S02E09 [1080p] [Dual Audio HEVC WEBRip DDP] (Sousou no Frieren Season 2)
+title: Frieren: Beyond Journey's End
+group: EMBER
+season: 2
+episode: 9
+resolution: 1080
+video_codec: h265
+audio: dualaudio, eac3
+source: webrip
+
+name: [EMBER] Frieren: Beyond Journey's End S02E05 [1080p] [Dual Audio HEVC WEBRip DDP] (Sousou no Frieren Season 2)
+title: Frieren: Beyond Journey's End
+group: EMBER
+season: 2
+episode: 5
+resolution: 1080
+video_codec: h265
+audio: dualaudio, eac3
+source: webrip
+
+name: [EMBER] Jujutsu Kaisen S03E11 [1080p] [Dual Audio HEVC WEBRip DDP] (Jujutsu Kaisen: Shimetsu Kaiyuu Zenpen | The Culling Game Part 1)
+title: Jujutsu Kaisen
+group: EMBER
+season: 3
+episode: 11
+resolution: 1080
+video_codec: h265
+audio: dualaudio, eac3
+source: webrip
+
+name: [EMBER] Ao no Orchestra (2025) (Season 2) [1080p] [HEVC WEBRip] (The Blue Orchestra) (Batch)
+title: Ao no Orchestra
+group: EMBER
+season: 2
+batch: true
+resolution: 1080
+year: 2025
+video_codec: h265
+source: webrip
+
+name: [EMBER] Chained Soldier (2026) (Season 2) (Uncensored) [1080p] [HEVC WEBRip] (Mato Seihei no Slave 2) (Batch)
+title: Chained Soldier
+group: EMBER
+season: 2
+batch: true
+resolution: 1080
+year: 2026
+video_codec: h265
+source: webrip
+
+name: [EMBER] My Hero Academia: Vigilantes S02E07 [1080p] [Dual Audio HEVC WEBRip DDP] (Vigilante: Boku no Hero Academia Illegals Season 2)
+title: My Hero Academia: Vigilantes
+group: EMBER
+season: 2
+episode: 7
+resolution: 1080
+video_codec: h265
+audio: dualaudio, eac3
+source: webrip
+
+name: [EMBER]  Fire Force S03E19 [1080p] [Dual Audio HEVC WEBRip DDP] (Enen no Shouboutai San no Shou)
+title: Fire Force
+group: EMBER
+season: 3
+episode: 19
+resolution: 1080
+video_codec: h265
+audio: dualaudio, eac3
+source: webrip
+
+name: [RABBIT] Arknights Season 3 (BD Remux 1080p x264 8-bit DTS-HD MA) | Arknights: RISE FROM EMBER | Arknights: Enshin Shomei
+title: Arknights
+group: RABBIT
+season: 3
+resolution: 1080
+video_codec: h264
+bit_depth: 8
+audio: dts
+source: bluray
+
+name: [ASW] Tempal - Item no Chikara - 09 [1080p HEVC x265 10Bit][AAC]
+title: Tempal - Item no Chikara
+group: ASW
+episode: 9
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Ace of Diamond Act II S2 - 20 [1080p HEVC x265 10Bit][AAC]
+title: Ace of Diamond Act II
+group: ASW
+season: 2
+episode: 20
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Ojisan wa Kawaii Mono ga Osuki. - 08 [1080p HEVC x265 10Bit][AAC]
+title: Ojisan wa Kawaii Mono ga Osuki.
+group: ASW
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Black Clover - 178 [1080p HEVC x265 10Bit][AAC]
+title: Black Clover
+group: ASW
+episode: 178
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] VERTEX FORCE - 08 [1080p HEVC x265 10Bit][AAC]
+title: VERTEX FORCE
+group: ASW
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Yowaki Max - 08 [1080p HEVC x265 10Bit][AAC]
+title: Yowaki Max
+group: ASW
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Hotel Inhumans S2 - 08 [1080p HEVC x265 10Bit][AAC]
+title: Hotel Inhumans
+group: ASW
+season: 2
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Yasei no Last Boss ga Arawareta! - 21 [1080p HEVC x265 10Bit][AAC]
+title: Yasei no Last Boss ga Arawareta!
+group: ASW
+episode: 21
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [ASW] Kanata kara - 08 [1080p HEVC x265 10Bit][AAC]
+title: Kanata kara
+group: ASW
+episode: 8
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: aac
+
+name: [Okay-Subs] Gunbuster S2 (BD 1080p) | Top wo Nerae 2! Diebuster
+title: Gunbuster
+group: Okay-Subs
+season: 2
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Sono Bisque Doll wa Koi wo Suru S2 (BD 1080p) | My Dress-Up Darling S2
+title: Sono Bisque Doll wa Koi wo Suru
+group: Okay-Subs
+season: 2
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Welcome to the N.H.K. S1 (DVD 480p) | NHK ni Youkoso!
+title: Welcome to the N.H.K.
+group: Okay-Subs
+season: 1
+resolution: 480
+source: dvd
+
+name: [Okay-Subs] Dan Da Dan S1 (BD 1080p Dual-Audio) | Dandadan
+title: Dan Da Dan
+group: Okay-Subs
+season: 1
+resolution: 1080
+audio: dualaudio
+source: bluray
+
+name: [Okay-Subs] The First Slam Dunk (2022) (UHD BD 1080p)
+title: The First Slam Dunk
+group: Okay-Subs
+resolution: 1080
+year: 2022
+source: bluray
+
+name: [Okay-Subs] Uma Musume Pretty Derby - BNW no Chikai (BD 1080p) | OVAs | BNW's Oath
+title: Uma Musume Pretty Derby - BNW no Chikai
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Uma Musume Pretty Derby S3 (BD 1080p) | Umamusume
+title: Uma Musume Pretty Derby
+group: Okay-Subs
+season: 3
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Hibike! Euphonium Ensemble Contest (2023) (BD 1080p) | Tokubetsu-hen OVA | Sound! Euphonium
+title: Hibike! Euphonium Ensemble Contest
+group: Okay-Subs
+resolution: 1080
+year: 2023
+source: bluray
+
+name: [Okay-Subs] Birdy the Mighty Decode - S00E01 (DVD 480p) | Tetsuwan Birdy Decode: The Cipher | OVA
+title: Birdy the Mighty Decode
+group: Okay-Subs
+season: 0
+episode: 1
+kind: special
+resolution: 480
+source: dvd
+
+name: [Okay-Subs] Too Many Losing Heroines! S1 (BD 1080p) | Make Heroine ga Oosugiru! | Makeine
+title: Too Many Losing Heroines!
+group: Okay-Subs
+season: 1
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] The Girl Who Leapt Through Time (2006) (BD 1080p) | Toki wo Kakeru Shoujo
+title: The Girl Who Leapt Through Time
+group: Okay-Subs
+resolution: 1080
+year: 2006
+source: bluray
+
+name: [Okay-Subs] Jellyfish Can't Swim in the Night S1 (BD 1080p) | Yoru no Kurage wa Oyogenai
+title: Jellyfish Can't Swim in the Night
+group: Okay-Subs
+season: 1
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Le Portrait de Petit Cossette S1 (DVD 480p)
+title: Le Portrait de Petit Cossette
+group: Okay-Subs
+season: 1
+resolution: 480
+source: dvd
+
+name: [Headpatter] Saga of Tanya the Evil - the Movie (2019) (BD 1080p HEVC 10-bit Opus) [Dual Audio] | Youjo Senki Movie
+title: Saga of Tanya the Evil
+group: Headpatter
+kind: movie
+resolution: 1080
+year: 2019
+video_codec: h265
+bit_depth: 10
+audio: opus, dualaudio
+source: bluray
+
+name: [Headpatter] The Royal Tutor Movie (2019) (BD 1080p x264 8-bit Opus) | Oushitsu Kyoushi Heine Movie
+title: The Royal Tutor
+group: Headpatter
+kind: movie
+resolution: 1080
+year: 2019
+video_codec: h264
+bit_depth: 8
+audio: opus
+source: bluray
+
+name: [Moxie] The Royal Tutor Movie (2019) (BD Remux 1080p x264 8-bit FLAC) | Oushitsu Kyoushi Heine Movie
+title: The Royal Tutor
+group: Moxie
+kind: movie
+resolution: 1080
+year: 2019
+video_codec: h264
+bit_depth: 8
+audio: flac
+source: bluray
+
+name: [Headpatter] Armored Trooper VOTOMS: Pailsen Files The Movie (2009) (BD 1080p x264 8-bit Opus) | Soukou Kihei Votoms: Pailsen Files the Movie
+title: Armored Trooper VOTOMS: Pailsen Files
+group: Headpatter
+kind: movie
+resolution: 1080
+year: 2009
+video_codec: h264
+bit_depth: 8
+audio: opus
+source: bluray
+
+name: [Wofire] Doraemon Movie 20 - Nobita's Space Drifting Chronicles (1999) [1080p, HEVC, EAC3 5.1]
+title: Doraemon
+group: Wofire
+episode: 20
+episode_title: Nobita's Space Drifting Chronicles
+kind: movie
+resolution: 1080
+year: 1999
+video_codec: h265
+audio: eac3
+
+name: [ToonsHub] Puella Magi Madoka Magica the Movie Part III Rebellion (2013) 1080p CR WEB-DL DUAL AAC2.0 H.264 (Mahou Shoujo Madoka☆Magica: Hangyaku no Monogatari, Dual-Audio, Multi-Subs)
+title: Puella Magi Madoka Magica
+group: ToonsHub
+episode_title: Part III Rebellion
+kind: movie
+resolution: 1080
+year: 2013
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [ToonsHub] Puella Magi Madoka Magica the Movie Part I Beginnings (2012) 1080p CR WEB-DL DUAL AAC2.0 H.264 (Mahou Shoujo Madoka☆Magica: Hajimari no Monogatari, Dual-Audio, Multi-Subs)
+title: Puella Magi Madoka Magica
+group: ToonsHub
+episode_title: Part I Beginnings
+kind: movie
+resolution: 1080
+year: 2012
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Judas] Yeonui Pyeonji (Your Letter) [1080p][HEVC x265 10bit][Multi-Subs] (Movie)
+title: Yeonui Pyeonji
+group: Judas
+kind: movie
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+subtitles: multi
+
+name: [Mira] Fate/Grand Order Memorial Movie 2023 (BD Remux 1080p FLAC AVC)
+title: Fate/Grand Order Memorial
+group: Mira
+kind: movie
+resolution: 1080
+year: 2023
+video_codec: h264
+audio: flac
+source: bluray
+
+name: [CNY] Cosmic Princess Kaguya! (2026) (BD 1080p x265 E-AC-3/AAC 5.1/2.0) [Multi-Audio] (German/Deutsch, Japanese Dubs) [OV] [OmU] [DF] [Synchro] | Chou Kaguya-hime! (Film/Movie)
+title: Cosmic Princess Kaguya!
+group: CNY
+resolution: 1080
+year: 2026
+video_codec: h265
+audio: eac3, aac, multiaudio
+source: bluray
+
+name: [Erai-raws] Meitantei Precure - 42 [1080p CR WEB-DL AVC AAC][MultiSub][F75F0E81]
+title: Meitantei Precure
+group: Erai-raws
+episode: 42
+resolution: 1080
+checksum: F75F0E81
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Meitantei Precure - 42 [480p CR WEB-DL AVC AAC][MultiSub][EB0AE045]
+title: Meitantei Precure
+group: Erai-raws
+episode: 42
+resolution: 480
+checksum: EB0AE045
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Dragon Ball Super: Beerus - 07 (REPACK) [1080p CR WEB-DL AVC AAC][MultiSub][4C54E945]
+title: Dragon Ball Super: Beerus
+group: Erai-raws
+episode: 7
+resolution: 1080
+checksum: 4C54E945
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Dark Summoner to Dekiteiru - 08 [1080p HIDIVE WEB-DL AVC AAC][8FD74328]
+title: Dark Summoner to Dekiteiru
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: 8FD74328
+video_codec: h264
+audio: aac
+source: webdl
+streaming: hidive
+
+name: [Erai-raws] Dark Summoner to Dekiteiru - 08 [720p HIDIVE WEB-DL AVC AAC][C3F2118C]
+title: Dark Summoner to Dekiteiru
+group: Erai-raws
+episode: 8
+resolution: 720
+checksum: C3F2118C
+video_codec: h264
+audio: aac
+source: webdl
+streaming: hidive
+
+name: [Erai-raws] Tensei Goblin dakedo Shitsumon Aru - 08 [480p CR WEB-DL AVC AAC][MultiSub][CB4CB9BB]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Erai-raws
+episode: 8
+resolution: 480
+checksum: CB4CB9BB
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: Hello I Am a Witch and My Crush Wants Me to Make a Love Potion S01E08 SUBFRENCH 720p CR WEB-DL AAC2.0 H.264-Tsundere-Raws (VOSTFR, Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu, Horemajo)
+title: Hello I Am a Witch and My Crush Wants Me to Make a Love Potion
+group: Tsundere-Raws
+season: 1
+episode: 8
+resolution: 720
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: french
+
+name: From Far Away S01E08 SUBFRENCH 1080p CR WEB-DL AAC2.0 x264-Tsundere-Raws (VOSTFR, Kanata kara, From the Other Side)
+title: From Far Away
+group: Tsundere-Raws
+season: 1
+episode: 8
+resolution: 1080
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+subtitles: french
+
+name: Dragon Ball Super Beerus S01E07 SUBFRENCH 1080p ADN WEB-DL AAC2.0 x264-Tsundere-Raws (VOSTFR, Multi Subs)
+title: Dragon Ball Super Beerus
+group: Tsundere-Raws
+season: 1
+episode: 7
+resolution: 1080
+video_codec: h264
+audio: aac
+source: webdl
+streaming: adn
+subtitles: french, multi
+
+name: [VCB-Studio] 直至魔女消逝 / Aru Majo ga Shinu Made / ある魔女が死ぬまで 10-bit 1080p HEVC BDRip [Fin]
+title: Aru Majo ga Shinu Made
+group: VCB-Studio
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+source: bdrip
+
+name: [7³ACG] Yasei no Last Boss ga Arawareta! 野生のラスボスが現れた! S1 [BDRip 1080p x265 OPUS]
+title: Yasei no Last Boss ga Arawareta! 野生のラスボスが現れた!
+group: 7³ACG
+season: 1
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bdrip
+
+name: [7³ACG] Hoozuki no Reitetsu 鬼灯の冷徹 S1 [BDRip 1080p x265 OPUS]
+title: Hoozuki no Reitetsu 鬼灯の冷徹
+group: 7³ACG
+season: 1
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bdrip
+
+name: [7³ACG] Jujutsu Kaisen 呪術廻戦 3rd Season [BDRip 1080p x265 OPUS]
+title: Jujutsu Kaisen 呪術廻戦
+group: 7³ACG
+season: 3
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bdrip
+
+name: [7³ACG] Kuroshitsuji: Midori no Majo-hen 黒執事 -緑の魔女編- S5 [BDRip 1080p x265 OPUS] (Black Butler: Emerald Witch Arc)
+title: Kuroshitsuji: Midori no Majo-hen 黒執事 -緑の魔女編-
+group: 7³ACG
+season: 5
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bdrip
+
+name: [7³ACG & ktnbytes] Isekai Nonbiri Nouka 2 異世界のんびり農家 S2 [BDRip 1080p AV1 OPUS]
+title: Isekai Nonbiri Nouka 2 異世界のんびり農家
+group: 7³ACG & ktnbytes
+season: 2
+resolution: 1080
+video_codec: av1
+audio: opus
+source: bdrip
+
+name: [ReinForce] Mushoku Tensei Isekai Ittara Honki Dasu S3 Vol 1 (BDRip 1920x1080 x264 FLAC)
+title: Mushoku Tensei Isekai Ittara Honki Dasu
+group: ReinForce
+season: 3
+volume: 1
+batch: true
+resolution: 1080
+video_codec: h264
+audio: flac
+source: bdrip
+
+name: [Erai-raws] Meitantei Precure - 42 [1080p CR WEBRip HEVC AAC][MultiSub][0A6B1BC9]
+title: Meitantei Precure
+group: Erai-raws
+episode: 42
+resolution: 1080
+checksum: 0A6B1BC9
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Hotel Inhumans Season 2 - 08 [1080p CR WEBRip HEVC AAC][MultiSub][2770CC01]
+title: Hotel Inhumans
+group: Erai-raws
+season: 2
+episode: 8
+resolution: 1080
+checksum: 2770CC01
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Tensei Kizoku, Kantei Skill de Nariagaru S3 - 09 [1080p CR WEBRip HEVC AAC][MultiSub][B3FFF272]
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: Erai-raws
+season: 3
+episode: 9
+resolution: 1080
+checksum: B3FFF272
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Tank Chair - 08 [1080p AMZN WEBRip HEVC EAC3][MultiSub][8ABB446C]
+title: Tank Chair
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: 8ABB446C
+video_codec: h265
+audio: eac3
+source: webrip
+streaming: amazon
+subtitles: multi
+
+name: [Erai-raws] Ojisan wa Kawaii Mono ga Osuki - 08 [1080p CR WEBRip HEVC AAC][MultiSub][CACCDDC9]
+title: Ojisan wa Kawaii Mono ga Osuki
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: CACCDDC9
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Yozakura-san Chi no Daisakusen 2nd Season Part 2 - 07 [1080p DSNP WEBRip HEVC AAC][MultiSub][749956ED]
+title: Yozakura-san Chi no Daisakusen Part 2
+group: Erai-raws
+season: 2
+episode: 7
+resolution: 1080
+checksum: 749956ED
+video_codec: h265
+audio: aac
+source: webrip
+streaming: disneyplus
+subtitles: multi
+
+name: [Erai-raws] Ao Ashi Season 2 - 08 [1080p CR WEBRip HEVC AAC][MultiSub][722C242C]
+title: Ao Ashi
+group: Erai-raws
+season: 2
+episode: 8
+resolution: 1080
+checksum: 722C242C
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Ranma 1/2 (2024) 3rd Season - 08 [1080p NF WEBRip HEVC AAC][MultiSub][775D382D]
+title: Ranma 1/2
+group: Erai-raws
+season: 3
+episode: 8
+resolution: 1080
+year: 2024
+checksum: 775D382D
+video_codec: h265
+audio: aac
+source: webrip
+streaming: netflix
+subtitles: multi
+
+name: [Erai-raws] Black Clover 2nd Season - 08 [1080p CR WEBRip HEVC AAC][MultiSub][5C7D7530]
+title: Black Clover
+group: Erai-raws
+season: 2
+episode: 8
+resolution: 1080
+checksum: 5C7D7530
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Yasei no Last Boss ga Arawareta 2nd Season - 09 [1080p CR WEBRip HEVC AAC][MultiSub][375BE331]
+title: Yasei no Last Boss ga Arawareta
+group: Erai-raws
+season: 2
+episode: 9
+resolution: 1080
+checksum: 375BE331
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Detective Conan - 1221 [1080p CR WEBRip HEVC AAC][MultiSub][64C482B7]
+title: Detective Conan
+group: Erai-raws
+episode: 1221
+resolution: 1080
+checksum: 64C482B7
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Rilakkuma - 33 [1080p CR WEBRip HEVC AAC][MultiSub][C14CFE57]
+title: Rilakkuma
+group: Erai-raws
+episode: 33
+resolution: 1080
+checksum: C14CFE57
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Tougen Anki: Nikko Kegon no Taki-hen - 08 [1080p CR WEBRip HEVC AAC][MultiSub][423E458A]
+title: Tougen Anki: Nikko Kegon no Taki-hen
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: 423E458A
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Tokyo Revengers: Santen Sensou Hen - 08 [1080p DSNP WEBRip HEVC AAC][MultiSub][03B5F73E]
+title: Tokyo Revengers: Santen Sensou Hen
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: 03B5F73E
+video_codec: h265
+audio: aac
+source: webrip
+streaming: disneyplus
+subtitles: multi
+
+name: [Erai-raws] Demons Crest - 04 [1080p AMZN WEBRip HEVC EAC3][MultiSub][B7381A9D]
+title: Demons Crest
+group: Erai-raws
+episode: 4
+resolution: 1080
+checksum: B7381A9D
+video_codec: h265
+audio: eac3
+source: webrip
+streaming: amazon
+subtitles: multi
+
+name: [Erai-raws] Koori no Jouheki 2nd Season - 08 [1080p NF WEBRip HEVC AAC][MultiSub][1997C70A]
+title: Koori no Jouheki
+group: Erai-raws
+season: 2
+episode: 8
+resolution: 1080
+checksum: 1997C70A
+video_codec: h265
+audio: aac
+source: webrip
+streaming: netflix
+subtitles: multi
+
+name: [Erai-raws] Tsuihou sareta Tensei Juukishi wa Game Chishiki de Musou suru - 21 [1080p CR WEBRip HEVC AAC][MultiSub][AD460D74]
+title: Tsuihou sareta Tensei Juukishi wa Game Chishiki de Musou suru
+group: Erai-raws
+episode: 21
+resolution: 1080
+checksum: AD460D74
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Shikin: On Myao Bou - Shikinjou Neko Keibishitsu - 10 (JA) [1080p CR WEBRip HEVC AAC][MultiSub][9FE991BC]
+title: Shikin: On Myao Bou - Shikinjou Neko Keibishitsu
+group: Erai-raws
+episode: 10
+resolution: 1080
+checksum: 9FE991BC
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Sasaki to P-chan Season 2 - 07 [1080p CR WEBRip HEVC AAC][MultiSub][6EF70108]
+title: Sasaki to P-chan
+group: Erai-raws
+season: 2
+episode: 7
+resolution: 1080
+checksum: 6EF70108
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Chitose-kun wa Ramune Bin no Naka Part 2 - 06 [1080p CR WEBRip HEVC AAC][MultiSub][EB90CEBA]
+title: Chitose-kun wa Ramune Bin no Naka Part 2
+group: Erai-raws
+episode: 6
+resolution: 1080
+checksum: EB90CEBA
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Erai-raws] Battle Spirits -Re- Zekkai no Kuu - 07 [1080p CR WEBRip HEVC AAC][MultiSub][F3DC5814]
+title: Battle Spirits -Re- Zekkai no Kuu
+group: Erai-raws
+episode: 7
+resolution: 1080
+checksum: F3DC5814
+video_codec: h265
+audio: aac
+source: webrip
+streaming: crunchyroll
+subtitles: multi
+
+name: [Team ONIBE] Love Live! Hasu no Sora Jogakuin School Idol Club the Movie - Bloom Garden Party [BD 1080p HEVC OPUS]
+title: Love Live! Hasu no Sora Jogakuin School Idol Club
+group: Team ONIBE
+episode_title: Bloom Garden Party
+kind: movie
+resolution: 1080
+video_codec: h265
+audio: opus
+source: bluray
+
+name: [Headpatter] Inukami! The Movie (2007) (BD 1080p x264 8-bit Opus) | Spiritual Investigator Shiro Karina! | Tokumei Reiteki Sousakan Karina Shirou!
+title: Inukami!
+group: Headpatter
+kind: movie
+resolution: 1080
+year: 2007
+video_codec: h264
+bit_depth: 8
+audio: opus
+source: bluray
+
+name: [Petrus] Shoujo Kageki Revue Starlight The Movie (1080p AMZN WEB-DL H264 DDP2.0).mkv
+title: Shoujo Kageki Revue Starlight
+group: Petrus
+kind: movie
+resolution: 1080
+extension: mkv
+video_codec: h264
+audio: eac3
+source: webdl
+streaming: amazon
+
+name: [ToonsHub] Saga of Tanya the Evil the Movie (2019) 1080p CR WEB-DL DUAL AAC2.0 H.264 (Youjo Senki Movie, Dual-Audio, Multi-Subs)
+title: Saga of Tanya the Evil
+group: ToonsHub
+kind: movie
+resolution: 1080
+year: 2019
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Yameii] Saga of Tanya the Evil: The Movie (2019) [English Dub] [CR WEB-DL 1080p H264 AAC] [160532B1] (Youjo Senki Movie)
+title: Saga of Tanya the Evil
+group: Yameii
+kind: movie
+resolution: 1080
+year: 2019
+checksum: 160532B1
+video_codec: h264
+audio: aac
+source: webdl
+streaming: crunchyroll
+
+name: [AnoZu] Saga of Tanya the Evil: The Movie (2019) 1080p CR WEB-DL Dual-Audio AAC 2.0 H.264 | Youjo Senki Movie
+title: Saga of Tanya the Evil
+group: AnoZu
+kind: movie
+resolution: 1080
+year: 2019
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+
+name: [neoDESU] That Time I Got Reincarnated as a Slime the Movie - Tears of the Azure Sea [BD 1080p AV1 OPUS AAC] [Dual Audio] Tensei shitara Slime Datta Ken Movie 2: Soukai no Namida-hen
+title: That Time I Got Reincarnated as a Slime
+group: neoDESU
+episode_title: Tears of the Azure Sea
+kind: movie
+resolution: 1080
+video_codec: av1
+audio: opus, aac, dualaudio
+source: bluray
+
+name: [Beatrice-Raws] Tensei Shitara Slime Datta Ken - Soukai no Namida Hen [BDRip 1920x1080 HEVC TrueHD FLAC] | That Time I Got Reincarnated as a Slime the Movie: Tears of the Azure Sea
+title: Tensei Shitara Slime Datta Ken - Soukai no Namida Hen
+group: Beatrice-Raws
+resolution: 1080
+video_codec: h265
+audio: truehd, flac
+source: bdrip
+
+name: [Ironclad] Tensei Shitara Slime Datta Ken - Sokai no Namida-hen [BD.1080.AV1] | That Time I Got Reincarnated as a Slime the Movie: Tears of the Azure Sea (2026) (Multi-Audio, Multi-Subs)
+title: Tensei Shitara Slime Datta Ken - Sokai no Namida-hen
+group: Ironclad
+video_codec: av1
+source: bluray
+
+name: Saga of Tanya the Evil S02E07 Purgatory 1080p CR WEB-DL DUAL AAC2.0 H.264-VARYG (Youjo Senki Movie, Dual-Audio, Multi-Subs)
+title: Saga of Tanya the Evil
+group: VARYG
+season: 2
+episode: 7
+episode_title: Purgatory
+resolution: 1080
+video_codec: h264
+audio: dualaudio, aac
+source: webdl
+streaming: crunchyroll
+subtitles: multi
+
+name: [Anime Time] KonoSuba - God's Blessing On This Wonderful World - S00E05 - Movie Legend Of Crimson (Fixed Subs Fonts) [BD] [Dual Audio][1080p][HEVC 10bit x265][OPUS][ENG Sub]
+title: KonoSuba - God's Blessing On This Wonderful World
+group: Anime Time
+season: 0
+episode: 5
+episode_title: Movie Legend Of Crimson
+kind: special
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio, opus
+source: bluray
+subtitles: english
+
+name: [GSH] X (1996) (WEB 1080p AVC DDP) [RoSub] | X The Movie | X 1999
+title: X
+group: GSH
+resolution: 1080
+year: 1996
+video_codec: h264
+audio: eac3
+source: webdl
+
+name: [SubsPlease] Dragon Ball Super - Beerus - 07 (1080p) [8758EC4D].mkv
+title: Dragon Ball Super - Beerus
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: 8758EC4D
+extension: mkv
+tags: none
+
+name: [SubsPlease] Detective Conan - 1221 (1080p) [ED9A7BAD].mkv
+title: Detective Conan
+group: SubsPlease
+episode: 1221
+resolution: 1080
+checksum: ED9A7BAD
+extension: mkv
+tags: none
+
+name: [SubsPlease] Keroro Gunsou (2026) - 08 (1080p) [06D55F38].mkv
+title: Keroro Gunsou
+group: SubsPlease
+episode: 8
+resolution: 1080
+year: 2026
+checksum: 06D55F38
+extension: mkv
+tags: none
+
+name: [SubsPlease] Tougen Anki - Nikko Kegon no Taki-hen - 08 (1080p) [6D97D17E].mkv
+title: Tougen Anki - Nikko Kegon no Taki-hen
+group: SubsPlease
+episode: 8
+resolution: 1080
+checksum: 6D97D17E
+extension: mkv
+tags: none
+
+name: [SubsPlease] Kusuriya no Hitorigoto - 56 (1080p) [C2ACD5A2].mkv
+title: Kusuriya no Hitorigoto
+group: SubsPlease
+episode: 56
+resolution: 1080
+checksum: C2ACD5A2
+extension: mkv
+tags: none
+
+name: [SubsPlease] Tetsuryou! Meet with Tetsudou Musume - 07 (1080p) [7F169387].mkv
+title: Tetsuryou! Meet with Tetsudou Musume
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: 7F169387
+extension: mkv
+tags: none
+
+name: [SubsPlease] Magic Knight Rayearth (2026) - 07 (1080p) [B9074280].mkv
+title: Magic Knight Rayearth
+group: SubsPlease
+episode: 7
+resolution: 1080
+year: 2026
+checksum: B9074280
+extension: mkv
+tags: none
+
+name: [SubsPlease] Sekai Saikyou no Majo, Hajimemashita - 07 (1080p) [5CD17231].mkv
+title: Sekai Saikyou no Majo, Hajimemashita
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: 5CD17231
+extension: mkv
+tags: none
+
+name: [SubsPlease] Dark Machine - The Animation - 06 (1080p) [9D47694F].mkv
+title: Dark Machine - The Animation
+group: SubsPlease
+episode: 6
+resolution: 1080
+checksum: 9D47694F
+extension: mkv
+tags: none
+
+name: [SubsPlease] PSYREN - 06 (1080p) [B972DDE3].mkv
+title: PSYREN
+group: SubsPlease
+episode: 6
+resolution: 1080
+checksum: B972DDE3
+extension: mkv
+tags: none
+
+name: [SubsPlease] Hotel Inhumans S2 - 07 (1080p) [1858BFBE].mkv
+title: Hotel Inhumans
+group: SubsPlease
+season: 2
+episode: 7
+resolution: 1080
+checksum: 1858BFBE
+extension: mkv
+tags: none
+
+name: [SubsPlease] Meitantei Precure! - 41 (1080p) [129EB372].mkv
+title: Meitantei Precure!
+group: SubsPlease
+episode: 41
+resolution: 1080
+checksum: 129EB372
+extension: mkv
+tags: none
+
+name: [SubsPlease] VERTEX FORCE - 08 (1080p) [796181F1].mkv
+title: VERTEX FORCE
+group: SubsPlease
+episode: 8
+resolution: 1080
+checksum: 796181F1
+extension: mkv
+tags: none
+
+name: [SubsPlease] Saikyosoubi - 07 (1080p) [C0179302].mkv
+title: Saikyosoubi
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: C0179302
+extension: mkv
+tags: none
+
+name: [SubsPlease] Juuou Mujin Dandivine - 07 (1080p) [C14C3926].mkv
+title: Juuou Mujin Dandivine
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: C14C3926
+extension: mkv
+tags: none
+
+name: [SubsPlease] Gensou Suikoden - 07 (1080p) [601A2829].mkv
+title: Gensou Suikoden
+group: SubsPlease
+episode: 7
+resolution: 1080
+checksum: 601A2829
+extension: mkv
+tags: none
+
+name: [URD] Yarikomizuki no Gamer wa Hai Settei no Isekai de Musou suru (Hell Mode: The Hardcore Gamer Dominates in Another World with Garbage Balancing) (Season 02) [1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs] (Batch)
+title: Yarikomizuki no Gamer wa Hai Settei no Isekai de Musou suru
+group: URD
+season: 2
+batch: true
+resolution: 1080
+video_codec: h265
+bit_depth: 10
+audio: dualaudio
+subtitles: english
+
+name: [SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu (67-85) (1080p) [Batch]
+title: Re Zero kara Hajimeru Isekai Seikatsu
+group: SubsPlease
+episode: 67
+last_episode: 85
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu (51-66) (720p) [Batch]
+title: Re Zero kara Hajimeru Isekai Seikatsu
+group: SubsPlease
+episode: 51
+last_episode: 66
+batch: true
+resolution: 720
+tags: none
+
+name: [SubsPlease] Hotel Inhumans (01-13) (1080p) [Batch]
+title: Hotel Inhumans
+group: SubsPlease
+episode: 1
+last_episode: 13
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Toukutsu Ou (01-12) (480p) [Batch]
+title: Toukutsu Ou
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 480
+tags: none
+
+name: [SubsPlease] Nige Jouzu no Wakagimi S2 (01-12) (1080p) [Batch]
+title: Nige Jouzu no Wakagimi
+group: SubsPlease
+season: 2
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Clevatess (01-12) (720p) [Batch]
+title: Clevatess
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 720
+tags: none
+
+name: [SubsPlease] Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu S2 (01-12) (1080p) [Batch]
+title: Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu
+group: SubsPlease
+season: 2
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [SubsPlease] Tai-Ari deshita. Ojousama wa Kakutou Game nante Shinai (01-12) (1080p) [Batch]
+title: Tai-Ari deshita. Ojousama wa Kakutou Game nante Shinai
+group: SubsPlease
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+tags: none
+
+name: [shincaps] Kaifuku Jutsushi no Yarinaoshi - 01-12 (AT-X 1440x1080 MPEG2 AAC).ts
+title: Kaifuku Jutsushi no Yarinaoshi
+group: shincaps
+episode: 1
+last_episode: 12
+batch: true
+resolution: 1080
+extension: ts
+video_codec: mpeg2
+audio: aac
+
+name: [Okay-Subs] When They Cry - Higurashi (2006) - Season 1 S01 v2 (BD 576p HEVC x265 Opus 2.0) | Higurashi no Naku Koro ni
+title: When They Cry - Higurashi
+group: Okay-Subs
+season: 1
+version: 2
+resolution: 576
+year: 2006
+video_codec: h265
+audio: opus
+source: bluray
+
+name: [Okay-Subs] The Boy and the Heron (2023) (UHD BD 1108p) | Kimitachi wa Dou Ikiru ka | How Do You Live?
+title: The Boy and the Heron
+group: Okay-Subs
+resolution: 1108
+year: 2023
+source: bluray
+
+name: [Okay-Subs] BanG Dream! It's MyGO!!!!! (BD 1080p)
+title: BanG Dream! It's MyGO!!!!!
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Wolf Children (BD 1080p) | Ookami Kodomo no Ame to Yuki
+title: Wolf Children
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Assassination Classroom S2 (BD 1080p) | Ansatsu Kyoushitsu S2
+title: Assassination Classroom
+group: Okay-Subs
+season: 2
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Fate/Zero (BD 1080p)
+title: Fate/Zero
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Fate/stay night: Heaven's Feel (BD 1080p)
+title: Fate/stay night: Heaven's Feel
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Onii-chan wa Oshimai! – Onimai: I'm Now Your Sister! - NCED (BD 1080p)
+title: Onii-chan wa Oshimai! - Onimai: I'm Now Your Sister!
+group: Okay-Subs
+kind: nced
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] A Herbivorous Dragon of 5000 Years Gets Unfairly Villainized 01-05 (WEB 1080p)
+title: A Herbivorous Dragon of 5000 Years Gets Unfairly Villainized
+group: Okay-Subs
+episode: 1
+last_episode: 5
+batch: true
+resolution: 1080
+source: webdl
+
+name: [Okay-Subs] Soul Eater 01-13 (BD 1080p)
+title: Soul Eater
+group: Okay-Subs
+episode: 1
+last_episode: 13
+batch: true
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Kaze ga Tsuyoku Fuiteiru 01-06 (BD 1080p)
+title: Kaze ga Tsuyoku Fuiteiru
+group: Okay-Subs
+episode: 1
+last_episode: 6
+batch: true
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Sono Bisque Doll wa Koi wo Suru – My Dress-Up Darling - 03
+title: Sono Bisque Doll wa Koi wo Suru - My Dress-Up Darling
+group: Okay-Subs
+episode: 3
+tags: none
+
+name: [Okay-Subs] Shokei Shoujo no Virgin Road – The Executioner and Her Way of Life - 01
+title: Shokei Shoujo no Virgin Road - The Executioner and Her Way of Life
+group: Okay-Subs
+episode: 1
+tags: none
+
+name: [Okay-Subs] Magical Circle Guruguru (2017) (BD 1080p) | Mahoujin Guru Guru
+title: Magical Circle Guruguru
+group: Okay-Subs
+resolution: 1080
+year: 2017
+source: bluray
+
+name: [Okay-Subs] O Maidens in Your Savage Season (WEB 720p) | Araburu Kisetsu no Otome-domo yo.
+title: O Maidens in Your Savage Season
+group: Okay-Subs
+resolution: 720
+source: webdl
+
+name: [Okay-Subs] Onimai: I'm Now Your Sister! (WEB 1080p) (Uncensored) | Oniichan wa Oshimai! | Onii-chan
+title: Onimai: I'm Now Your Sister!
+group: Okay-Subs
+resolution: 1080
+source: webdl
+
+name: [Okay-Subs] The Dangers in My Heart (BD 1080p) | Boku no Kokoro no Yabai Yatsu S1
+title: The Dangers in My Heart
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Miss Kobayashi's Dragon Maid (BD 1080p)
+title: Miss Kobayashi's Dragon Maid
+group: Okay-Subs
+resolution: 1080
+source: bluray
+
+name: [Okay-Subs] Ya Boy Kongming! (WEB 1080p) | Paripi Koumei
+title: Ya Boy Kongming!
+group: Okay-Subs
+resolution: 1080
+source: webdl
