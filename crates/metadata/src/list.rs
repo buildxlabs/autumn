@@ -403,16 +403,35 @@ struct CustomListFlag {
 
 impl SavedEntry {
     fn into_data(self) -> Option<ListEntryData> {
-        let names = self
-            .custom_lists
-            .and_then(|value| serde_json::from_value::<Vec<CustomListFlag>>(value).ok())
-            .unwrap_or_default()
+        let flags = match self.custom_lists {
+            None | Some(serde_json::Value::Null) => Vec::new(),
+            Some(value) => serde_json::from_value::<Vec<CustomListFlag>>(value)
+                .inspect_err(|error| {
+                    tracing::warn!(%error, "unreadable custom lists on a saved AniList entry");
+                })
+                .unwrap_or_default(),
+        };
+        let names = flags
             .into_iter()
             .filter(|flag| flag.enabled)
             .map(|flag| flag.name)
             .collect();
         self.entry.into_data(names)
     }
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+struct EntryVariables {
+    user_name: String,
+    media_id: i32,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Query", variables = "EntryVariables")]
+struct EntryQuery {
+    #[cynic(rename = "MediaList")]
+    #[arguments(userName: $user_name, mediaId: $media_id)]
+    entry: Option<SavedEntry>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -567,6 +586,38 @@ impl AniList {
         })
     }
 
+    /// The account's list entry for one media, or `None` when the media is
+    /// not on the list. One small request that, unlike
+    /// [`AniList::list_collection`], also finds entries past the 11,000-entry
+    /// cap.
+    ///
+    /// # Errors
+    ///
+    /// The request's [`Error`] on a network, API or decode failure. A
+    /// "not found" answer is `Ok(None)`, not an error.
+    pub async fn list_entry(
+        &self,
+        token: &str,
+        user_name: &str,
+        media_id: u32,
+    ) -> Result<Option<ListEntryData>, Error> {
+        let Ok(media_id) = i32::try_from(media_id) else {
+            return Ok(None);
+        };
+        let variables = EntryVariables {
+            user_name: user_name.to_owned(),
+            media_id,
+        };
+        match self
+            .authenticated(EntryQuery::build(variables), token)
+            .await
+        {
+            Ok(data) => Ok(data.entry.and_then(SavedEntry::into_data)),
+            Err(error) if crate::detail::is_not_found(&error) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Every custom-list name configured on the authenticated account,
     /// including lists with no entries, from `Viewer.mediaListOptions`.
     ///
@@ -681,11 +732,21 @@ impl AniList {
         let input = OptionsInput {
             custom_lists: names.to_vec(),
         };
-        let variables = OptionsVariables {
-            anime: (kind == MediaKind::Anime).then_some(input),
-            manga: (kind == MediaKind::Manga).then(|| OptionsInput {
-                custom_lists: names.to_vec(),
-            }),
+        let variables = match kind {
+            MediaKind::Anime => OptionsVariables {
+                anime: Some(input),
+                manga: None,
+            },
+            MediaKind::Manga => OptionsVariables {
+                anime: None,
+                manga: Some(input),
+            },
+            _ => {
+                return Err(Error::Api {
+                    status: None,
+                    message: "unsupported media kind".to_owned(),
+                });
+            }
         };
         let data = self
             .mutation(UpdateUserMutation::build(variables), token)

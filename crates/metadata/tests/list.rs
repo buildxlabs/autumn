@@ -72,6 +72,24 @@ impl Mock {
                                         {"name": "Watchlist", "enabled": false}
                                     ]
                                 }}})
+                            } else if query.contains("MediaList(") {
+                                if request["variables"]["mediaId"] == 154_587 {
+                                    let mut entry = fixture("collection_with_custom_lists.json")
+                                        ["data"]["MediaListCollection"]["lists"][0]["entries"][0]
+                                        .clone();
+                                    entry["customLists"] =
+                                        json!([{"name": "Favourites", "enabled": true}]);
+                                    json!({"data": {"MediaList": entry}})
+                                } else {
+                                    // AniList answers a missing entry with a 404.
+                                    return (
+                                        StatusCode::NOT_FOUND,
+                                        Json(json!({
+                                            "errors": [{"message": "Not Found.", "status": 404}],
+                                            "data": {"MediaList": null}
+                                        })),
+                                    );
+                                }
                             } else if query.contains("mediaListOptions") {
                                 json!({"data": {"Viewer": fixture("collection_with_empty_custom_list.json")["data"]["Viewer"]}})
                             } else if query.contains("DeleteMediaListEntry(") {
@@ -266,4 +284,28 @@ async fn custom_list_names_come_from_list_options_including_empty_lists() {
         "names are read without the collection"
     );
     assert_eq!(mock.auth(), vec!["Bearer test-token"]);
+}
+
+#[tokio::test]
+async fn one_list_entry_is_read_by_media_id_and_a_404_means_absent() {
+    let mock = Mock::serve().await;
+    let entry = mock
+        .client
+        .list_entry("test-token", "TestUser", 154_587)
+        .await
+        .unwrap()
+        .expect("the media is on the list");
+    assert_eq!(entry.id, 9001);
+    assert_eq!(entry.status, ListStatus::Current);
+    assert_eq!(entry.custom_lists, vec!["Favourites"]);
+    let variables = mock.request(0)["variables"].clone();
+    assert_eq!(variables["userName"], "TestUser");
+    assert_eq!(variables["mediaId"], 154_587);
+
+    let missing = mock
+        .client
+        .list_entry("test-token", "TestUser", 999_999)
+        .await
+        .unwrap();
+    assert!(missing.is_none(), "a 404 is an absent entry, not an error");
 }

@@ -22,8 +22,9 @@ use metadata::{AniList, CustomListNames, ListEntryData, ListEntryInput};
 use crate::{Collection, Platform, PlatformError};
 
 /// The AniList list-entry id for each local media id, so delete and progress
-/// updates need no collection request.
-type EntryCache = Arc<Mutex<HashMap<MediaId, i32>>>;
+/// updates need no lookup request. Ids learned from a collection carry its
+/// kind; ids learned from a write or a single-entry lookup carry `None`.
+type EntryCache = Arc<Mutex<HashMap<MediaId, (Option<MediaKind>, i32)>>>;
 
 /// A tracking platform backed by an AniList account.
 ///
@@ -36,7 +37,24 @@ pub struct AniListPlatform {
     token: String,
     user_name: String,
     entries: EntryCache,
-    truncated: Arc<AtomicBool>,
+    truncated: Arc<Truncated>,
+}
+
+/// Whether the latest anime and manga collections hit the 11k cap.
+#[derive(Debug, Default)]
+struct Truncated {
+    anime: AtomicBool,
+    manga: AtomicBool,
+}
+
+impl Truncated {
+    fn flag(&self, kind: MediaKind) -> Option<&AtomicBool> {
+        match kind {
+            MediaKind::Anime => Some(&self.anime),
+            MediaKind::Manga => Some(&self.manga),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Debug for AniListPlatform {
@@ -76,7 +94,7 @@ impl AniListPlatform {
             token,
             user_name,
             entries: Arc::new(Mutex::new(HashMap::new())),
-            truncated: Arc::new(AtomicBool::new(false)),
+            truncated: Arc::new(Truncated::default()),
         }
     }
 
@@ -86,12 +104,14 @@ impl AniListPlatform {
         &self.user_name
     }
 
-    /// Whether the last collection hit AniList's 11,000-entry cap and was
-    /// therefore incomplete. The UI can show this instead of pretending the
-    /// list is whole.
+    /// Whether the latest `kind` collection hit AniList's 11,000-entry cap
+    /// and was therefore incomplete. The UI can show this instead of
+    /// pretending the list is whole.
     #[must_use]
-    pub fn collection_truncated(&self) -> bool {
-        self.truncated.load(Ordering::SeqCst)
+    pub fn collection_truncated(&self, kind: MediaKind) -> bool {
+        self.truncated
+            .flag(kind)
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
     }
 
     /// Every custom-list name configured on the account, for both kinds,
@@ -122,14 +142,35 @@ impl AniListPlatform {
         self.entries
             .lock()
             .ok()
-            .and_then(|entries| entries.get(&media).copied())
+            .and_then(|entries| entries.get(&media).map(|&(_, id)| id))
+    }
+
+    /// The media's AniList list-entry id: cached, or looked up with one
+    /// small request. `None` means the media is not on the account's list.
+    /// The lookup also finds entries past the collection's 11k cap.
+    async fn find_entry_id(&self, media: MediaId) -> Result<Option<i32>, PlatformError> {
+        if let Some(id) = self.entry_id(media) {
+            return Ok(Some(id));
+        }
+        let anilist_id = self.anilist_id(media).await?;
+        let Some(found) = self
+            .client
+            .list_entry(&self.token, &self.user_name, anilist_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        if let Ok(mut cache) = self.entries.lock() {
+            cache.insert(media, (None, found.id));
+        }
+        Ok(Some(found.id))
     }
 
     /// Caches the id of the entry AniList returned from a write and converts it for
     /// the caller, so the UI shows what was stored rather than what was sent.
     fn remember(&self, media: MediaId, saved: &ListEntryData) -> ListEntry {
         if let Ok(mut cache) = self.entries.lock() {
-            cache.insert(media, saved.id);
+            cache.insert(media, (None, saved.id));
         }
         Self::to_entry(saved, media)
     }
@@ -165,8 +206,9 @@ impl Platform for AniListPlatform {
         // AniList caps a collection at its 11,000 most recently updated
         // entries. Collection has no room for the flag, so keep it here for
         // the UI instead of pretending the list is complete.
-        self.truncated
-            .fetch_or(data.has_next_chunk, Ordering::SeqCst);
+        if let Some(flag) = self.truncated.flag(kind) {
+            flag.store(data.has_next_chunk, Ordering::SeqCst);
+        }
         let custom_names = data.custom_lists.for_kind(kind);
         let mut merged: HashMap<MediaId, (i32, ListEntry)> = HashMap::new();
         let mut order: Vec<MediaId> = Vec::new();
@@ -196,11 +238,15 @@ impl Platform for AniListPlatform {
         let mut ids = Vec::with_capacity(order.len());
         for media in order {
             if let Some((id, entry)) = merged.remove(&media) {
-                ids.push((media, id));
+                ids.push((media, (Some(kind), id)));
                 entries.push(entry);
             }
         }
         if let Ok(mut cache) = self.entries.lock() {
+            // Forget ids this fetch could have confirmed: an entry deleted on
+            // anilist.co must not keep a stale id that makes every save fail.
+            // Untagged ids are cheap to look up again, so they go too.
+            cache.retain(|_, (cached, _)| cached.is_some_and(|cached| cached != kind));
             cache.extend(ids);
         }
         Ok(Collection::group(&entries, custom_names))
@@ -233,15 +279,9 @@ impl Platform for AniListPlatform {
         media: MediaId,
         progress: u32,
     ) -> Result<ListEntry, PlatformError> {
-        if self.entry_id(media).is_none() {
-            // Cold start: an entry already on AniList must keep its status.
-            // Look it up the same way delete does before deciding it is new.
-            self.collection(MediaKind::Anime).await?;
-            if self.entry_id(media).is_none() {
-                self.collection(MediaKind::Manga).await?;
-            }
-        }
-        let id = self.entry_id(media);
+        // Cold start: an entry already on AniList must keep its status, so
+        // look it up before deciding it is new.
+        let id = self.find_entry_id(media).await?;
         let input = ListEntryInput {
             id,
             media_id: Some(self.anilist_id(media).await?),
@@ -256,20 +296,10 @@ impl Platform for AniListPlatform {
     }
 
     async fn delete_entry(&self, media: MediaId) -> Result<(), PlatformError> {
-        let id = if let Some(id) = self.entry_id(media) {
-            id
-        } else {
-            // Cold start, or an entry past the 11k cap: find its list entry
-            // id before deciding the entry is absent. A wrong "no-op" here
-            // would leave the entry undeletable.
-            self.collection(MediaKind::Anime).await?;
-            if self.entry_id(media).is_none() {
-                self.collection(MediaKind::Manga).await?;
-            }
-            let Some(id) = self.entry_id(media) else {
-                return Ok(());
-            };
-            id
+        // Cold start, or an entry past the 11k cap: find its list-entry id
+        // before deciding the entry is absent.
+        let Some(id) = self.find_entry_id(media).await? else {
+            return Ok(());
         };
         self.client.delete_list_entry(&self.token, id).await?;
         if let Ok(mut entries) = self.entries.lock() {

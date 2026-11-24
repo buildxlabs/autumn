@@ -37,6 +37,22 @@ struct Mock {
     reject_token: Arc<AtomicBool>,
     bare_401: Arc<AtomicBool>,
     server_changes: Arc<Mutex<Value>>,
+    collection: Arc<Mutex<Value>>,
+}
+
+/// The stored entry for `mediaId` in the mock's collection, as the
+/// single-entry `MediaList` query answers it.
+fn stored_entry(collection: &Value, media_id: &Value) -> Option<Value> {
+    collection["data"]["MediaListCollection"]["lists"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|group| group["entries"].as_array().cloned().unwrap_or_default())
+        .find(|entry| &entry["mediaId"] == media_id)
+        .map(|mut entry| {
+            entry["customLists"] = Value::Null;
+            entry
+        })
 }
 
 /// What AniList answers to `SaveMediaListEntry`: the stored entry (from the
@@ -131,6 +147,22 @@ impl Mock {
                                 let changes = changes.lock().unwrap().clone();
                                 json!({"data": {"SaveMediaListEntry":
                                     saved_entry(&collection, &variables, &changes)}})
+                            } else if query.contains("MediaList(") {
+                                let collection = collection_body.lock().unwrap().clone();
+                                return match stored_entry(&collection, &variables["mediaId"]) {
+                                    Some(entry) => (
+                                        StatusCode::OK,
+                                        Json(json!({"data": {"MediaList": entry}})),
+                                    ),
+                                    // AniList answers a missing entry with a 404.
+                                    None => (
+                                        StatusCode::NOT_FOUND,
+                                        Json(json!({
+                                            "errors": [{"message": "Not Found.", "status": 404}],
+                                            "data": {"MediaList": null},
+                                        })),
+                                    ),
+                                };
                             } else if query.contains("mediaListOptions") {
                                 let collection = collection_body.lock().unwrap().clone();
                                 json!({"data": {"Viewer": collection["data"]["Viewer"]}})
@@ -165,7 +197,13 @@ impl Mock {
             reject_token,
             bare_401,
             server_changes,
+            collection: body,
         }
+    }
+
+    /// Replaces what the account's collection holds from now on.
+    fn set_collection(&self, body: Value) {
+        *self.collection.lock().unwrap() = body;
     }
 
     /// Fields AniList sets on its own in the next saved entries.
@@ -284,7 +322,10 @@ async fn save_and_delete_use_the_cached_list_entry_id() {
     let mock = Mock::serve().await;
     let anilist = platform(db.clone(), &mock);
     anilist.collection(MediaKind::Anime).await.unwrap();
-    assert!(!anilist.collection_truncated(), "one chunk in the fixture");
+    assert!(
+        !anilist.collection_truncated(MediaKind::Anime),
+        "one chunk in the fixture"
+    );
 
     let media = db
         .media()
@@ -322,12 +363,65 @@ async fn deleting_on_a_cold_cache_looks_up_the_entry_id() {
     let anilist = platform(db, &mock);
 
     anilist.delete_entry(minted.media).await.unwrap();
-    let last = mock.request(mock.count() - 1);
-    assert_eq!(last["variables"]["id"], 9001, "id came from a lookup");
+    assert_eq!(mock.count(), 2, "one small lookup, then the delete");
+    let lookup = mock.request(0);
     assert!(
-        !anilist.collection_truncated(),
-        "the fixture fits one chunk"
+        !lookup["query"]
+            .as_str()
+            .unwrap()
+            .contains("MediaListCollection"),
+        "the lookup does not download a collection"
     );
+    assert_eq!(lookup["variables"]["mediaId"], 154_587);
+    assert_eq!(lookup["variables"]["userName"], "TestUser");
+    let last = mock.request(1);
+    assert_eq!(last["variables"]["id"], 9001, "id came from a lookup");
+}
+
+#[tokio::test]
+async fn deleting_media_not_on_the_list_is_a_no_op() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(999_999)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+
+    anilist.delete_entry(minted.media).await.unwrap();
+    assert_eq!(mock.count(), 1, "AniList's 404 means nothing to delete");
+}
+
+#[tokio::test]
+async fn a_refresh_forgets_entries_deleted_on_anilist() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let mock = Mock::serve().await;
+    let anilist = platform(db.clone(), &mock);
+    anilist.collection(MediaKind::Anime).await.unwrap();
+    let media = db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(52_991)])
+        .await
+        .unwrap()
+        .unwrap();
+
+    // The user deletes everything on anilist.co, then Autumn refreshes.
+    let mut emptied = fixture();
+    emptied["data"]["MediaListCollection"]["lists"] = json!([]);
+    mock.set_collection(emptied);
+    anilist.collection(MediaKind::Anime).await.unwrap();
+
+    let updated = anilist.update_progress(media, 3).await.unwrap();
+    let variables = mock.request(mock.count() - 1)["variables"].clone();
+    assert!(
+        variables.get("id").is_none_or(Value::is_null),
+        "the stale list-entry id 9002 is not reused: {variables}"
+    );
+    assert_eq!(variables["status"], "CURRENT", "the media is new again");
+    assert_eq!(updated.status, ListStatus::Current);
 }
 
 #[tokio::test]

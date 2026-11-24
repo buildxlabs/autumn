@@ -42,7 +42,7 @@ impl AniList {
 }
 
 /// AniList answers a missing id with HTTP 404 and `errors[].status` 404.
-fn is_not_found(error: &Error) -> bool {
+pub(crate) fn is_not_found(error: &Error) -> bool {
     const NOT_FOUND: u16 = 404;
     matches!(
         error,
