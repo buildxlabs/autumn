@@ -50,7 +50,7 @@ pub enum EpisodeKind {
     Episode,
     /// A special: `SP`, `Special`, `OVA`, `OAD`, `ONA` or season `S00`.
     Special,
-    /// A movie, marked `Movie` or `Gekijouban`.
+    /// A movie, marked `Movie`, `The Movie` or a leading `Gekijouban`.
     Movie,
     /// A creditless opening: `NCOP`, `NC OP`, `OP` or `Opening`.
     Ncop,
@@ -124,7 +124,7 @@ impl Walk {
                     0
                 }
                 (Zone::EpisodeTitle, Token::Word(word)) => {
-                    self.episode_title_word(word);
+                    self.episode_title_word(word, next);
                     0
                 }
                 (Zone::EpisodeTitle, Token::Dash) => {
@@ -154,6 +154,7 @@ impl Walk {
             open: '[' | '【',
             content,
         }) = tokens.first()
+            && !content.trim().is_empty()
             && !is_metadata(content)
         {
             self.release.group = Some(content.trim().to_owned());
@@ -224,18 +225,26 @@ impl Walk {
             self.start_kind(kind, numbered);
             return 1;
         }
+        let segment_start = matches!(self.title.last(), None | Some(Part::Slash));
+        if word.eq_ignore_ascii_case("gekijouban") && segment_start {
+            self.release.kind = EpisodeKind::Movie;
+            return 0;
+        }
         if let Some((kind, numbered)) = tag::kind_word(word) {
             if numbered.is_some() {
                 self.start_kind(kind, numbered);
                 return 0;
             }
-            if ends_title(next) {
+            if closes_kind_word(next) && self.kind_word_fits(word, next) {
+                if kind == EpisodeKind::Movie && self.last_title_word_is("the") {
+                    self.title.pop();
+                }
                 let numbered = next_number(next);
                 self.start_kind(kind, numbered);
                 return usize::from(numbered.is_some());
             }
         }
-        if tag::is_tech(word) {
+        if tag::ends_title(word) {
             self.zone = Zone::Tail;
             return 0;
         }
@@ -255,9 +264,35 @@ impl Walk {
         0
     }
 
-    fn episode_title_word(&mut self, word: &str) {
+    /// Whether a bare dictionary kind word such as `Ending` marks the kind here,
+    /// rather than being part of the title as in `Happy Ending - 01`. Acronyms
+    /// such as `OVA` always do.
+    fn kind_word_fits(&self, word: &str, next: Option<&Token>) -> bool {
+        !tag::is_dictionary_kind(word)
+            || !self.has_title()
+            || self.title.last() == Some(&Part::Dash)
+            || self.last_title_word_is("the")
+            || matches!(next, Some(Token::Word(w)) if tag::number(w).is_some() || tag::is_tech(w))
+    }
+
+    fn last_title_word_is(&self, word: &str) -> bool {
+        matches!(self.title.last(), Some(Part::Word(w)) if w.eq_ignore_ascii_case(word))
+    }
+
+    fn episode_title_word(&mut self, word: &str, next: Option<&Token>) {
         if tag::is_tech(word) {
             self.zone = Zone::Tail;
+            return;
+        }
+        // A kind word closing the episode title: `Title - 05 Preview [1080p]`,
+        // `Title - 24 Next Ep PV`. A dictionary word counts only on its own.
+        if self.release.kind == EpisodeKind::Episode
+            && (self.episode_title.is_empty() || !tag::is_dictionary_kind(word))
+            && let Some((kind, None)) = tag::kind_word(word)
+            && closes_kind_word(next)
+            && !matches!(next, Some(Token::Dash))
+        {
+            self.release.kind = kind;
             return;
         }
         if self.release.episode.is_none()
@@ -281,6 +316,23 @@ impl Walk {
             .split([' ', ',', ';'])
             .filter(|w| !w.is_empty())
             .collect();
+        // A kind in its own bracket: `Title (OVA) - 01`, `Title - 01 (OVA)`.
+        if let [word] = words.as_slice()
+            && self.release.kind == EpisodeKind::Episode
+            && let Some((kind, numbered)) = tag::kind_word(word)
+        {
+            self.release.kind = kind;
+            if self.release.episode.is_none()
+                && let Some((episode, version)) = numbered
+            {
+                self.release.episode = Some(episode);
+                self.release.version = version;
+            }
+            if self.zone == Zone::EpisodeTitle {
+                self.zone = Zone::Tail;
+            }
+            return;
+        }
         match self.zone {
             Zone::Title => {
                 if let Some(year) = tag::year(content) {
@@ -335,8 +387,8 @@ impl Walk {
         // A zero-padded number closing the title is the episode: `Bakemonogatari_01_(…)`.
         if self.release.episode.is_none()
             && let Some(Part::Word(last)) = self.title.last()
-            && last.len() >= 2
             && last.starts_with('0')
+            && (2..=3).contains(&last.chars().take_while(char::is_ascii_digit).count())
             && let Some((episode, version)) = tag::number(last)
         {
             self.release.episode = Some(episode);
@@ -422,7 +474,7 @@ fn next_number(next: Option<&Token>) -> Option<Numbered> {
 
 /// Whether a bare kind word followed by `next` marks the kind, rather than
 /// being part of the title (`Title OVA - 01`, but `Special A`).
-fn ends_title(next: Option<&Token>) -> bool {
+fn closes_kind_word(next: Option<&Token>) -> bool {
     match next {
         None | Some(Token::Dash | Token::Slash | Token::Bracket { .. }) => true,
         Some(Token::Word(word)) => tag::number(word).is_some() || tag::is_tech(word),
