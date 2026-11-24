@@ -8,6 +8,7 @@
 //! No GPUI lives here. The public surface is async functions and plain types
 //! (ARCHITECTURE §2–3).
 
+mod detect;
 mod endpoint;
 mod event;
 mod ipc;
@@ -15,6 +16,10 @@ mod mpv;
 #[cfg(test)]
 mod testing;
 
+pub use detect::{
+    InstalledPlayer, LaunchCommand, Platform, PlayerKind, SearchEnv, detect, preferred,
+    validate_custom_path,
+};
 pub use endpoint::{Endpoint, Retry, fresh_endpoint, sweep_stale};
 pub use event::{Chapter, PlayerEvent};
 pub use ipc::Client;
@@ -92,6 +97,27 @@ pub enum Error {
     /// The supervisor or the command channel went away.
     #[error("player session is closed")]
     Closed,
+
+    /// A user-entered or detected player path does not exist.
+    #[error("no player at {path}")]
+    NotFound {
+        /// The path that was checked.
+        path: PathBuf,
+    },
+
+    /// A player path exists but cannot be executed.
+    #[error("{path} is not an executable player")]
+    NotExecutable {
+        /// The path that was checked.
+        path: PathBuf,
+    },
+
+    /// A player path does not name a supported player.
+    #[error("unrecognized player at {path}")]
+    Unrecognized {
+        /// The path that was checked.
+        path: PathBuf,
+    },
 }
 
 /// The result type used throughout the crate.
