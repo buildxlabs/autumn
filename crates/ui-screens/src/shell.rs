@@ -2335,6 +2335,31 @@ mod tests {
                 }
             });
         }
+
+        fn genres_state(&self, cx: &mut TestAppContext) -> (String, usize) {
+            self.view.read_with(cx, |shell, cx| {
+                shell.search.as_ref().map_or_else(
+                    || (String::new(), 0),
+                    |search| search.read_with(cx, SearchScreen::genres_text_and_cursor),
+                )
+            })
+        }
+
+        fn set_genres(&self, cx: &mut TestAppContext, text: &str, cursor: usize) {
+            self.view.update(cx, |shell, cx| {
+                if let Some(search) = &shell.search {
+                    search.update(cx, |search, cx| search.set_genres_text(text, cursor, cx));
+                }
+            });
+        }
+
+        fn schedule_apply(&self, cx: &mut TestAppContext) {
+            self.view.update(cx, |shell, cx| {
+                if let Some(search) = &shell.search {
+                    search.update(cx, SearchScreen::schedule_apply_now);
+                }
+            });
+        }
     }
 
     #[gpui_kit::test]
@@ -2521,5 +2546,57 @@ mod tests {
             })
             .expect("window is open");
         assert!(shown, "a cache-miss failure is surfaced in the UI");
+    }
+
+    #[gpui_kit::test]
+    fn a_typed_commit_leaves_the_genres_input_and_caret_alone(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(SearchFilters::EMPTY), cx);
+        });
+        shell.settle(cx);
+
+        shell.set_genres(cx, "action,com,", 10);
+        assert_eq!(shell.genres_state(cx), ("action,com,".to_owned(), 10));
+
+        // The button folds in the pending text and navigates forward; the
+        // restored filters must not rewrite what the user just typed.
+        shell.click(cx, "search-sort");
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.genres_state(cx),
+            ("action,com,".to_owned(), 10),
+            "the unformatted text and caret survive the forward commit"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn back_on_a_cache_hit_cancels_a_pending_typed_commit(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(SearchFilters::EMPTY), cx);
+        });
+        shell.settle(cx);
+        shell.click(cx, "search-sort");
+        shell.settle(cx);
+        let requests = shell.requests.load(Ordering::SeqCst);
+
+        shell.set_query(cx, "frieren");
+        shell.schedule_apply(cx);
+        // Back lands on a cached filter set before the debounce expires.
+        shell.press(cx, BACK_KEY);
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.view.read_with(cx, |shell, _| shell.route()),
+            Route::Search(SearchFilters::EMPTY),
+            "Back wins over the pending typed commit"
+        );
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            requests,
+            "the cancelled commit made no request"
+        );
     }
 }

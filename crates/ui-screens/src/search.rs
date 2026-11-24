@@ -58,6 +58,8 @@ pub(crate) struct SearchScreen {
     task: Option<Task<()>>,
     /// The page a request is in flight for, so scrolling cannot start two.
     requested_page: u32,
+    /// Whether a filter or page request is currently running.
+    in_flight: bool,
     /// The saved grid offset to re-apply once restored results are drawn.
     scroll_pending: Option<Point<Pixels>>,
 }
@@ -235,6 +237,7 @@ impl SearchScreen {
                 error: None,
                 task: None,
                 requested_page: 0,
+                in_flight: false,
                 scroll_pending: None,
             }
         });
@@ -258,12 +261,23 @@ impl SearchScreen {
         if self.session.filters() == &filters && !first_show {
             return;
         }
-        if self.session.filters() != &filters {
+        // A typed commit navigates forward with exactly the text the inputs
+        // already hold. Re-writing it would move the caret and reformat it.
+        let inputs = self.input_entities();
+        if self.collected(
+            &inputs.query,
+            &inputs.genres,
+            &inputs.country,
+            &inputs.year,
+            cx,
+        ) != filters
+        {
             self.write_inputs(&filters, cx);
         }
         if let Some(loaded) = self.cache.get(&filters).cloned() {
             // A cache hit is synchronous: cancel any request still in flight.
             self.task = None;
+            self.in_flight = false;
             self.session.restore(filters, loaded);
             self.requested_page = self.session.page();
             self.error = None;
@@ -315,6 +329,7 @@ impl SearchScreen {
     fn load(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
         self.requested_page = 1;
+        self.in_flight = true;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(
@@ -325,6 +340,7 @@ impl SearchScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 screen.task = None;
+                screen.in_flight = false;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -360,6 +376,41 @@ impl SearchScreen {
         self.query.read(cx).value().to_string()
     }
 
+    /// Test seam: the genres input's text and caret, for caret-preservation
+    /// checks after a typed commit navigates forward.
+    #[cfg(test)]
+    pub(crate) fn genres_text_and_cursor(&self, cx: &App) -> (String, usize) {
+        let input = self.genres.read(cx);
+        (input.value().to_string(), input.cursor())
+    }
+
+    /// Test seam: sets genre text and places the caret, without a Change event.
+    #[cfg(test)]
+    pub(crate) fn set_genres_text(&self, text: &str, cursor: usize, cx: &mut Context<'_, Self>) {
+        let genres = self.genres.clone();
+        let value = text.to_owned();
+        let window = self.window;
+        let _ = window.update(cx, |_, window, app| {
+            genres.update(app, |input, cx| {
+                input.set_value(value, window, cx);
+                input.set_selected_range(cursor..cursor, cx);
+            });
+        });
+    }
+
+    /// Test seam: starts a debounced commit from the current inputs.
+    #[cfg(test)]
+    pub(crate) fn schedule_apply_now(&mut self, cx: &mut Context<'_, Self>) {
+        let inputs = self.input_entities();
+        self.schedule_apply(
+            &inputs.query,
+            &inputs.genres,
+            &inputs.country,
+            &inputs.year,
+            cx,
+        );
+    }
+
     /// Test seam: types into the query without going through the keyboard.
     #[cfg(test)]
     pub(crate) fn set_query_text(&self, text: &str, cx: &mut Context<'_, Self>) {
@@ -391,9 +442,7 @@ impl SearchScreen {
 
     /// Pages when the user scrolls near the end of the loaded results.
     fn maybe_next_page(&mut self, cx: &mut Context<'_, Self>) {
-        if self.task.is_none()
-            && self.session.has_next()
-            && self.session.page() >= self.requested_page
+        if !self.in_flight && self.session.has_next() && self.session.page() >= self.requested_page
         {
             self.next_page(cx);
         }
@@ -452,6 +501,7 @@ impl SearchScreen {
         let filters = self.collected(query, genres, country, year, cx);
         let mut session = self.session.clone();
         self.requested_page = 1;
+        self.in_flight = true;
         self.task = Some(cx.spawn(async move |screen, cx| {
             cx.background_executor().timer(DEBOUNCE).await;
             let task = cx.update(|cx| {
@@ -463,6 +513,7 @@ impl SearchScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 screen.task = None;
+                screen.in_flight = false;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -495,6 +546,7 @@ impl SearchScreen {
     fn apply_with(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
         self.requested_page = 1;
+        self.in_flight = true;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(
@@ -505,6 +557,7 @@ impl SearchScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 screen.task = None;
+                screen.in_flight = false;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
@@ -552,6 +605,7 @@ impl SearchScreen {
     fn next_page(&mut self, cx: &mut Context<'_, Self>) {
         let mut session = self.session.clone();
         self.requested_page = session.page() + 1;
+        self.in_flight = true;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(
@@ -562,6 +616,7 @@ impl SearchScreen {
             let result = task.await;
             let _ = screen.update(cx, |screen, cx| {
                 screen.task = None;
+                screen.in_flight = false;
                 match result {
                     Ok(Ok(session)) => {
                         screen.session = session;
