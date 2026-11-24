@@ -14,8 +14,10 @@ cynic.workspace      = true
 domain.workspace     = true
 net.workspace        = true
 rmp-serde.workspace  = true
+scraper.workspace    = true
 serde.workspace      = true
 serde_json.workspace = true
+strsim.workspace     = true
 thiserror.workspace  = true
 tracing.workspace    = true
 
