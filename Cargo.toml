@@ -25,6 +25,7 @@ gpui-kit = "=0.10.0"
 httpdate = "1.0"
 keyring = { features = [ "v1" ], version = "4" }
 metadata = { path = "crates/metadata" }
+mkv = { path = "crates/mkv" }
 net = { path = "crates/net" }
 nucleo-matcher = "0.3"
 rand = "0.10"
