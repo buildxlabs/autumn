@@ -10,6 +10,7 @@
 //! The notice is kept with the ported behavior in [`normalize`].
 
 mod error;
+mod hydrate;
 mod matcher;
 mod normalize;
 mod scanner;
@@ -22,6 +23,8 @@ use std::{
 
 use db::{Db, FileFlag, LocalFile};
 use domain::{ExternalId, MediaId, MediaKind};
+use hydrate::{HydratedFile, Hydration};
+use metadata::{AniZip, AnimeFillerList};
 
 pub use db::{MediaMatchSummary, ScanSummary, UnmatchedFile, UnmatchedReason};
 pub use error::LibraryError;
@@ -43,6 +46,7 @@ pub struct ScanProgress {
 pub struct Library {
     db: Db,
     matcher: Matcher,
+    hydration: Option<Hydration>,
 }
 
 impl Library {
@@ -56,6 +60,16 @@ impl Library {
         Self {
             db,
             matcher: Matcher::new(threshold),
+            hydration: None,
+        }
+    }
+
+    /// A library that hydrates its matches with `AniZip` and filler metadata.
+    /// The clients are fetched once per matched media on each scan.
+    pub fn with_metadata(db: Db, anizip: AniZip, filler: AnimeFillerList) -> Self {
+        Self {
+            hydration: Some(Hydration { anizip, filler }),
+            ..Self::new(db)
         }
     }
 
@@ -101,10 +115,19 @@ impl Library {
             .map(|file| (file.path.to_string_lossy().into_owned(), file))
             .collect();
         let eligible = eligible_files(&scanned, &existing);
-        let (wins, media) = self
+        let (wins, mut media) = self
             .match_groups(&scanned, &eligible, candidates, &mut progress, matched)
             .await?;
-        let rows = build_rows(&scanned, &existing, &wins, &media);
+        let hydrated = if let Some(clients) = &self.hydration {
+            let result =
+                hydrate::hydrate_all(&self.db, clients, &scanned, &wins, &media, candidates)
+                    .await?;
+            media.extend(result.media);
+            result.files
+        } else {
+            HashMap::new()
+        };
+        let rows = build_rows(&scanned, &existing, &wins, &media, &hydrated);
         self.db.local_file().sync(&rows).await?;
 
         let summary = summarize(
@@ -335,6 +358,7 @@ fn build_rows(
     existing: &HashMap<String, LocalFile>,
     wins: &HashMap<usize, Match>,
     media: &HashMap<usize, MediaId>,
+    hydrated: &HashMap<usize, HydratedFile>,
 ) -> Vec<LocalFile> {
     scanned
         .iter()
@@ -345,6 +369,8 @@ fn build_rows(
             let locked = prior.is_some_and(|row| row.locked);
             let ignored = prior.is_some_and(|row| row.ignored);
             let found = wins.get(&index).copied();
+            let fresh = hydrated.get(&index);
+            let parsed_kind = || scanner::kind_name(file.release.kind).to_owned();
             let media_id = if ignored {
                 None
             } else {
@@ -356,34 +382,39 @@ fn build_rows(
                     }
                 })
             };
+            let (season, episode, kind, filler) = if locked {
+                (
+                    prior.and_then(|row| row.season),
+                    prior.and_then(|row| row.episode),
+                    prior.map_or_else(parsed_kind, |row| row.kind.clone()),
+                    prior.is_some_and(|row| row.filler),
+                )
+            } else if ignored {
+                (None, None, parsed_kind(), false)
+            } else if let Some(hydrated) = fresh {
+                (
+                    hydrated.season,
+                    hydrated.episode,
+                    hydrated.kind.clone(),
+                    hydrated.filler,
+                )
+            } else {
+                (
+                    file.release.season,
+                    file.release.episode,
+                    parsed_kind(),
+                    false,
+                )
+            };
             LocalFile {
                 path: file.path.clone(),
                 size: file.size,
                 modified: file.modified,
                 title: file.release.title.clone(),
                 group: file.release.group.clone(),
-                season: if locked {
-                    prior.and_then(|row| row.season)
-                } else if ignored {
-                    None
-                } else {
-                    file.release.season
-                },
-                episode: if locked {
-                    prior.and_then(|row| row.episode)
-                } else if ignored {
-                    None
-                } else {
-                    file.release.episode
-                },
-                kind: if locked {
-                    prior.map_or_else(
-                        || scanner::kind_name(file.release.kind).to_owned(),
-                        |row| row.kind.clone(),
-                    )
-                } else {
-                    scanner::kind_name(file.release.kind).to_owned()
-                },
+                season,
+                episode,
+                kind,
                 media_id,
                 confidence: if ignored {
                     None
@@ -394,6 +425,7 @@ fn build_rows(
                 },
                 locked,
                 ignored,
+                filler,
             }
         })
         .collect()

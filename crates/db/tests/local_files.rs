@@ -81,5 +81,6 @@ fn file(path: &str, size: i64, media: Option<MediaId>) -> LocalFile {
         confidence: media.map(|_| 0.9),
         locked: false,
         ignored: false,
+        filler: false,
     }
 }

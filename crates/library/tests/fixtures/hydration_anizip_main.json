@@ -1,0 +1,44 @@
+{
+  "titles": {
+    "x-jat": "Test Series",
+    "en": "Test Series"
+  },
+  "episodes": {
+    "24": {
+      "absoluteEpisodeNumber": 24,
+      "seasonNumber": 1,
+      "episodeNumber": 24,
+      "title": { "en": "Episode 24" }
+    },
+    "25": {
+      "absoluteEpisodeNumber": 25,
+      "seasonNumber": 2,
+      "episodeNumber": 1,
+      "title": { "en": "Episode 25" }
+    },
+    "28": {
+      "absoluteEpisodeNumber": 28,
+      "seasonNumber": 2,
+      "episodeNumber": 4,
+      "title": { "en": "Episode 28" }
+    },
+    "S1": {
+      "seasonNumber": 0,
+      "title": { "en": "Special 1" }
+    },
+    "O1": {
+      "seasonNumber": 0,
+      "title": { "en": "Opening 1" }
+    },
+    "E1": {
+      "seasonNumber": 0,
+      "title": { "en": "Ending 1" }
+    }
+  },
+  "episodeCount": 30,
+  "specialCount": 1,
+  "mappings": {
+    "anilist_id": 1001,
+    "anidb_id": 123
+  }
+}
