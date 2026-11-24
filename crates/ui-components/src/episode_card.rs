@@ -126,38 +126,6 @@ impl EpisodeActions {
         self.open_folder = Some(Rc::new(action));
         self
     }
-
-    /// Fires Play, as a click on the card does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_play(&self, window: &mut Window, cx: &mut App) {
-        if let Some(action) = &self.play {
-            action(window, cx);
-        }
-    }
-
-    /// Fires Mark watched, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_mark_watched(&self, window: &mut Window, cx: &mut App) {
-        if let Some(action) = &self.mark_watched {
-            action(window, cx);
-        }
-    }
-
-    /// Fires Lock / Unlock, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_toggle_lock(&self, window: &mut Window, cx: &mut App) {
-        if let Some(action) = &self.toggle_lock {
-            action(window, cx);
-        }
-    }
-
-    /// Fires Open folder, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_open_folder(&self, window: &mut Window, cx: &mut App) {
-        if let Some(action) = &self.open_folder {
-            action(window, cx);
-        }
-    }
 }
 
 /// The 16:9 episode card for grids and carousels.
@@ -204,36 +172,12 @@ impl EpisodeCard {
         self.actions = actions;
         self
     }
-
-    /// Fires Play, as a click on the card does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_play(&self, window: &mut Window, cx: &mut App) {
-        self.actions.fire_play(window, cx);
-    }
-
-    /// Fires Mark watched, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_mark_watched(&self, window: &mut Window, cx: &mut App) {
-        self.actions.fire_mark_watched(window, cx);
-    }
-
-    /// Fires Lock / Unlock, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_toggle_lock(&self, window: &mut Window, cx: &mut App) {
-        self.actions.fire_toggle_lock(window, cx);
-    }
-
-    /// Fires Open folder, as the context menu does.
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn fire_open_folder(&self, window: &mut Window, cx: &mut App) {
-        self.actions.fire_open_folder(window, cx);
-    }
 }
 
 impl RenderOnce for EpisodeCard {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         if self.view.skeleton {
-            return skeleton(self.width, thumbnail_height(self.width)).into_any_element();
+            return skeleton(self.id, self.width, thumbnail_height(self.width)).into_any_element();
         }
 
         let height = thumbnail_height(self.width);
@@ -355,7 +299,8 @@ impl EpisodeRow {
 impl RenderOnce for EpisodeRow {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         if self.view.skeleton {
-            return skeleton(self.width, thumbnail_height(px(ROW_THUMB_WIDTH))).into_any_element();
+            return skeleton(self.id, self.width, thumbnail_height(px(ROW_THUMB_WIDTH)))
+                .into_any_element();
         }
 
         let colors = cx.theme().colors;
@@ -464,8 +409,10 @@ fn placeholder_thumbnail() -> Div {
 }
 
 /// Shimmer rectangles in place of the whole card while its data loads.
-fn skeleton(width: Pixels, height: Pixels) -> Div {
+fn skeleton(id: ElementId, width: Pixels, height: Pixels) -> impl IntoElement {
     div()
+        .id(id)
+        .test_support()
         .debug_selector(|| SKELETON.into())
         .w(width)
         .flex_none()
@@ -619,9 +566,11 @@ fn context_menu_items(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::RefCell;
 
-    use gpui_kit::{Context, IntoElement, Render, TestAppContext};
+    use gpui_kit::{
+        AppContext as _, Context, IntoElement, Render, TestAppContext, test::TestWindowExt,
+    };
 
     use super::*;
 
@@ -643,11 +592,24 @@ mod tests {
     struct CardView {
         view: EpisodeCardView,
         id: &'static str,
+        actions: EpisodeActions,
     }
 
     impl Render for CardView {
         fn render(&mut self, _: &mut Window, _: &mut Context<'_, Self>) -> impl IntoElement {
-            EpisodeCard::new(self.view.clone(), self.id)
+            EpisodeCard::new(self.view.clone(), self.id).actions(self.actions.clone())
+        }
+    }
+
+    struct RowView {
+        view: EpisodeCardView,
+        id: &'static str,
+        actions: EpisodeActions,
+    }
+
+    impl Render for RowView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<'_, Self>) -> impl IntoElement {
+            EpisodeRow::new(self.view.clone(), self.id).actions(self.actions.clone())
         }
     }
 
@@ -657,6 +619,7 @@ mod tests {
         let (_root, cx) = cx.add_window_view(move |_, _| CardView {
             view: view(),
             id: "episode-card-test",
+            actions: EpisodeActions::new(),
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
 
@@ -693,6 +656,7 @@ mod tests {
                 ..view()
             },
             id: "episode-card-placeholder-test",
+            actions: EpisodeActions::new(),
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert!(
@@ -707,6 +671,7 @@ mod tests {
                 ..view()
             },
             id: "episode-card-skeleton-test",
+            actions: EpisodeActions::new(),
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert!(
@@ -721,7 +686,11 @@ mod tests {
         cx.update(gpui_kit::init);
 
         let measured = |view: EpisodeCardView, id: &'static str, cx: &mut TestAppContext| {
-            let (_root, cx) = cx.add_window_view(move |_, _| CardView { view, id });
+            let (_root, cx) = cx.add_window_view(move |_, _| CardView {
+                view,
+                id,
+                actions: EpisodeActions::new(),
+            });
             cx.update(|window, cx| window.draw(cx).clear(cx));
             let fill = cx.debug_bounds(PROGRESS_FILL).expect("progress fill");
             let track = cx.debug_bounds(PROGRESS_TRACK).expect("progress track");
@@ -748,7 +717,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn no_progress_means_no_bar(cx: &mut TestAppContext) {
+    fn no_progress_means_no_fill(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         let (_root, cx) = cx.add_window_view(move |_, _| CardView {
             view: EpisodeCardView {
@@ -756,43 +725,108 @@ mod tests {
                 ..view()
             },
             id: "episode-card-no-progress-test",
+            actions: EpisodeActions::new(),
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert!(cx.debug_bounds(PROGRESS_FILL).is_none());
     }
 
     #[gpui_kit::test]
-    fn all_four_callbacks_fire(cx: &mut TestAppContext) {
+    fn click_and_context_menu_fire_the_callbacks(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
-        let calls = Rc::new(Cell::new(0u32));
+        let calls = Rc::new(RefCell::new(Vec::<&'static str>::new()));
         let actions = EpisodeActions::new()
             .on_play({
                 let calls = Rc::clone(&calls);
-                move |_, _| calls.set(calls.get() + 1)
+                move |_, _| calls.borrow_mut().push("play")
             })
             .on_mark_watched({
                 let calls = Rc::clone(&calls);
-                move |_, _| calls.set(calls.get() + 10)
+                move |_, _| calls.borrow_mut().push("mark watched")
             })
             .on_toggle_lock({
                 let calls = Rc::clone(&calls);
-                move |_, _| calls.set(calls.get() + 100)
+                move |_, _| calls.borrow_mut().push("toggle lock")
             })
             .on_open_folder({
                 let calls = Rc::clone(&calls);
-                move |_, _| calls.set(calls.get() + 1000)
+                move |_, _| calls.borrow_mut().push("open folder")
             });
-        let card = EpisodeCard::new(view(), "episode-card-callbacks").actions(actions);
-        let (_root, cx) = cx.add_window_view(|_, _| CardView {
-            view: view(),
-            id: "episode-card-callback-window",
+
+        // A Root is needed so the context menu's overlay can render.
+        let window = cx.add_window(|window, cx| {
+            let card = cx.new(|_| CardView {
+                view: view(),
+                id: "episode-card-callbacks",
+                actions,
+            });
+            gpui_kit::base::Root::new(card, window, cx)
         });
-        cx.update(|window, cx| {
-            card.fire_play(window, cx);
-            card.fire_mark_watched(window, cx);
-            card.fire_toggle_lock(window, cx);
-            card.fire_open_folder(window, cx);
+        cx.update_window(window.into(), |_, window, cx| window.render_frame(cx))
+            .expect("render the card");
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.click("episode-card-callbacks", cx);
+        })
+        .expect("click the card");
+        assert_eq!(&*calls.borrow(), &["play"], "a click plays");
+
+        for index in 0..4 {
+            cx.update_window(window.into(), |_, window, cx| {
+                window.right_click("episode-card-callbacks", cx);
+            })
+            .expect("right-click the card");
+            cx.run_until_parked();
+            cx.update_window(window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                window.within("popup-menu").click(index, cx);
+            })
+            .expect("pick a context-menu item");
+        }
+        assert_eq!(
+            &*calls.borrow(),
+            &["play", "play", "mark watched", "toggle lock", "open folder"],
+            "each context-menu item fires its callback"
+        );
+
+        // The row wires the same actions through its own click and menu.
+        calls.borrow_mut().clear();
+        let row_actions = EpisodeActions::new()
+            .on_play({
+                let calls = Rc::clone(&calls);
+                move |_, _| calls.borrow_mut().push("play")
+            })
+            .on_open_folder({
+                let calls = Rc::clone(&calls);
+                move |_, _| calls.borrow_mut().push("open folder")
+            });
+        let window = cx.add_window(|window, cx| {
+            let row = cx.new(|_| RowView {
+                view: view(),
+                id: "episode-row-callbacks",
+                actions: row_actions,
+            });
+            gpui_kit::base::Root::new(row, window, cx)
         });
-        assert_eq!(calls.get(), 1111, "every callback fired once");
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            window.click("episode-row-callbacks", cx);
+        })
+        .expect("click the row");
+        cx.update_window(window.into(), |_, window, cx| {
+            window.right_click("episode-row-callbacks", cx);
+        })
+        .expect("right-click the row");
+        cx.run_until_parked();
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            window.within("popup-menu").click(1, cx);
+        })
+        .expect("pick Open folder");
+        assert_eq!(
+            &*calls.borrow(),
+            &["play", "open folder"],
+            "the row uses the same callbacks"
+        );
     }
 }

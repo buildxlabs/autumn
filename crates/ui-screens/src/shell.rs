@@ -2078,6 +2078,31 @@ mod tests {
         assert_eq!(shell.route(cx), Route::Home, "back home");
     }
 
+    /// The placeholder route shows every episode-card state in both layouts.
+    #[gpui_kit::test]
+    fn schedule_placeholder_shows_the_episode_gallery(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-schedule");
+        assert_eq!(shell.route(cx), Route::Schedule);
+
+        for id in [
+            "mock-episode-card-0",
+            "mock-episode-card-1",
+            "mock-episode-card-2",
+            "mock-episode-card-3",
+            "mock-episode-card-4",
+            "mock-episode-card-5",
+            "mock-episode-row-0",
+            "mock-episode-row-1",
+            "mock-episode-row-2",
+            "mock-episode-row-3",
+            "mock-episode-row-4",
+            "mock-episode-row-5",
+        ] {
+            assert!(shell.shows(cx, id), "{id} is drawn on the Schedule route");
+        }
+    }
+
     /// The Phase 0 exit criterion.
     #[gpui_kit::test]
     fn back_restores_the_scroll_position(cx: &mut TestAppContext) {
