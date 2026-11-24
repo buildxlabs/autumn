@@ -193,7 +193,7 @@ def chapters() -> bytes:
             ID_EDITION_ENTRY,
             uelem(ID_EDITION_FLAG_ORDERED, 0)
             + chapter_atom("Opening", 0)
-            + chapter_atom("Ending", 120_000),
+            + chapter_atom("Ending", 120_000_000_000),
         ),
     )
 

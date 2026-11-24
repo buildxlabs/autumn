@@ -209,9 +209,9 @@ pub struct SegmentInfo {
 pub struct Chapter {
     /// The chapter UID.
     pub uid: Option<u64>,
-    /// The start of the chapter, in the segment's timecode units.
+    /// The start of the chapter, in nanoseconds.
     pub start: u64,
-    /// The end of the chapter, in the segment's timecode units.
+    /// The end of the chapter, in nanoseconds.
     pub end: u64,
     /// The display names of the chapter, per language.
     pub display: Vec<ChapterDisplay>,

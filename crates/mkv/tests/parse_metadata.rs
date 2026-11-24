@@ -67,6 +67,23 @@ fn the_real_fixture_decodes_its_metadata() {
     assert!(names.contains(&"Opening"), "{names:?}");
     assert!(names.contains(&"Ending"), "{names:?}");
 
+    // Chapter times are nanoseconds, not TimestampScale units.
+    let chapters: Vec<_> = file
+        .editions()
+        .iter()
+        .flat_map(|edition| edition.chapters.iter())
+        .collect();
+    let opening = chapters
+        .iter()
+        .find(|chapter| chapter.display.iter().any(|d| d.name == "Opening"))
+        .unwrap();
+    let ending = chapters
+        .iter()
+        .find(|chapter| chapter.display.iter().any(|d| d.name == "Ending"))
+        .unwrap();
+    assert_eq!(opening.start, 0);
+    assert_eq!(ending.start, 120_000_000_000);
+
     let font = file.attachment_data("Sample Font.ttf").unwrap();
     let attachment = file
         .attachments()
