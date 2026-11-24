@@ -195,6 +195,11 @@ pub(crate) fn is_dictionary_kind(word: &str) -> bool {
     WORDS.contains(&word.to_ascii_lowercase().as_str())
 }
 
+/// A version on its own: `v2`, `V3`.
+pub(crate) fn version_word(word: &str) -> Option<u32> {
+    digits_only(word.strip_prefix(['v', 'V'])?)
+}
+
 /// `S2`, `S02` or `Season2`.
 pub(crate) fn season(word: &str) -> Option<u32> {
     let lower = word.to_ascii_lowercase();
@@ -222,6 +227,8 @@ pub(crate) struct SeasonEpisode<'w> {
     pub(crate) season: u32,
     pub(crate) episode: Option<Numbered>,
     pub(crate) kind: Option<(EpisodeKind, Option<Numbered>)>,
+    /// The end of a range such as `S01E14-E26`.
+    pub(crate) last_episode: Option<u32>,
     /// Text glued on after a `-`, the start of the episode title.
     pub(crate) rest: &'w str,
 }
@@ -239,11 +246,20 @@ pub(crate) fn season_episode(word: &str) -> Option<SeasonEpisode<'_>> {
         } else {
             rest.strip_prefix('-')?
         };
+        // `S01E14-E26`, `S01E14-26` or `S02E01-S02E12`: a range, not an episode title.
+        let range_end = rest
+            .strip_prefix(['S', 's'])
+            .map(|after| split_digits(after).1)
+            .filter(|after| after.starts_with(['E', 'e']))
+            .unwrap_or(rest);
+        let last_episode = digits_only(range_end.strip_prefix(['E', 'e']).unwrap_or(range_end))
+            .filter(|last| *last > episode);
         return Some(SeasonEpisode {
             season,
             episode: Some((episode, version)),
             kind: None,
-            rest,
+            last_episode,
+            rest: if last_episode.is_some() { "" } else { rest },
         });
     }
     let kind = kind_word(after_season).filter(|(_, number)| number.is_some())?;
@@ -251,6 +267,7 @@ pub(crate) fn season_episode(word: &str) -> Option<SeasonEpisode<'_>> {
         season,
         episode: None,
         kind: Some(kind),
+        last_episode: None,
         rest: "",
     })
 }
@@ -278,6 +295,49 @@ pub(crate) fn episode_prefix(word: &str) -> Option<EpisodePrefix> {
         }
     }
     None
+}
+
+/// An episode range: `01-12`, `01~12` or `E01-E12`. A year range such as
+/// `2019-2020` is not one.
+pub(crate) fn episode_range(word: &str) -> Option<(u32, u32)> {
+    let (first, last) = word.split_once(['-', '~'])?;
+    let episode = |s: &str| {
+        let s = s.strip_prefix(['E', 'e']).unwrap_or(s);
+        digits_only(s.strip_prefix(['P', 'p']).unwrap_or(s))
+    };
+    let (first_number, last_number) = (episode(first)?, episode(last)?);
+    let years = year(first).is_some() && year(last).is_some();
+    (first_number < last_number && !years).then_some((first_number, last_number))
+}
+
+/// A season range: `S01-S03` or `S1-3`.
+pub(crate) fn season_range(word: &str) -> Option<(u32, u32)> {
+    let (first, last) = word.split_once('-')?;
+    let first = season(first).filter(|_| first.starts_with(['S', 's']))?;
+    let last = season(last).or_else(|| digits_only(last))?;
+    (first < last).then_some((first, last))
+}
+
+/// `Batch` or `Complete`.
+pub(crate) fn is_batch(word: &str) -> bool {
+    word.eq_ignore_ascii_case("batch") || word.eq_ignore_ascii_case("complete")
+}
+
+/// A volume glued to its number: `Vol.1`, `Vol1`, `Vol.01`.
+pub(crate) fn volume(word: &str) -> Option<u32> {
+    let lower = word.to_ascii_lowercase();
+    let rest = lower.strip_prefix("vol")?;
+    volume_number(rest.strip_prefix('.').unwrap_or(rest))
+}
+
+/// A volume number, or the first of a volume range: `1`, `01`, `1-2`, `2~3`.
+pub(crate) fn volume_number(word: &str) -> Option<u32> {
+    digits_only(word).or_else(|| episode_range(word).map(|(first, _)| first))
+}
+
+/// A bare `Vol`, `Vol.` or `Volume`, whose number is the next word.
+pub(crate) fn is_volume_keyword(word: &str) -> bool {
+    ["vol", "vol.", "volume"].contains(&word.to_ascii_lowercase().as_str())
 }
 
 /// `第01話`.
