@@ -105,6 +105,84 @@ fn eof_is_announced_once_for_property_and_end_file() {
 }
 
 #[test]
+fn seeking_back_from_the_end_allows_a_second_eof() {
+    let mut state = State::default();
+    let mut positions = PositionLimiter::new(POSITION_INTERVAL);
+
+    assert_eq!(
+        events_of(
+            &property("eof-reached", &json!(true)),
+            &mut state,
+            &mut positions
+        ),
+        vec![PlayerEvent::Eof]
+    );
+    assert_eq!(
+        events_of(
+            &property("eof-reached", &json!(false)),
+            &mut state,
+            &mut positions
+        ),
+        []
+    );
+    assert_eq!(
+        events_of(
+            &property("eof-reached", &json!(true)),
+            &mut state,
+            &mut positions
+        ),
+        vec![PlayerEvent::Eof]
+    );
+}
+
+#[test]
+fn end_file_clears_the_previous_files_metadata() {
+    let mut state = State::default();
+    let mut positions = PositionLimiter::new(POSITION_INTERVAL);
+
+    events_of(
+        &property("path", &json!("/media/old.mkv")),
+        &mut state,
+        &mut positions,
+    );
+    events_of(
+        &property("duration", &json!(1200.0)),
+        &mut state,
+        &mut positions,
+    );
+    events_of(
+        &property("chapter-list", &json!([{ "title": "OP", "time": 0.0 }])),
+        &mut state,
+        &mut positions,
+    );
+
+    events_of(
+        &json!({ "event": "end-file", "reason": "replace" }),
+        &mut state,
+        &mut positions,
+    );
+
+    assert_eq!(
+        events_of(
+            &json!({ "event": "file-loaded" }),
+            &mut state,
+            &mut positions
+        ),
+        vec![PlayerEvent::MediaReady {
+            path: None,
+            duration: None,
+        }]
+    );
+    assert_eq!(
+        events_of(&property("chapter", &json!(0)), &mut state, &mut positions),
+        vec![PlayerEvent::Chapters {
+            current: Some(0),
+            list: Vec::new(),
+        }]
+    );
+}
+
+#[test]
 fn a_second_file_can_reach_eof_in_the_same_session() {
     let mut state = State::default();
     let mut positions = PositionLimiter::new(POSITION_INTERVAL);

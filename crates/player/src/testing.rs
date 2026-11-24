@@ -205,6 +205,88 @@ mod pump_tests {
     }
 
     #[tokio::test]
+    async fn dropping_the_local_handles_keeps_the_detached_player_running() {
+        let (client, events, pump, mut fake) = FakeMpv::spawn();
+        fake.drain_observations().await;
+        drop(client);
+        drop(events);
+
+        let still_running = tokio::time::timeout(Duration::from_millis(500), pump)
+            .await
+            .is_err();
+        assert!(
+            still_running,
+            "the pump must outlive a dropped Session handle"
+        );
+    }
+
+    #[tokio::test]
+    async fn pending_commands_are_resolved_when_the_transport_closes() {
+        let (client, _events, pump, mut fake) = FakeMpv::spawn();
+        fake.drain_observations().await;
+
+        let call = tokio::spawn(async move { client.call(vec![json!("quit")]).await });
+        tokio::task::yield_now().await;
+        let _quit = fake.next_command().await;
+        drop(fake);
+
+        let result = tokio::time::timeout(Duration::from_secs(2), call)
+            .await
+            .expect("the caller must be resolved when IPC closes")
+            .expect("the call task must not panic");
+        assert!(
+            matches!(result, Err(crate::Error::Closed)),
+            "an unanswered command must fail with Closed, not hang"
+        );
+        let _ = tokio::time::timeout(Duration::from_secs(2), pump).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn property_events_flow_over_a_real_unix_socket() {
+        use tokio::io::AsyncBufReadExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mpv-fake.sock");
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+
+        let (command_tx, command_rx) = mpsc::unbounded();
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let pump = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            crate::ipc::run_ipc(stream, command_rx, event_tx).await
+        });
+
+        let endpoint = crate::Endpoint::at(path.to_string_lossy().into_owned());
+        let stream = endpoint.connect().await.unwrap();
+        let _keepalive = command_tx;
+        let (read, mut write) = tokio::io::split(stream);
+        let mut reader = tokio::io::BufReader::new(read);
+
+        for _ in 0..OBSERVED.len() {
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+        }
+        for value in [
+            json!({"event": "property-change", "name": "path", "data": "/media/ep.mkv"}),
+            json!({"event": "file-loaded"}),
+        ] {
+            let mut bytes = serde_json::to_vec(&value).unwrap();
+            bytes.push(b'\n');
+            write.write_all(&bytes).await.unwrap();
+        }
+
+        assert_eq!(
+            event_rx.next().await,
+            Some(PlayerEvent::MediaReady {
+                path: Some("/media/ep.mkv".to_owned()),
+                duration: None,
+            })
+        );
+        pump.abort();
+    }
+
+    #[tokio::test]
     async fn rapid_positions_are_coalesced_to_the_latest_value() {
         let (_client, mut events, _pump, mut fake) = FakeMpv::spawn();
         fake.drain_observations().await;

@@ -4,6 +4,9 @@ use std::{fmt, path::Path, time::Duration};
 
 use rand::random;
 
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt;
+
 use crate::{Error, Result};
 
 /// The longest path a Unix domain socket can have on macOS, minus the NUL.
@@ -209,6 +212,11 @@ fn sweep_dir(dir: &Path, prefix: &str) -> Result<()> {
         if !entry.file_name().to_string_lossy().starts_with(prefix) {
             continue;
         }
+        // Per-launch stderr logs share the socket prefix; a regular file is
+        // never a stale IPC endpoint and may belong to a live session.
+        if !entry.file_type().is_ok_and(|kind| kind.is_socket()) {
+            continue;
+        }
         if std::os::unix::net::UnixStream::connect(entry.path()).is_ok() {
             continue;
         }
@@ -268,13 +276,20 @@ mod tests {
         let ipc = cache.path().join("ipc");
         std::fs::create_dir_all(&ipc).unwrap();
         let stale = ipc.join("mpv-deadbeef");
+        let listener = std::os::unix::net::UnixListener::bind(&stale).unwrap();
+        drop(listener); // leaves a socket file with nobody listening
+        let live_log = ipc.join("mpv-session.log");
         let unrelated = ipc.join("keep-me.txt");
-        std::fs::write(&stale, b"").unwrap();
+        std::fs::write(&live_log, b"stderr").unwrap();
         std::fs::write(&unrelated, b"keep").unwrap();
 
         sweep_stale(cache.path()).unwrap();
 
         assert!(!stale.exists(), "the stale socket must be removed");
+        assert!(
+            live_log.exists(),
+            "a live session's stderr log must survive the sweep"
+        );
         assert!(unrelated.exists(), "unrelated files must survive the sweep");
     }
 

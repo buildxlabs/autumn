@@ -28,7 +28,6 @@ metadata = { path = "crates/metadata" }
 mkv = { path = "crates/mkv" }
 net = { path = "crates/net" }
 nucleo-matcher = "0.3"
-player = { path = "crates/player" }
 rand = "0.10"
 release-parser = { path = "crates/release-parser" }
 reqwest = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }

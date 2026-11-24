@@ -175,10 +175,12 @@ impl Session {
     ///
     /// Returns an error if the session already ended or quit was rejected.
     pub async fn quit(&self) -> Result<()> {
-        self.client
-            .call(vec![serde_json::json!("quit")])
-            .await
-            .map(|_| ())
+        // mpv can close its socket before writing the reply to `quit`, so a
+        // closed command channel or a timed-out reply still means it stopped.
+        match self.client.call(vec![serde_json::json!("quit")]).await {
+            Ok(_) | Err(Error::Closed) => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -277,9 +279,17 @@ fn detach(command: &mut Command) {
 async fn connect_with_retry(
     endpoint: &Endpoint,
     retry: Retry,
+    child: &mut Child,
 ) -> Result<crate::endpoint::IpcStream> {
     let mut last = None;
     for attempt in 1..=retry.attempts {
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(Error::Connect {
+                endpoint: endpoint.to_string(),
+                attempts: attempt,
+                source: std::io::Error::other(format!("player exited before IPC opened: {status}")),
+            });
+        }
         match endpoint.connect().await {
             Ok(stream) => return Ok(stream),
             Err(source) => {
@@ -306,7 +316,7 @@ async fn supervise(
     mut events: mpsc::Sender<PlayerEvent>,
     commands: mpsc::UnboundedReceiver<Request>,
 ) {
-    let stream = match connect_with_retry(&endpoint, retry).await {
+    let stream = match connect_with_retry(&endpoint, retry, &mut child).await {
         Ok(stream) => stream,
         Err(error) => {
             warn!("{error}");
@@ -366,12 +376,22 @@ mod tests {
             listener.accept().await.is_ok()
         });
 
+        let mut child = tokio::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
         assert!(
-            connect_with_retry(&endpoint, Retry::new(20, Duration::from_millis(20)))
-                .await
-                .is_ok()
+            connect_with_retry(
+                &endpoint,
+                Retry::new(20, Duration::from_millis(20)),
+                &mut child
+            )
+            .await
+            .is_ok()
         );
         assert!(server.await.unwrap());
+        let _ = child.start_kill();
+        let _ = child.wait().await;
     }
 
     #[test]

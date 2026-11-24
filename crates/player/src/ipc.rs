@@ -19,6 +19,8 @@ use crate::{
 };
 
 const POSITION_INTERVAL: Duration = Duration::from_millis(250);
+/// A command that never gets a reply must not hang the caller forever.
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) const OBSERVED: &[&str] = &[
     "time-pos",
     "duration",
@@ -61,7 +63,17 @@ impl Client {
         self.commands
             .unbounded_send(Request { command, reply })
             .map_err(|_| Error::Closed)?;
-        receiver.await.map_err(|_| Error::Closed)?
+        match tokio::time::timeout(COMMAND_TIMEOUT, receiver).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(Error::Closed),
+            Err(_) => {
+                warn!(
+                    "player command timed out after {}s",
+                    COMMAND_TIMEOUT.as_secs()
+                );
+                Err(Error::Closed)
+            }
+        }
     }
 }
 
@@ -124,12 +136,18 @@ fn translate(
             }
             "end-file" => {
                 let reason = value.get("reason").and_then(Value::as_str).unwrap_or("");
-                if reason == "eof" && !state.eof_emitted {
+                let outcome = if reason == "eof" && !state.eof_emitted {
                     state.eof_emitted = true;
                     Translation::Events(vec![PlayerEvent::Eof])
                 } else {
                     Translation::Ignore
-                }
+                };
+                // A replacement file must not inherit the old file's metadata.
+                state.path = None;
+                state.duration = None;
+                state.chapter = None;
+                state.chapters.clear();
+                outcome
             }
             _ => Translation::Ignore,
         };
@@ -187,10 +205,16 @@ fn property_change(
             }),
         "eof-reached" => {
             let reached = data.and_then(Value::as_bool).unwrap_or(false);
-            if reached && !state.eof_emitted {
-                state.eof_emitted = true;
-                Translation::Events(vec![PlayerEvent::Eof])
+            if reached {
+                if state.eof_emitted {
+                    Translation::Ignore
+                } else {
+                    state.eof_emitted = true;
+                    Translation::Events(vec![PlayerEvent::Eof])
+                }
             } else {
+                // Seeking back from the end must allow a second Eof.
+                state.eof_emitted = false;
                 Translation::Ignore
             }
         }
@@ -204,12 +228,13 @@ fn property_change(
             }])
         }
         "chapter-list" => {
-            let list = data
-                .and_then(Value::as_array)
-                .and_then(|values| {
-                    serde_json::from_value::<Vec<Chapter>>(Value::Array(values.clone())).ok()
-                })
-                .unwrap_or_default();
+            let decoded = data.and_then(Value::as_array).and_then(|values| {
+                serde_json::from_value::<Vec<Chapter>>(Value::Array(values.clone())).ok()
+            });
+            if decoded.is_none() && data.is_some() {
+                warn!("could not decode player chapter list: {:?}", data);
+            }
+            let list = decoded.unwrap_or_default();
             state.chapters.clone_from(&list);
             Translation::Events(vec![PlayerEvent::Chapters {
                 current: state.chapter,
@@ -276,6 +301,10 @@ where
     let mut state = State::default();
     let mut positions = PositionLimiter::new(POSITION_INTERVAL);
     let mut pending: HashMap<u64, Pending> = HashMap::new();
+    // The local consumer may go away while the detached player keeps running.
+    // Keep pumping the transport until it actually closes, so dropping a
+    // Session never tears down the supervised child.
+    let mut commands_open = true;
     let mut ticker = tokio::time::interval(POSITION_INTERVAL);
     ticker.tick().await;
 
@@ -287,7 +316,7 @@ where
                     Translation::Events(events_to_send) => {
                         for event in events_to_send {
                             if events.send(event).await.is_err() {
-                                break 'pump Ok(());
+                                debug!("player event consumer went away; keeping the player alive");
                             }
                         }
                     }
@@ -301,20 +330,31 @@ where
                     Translation::Ignore => {}
                 }
             }
-            request = commands.next() => {
-                let Some(request) = request else { break Ok(()); };
+            request = async {
+                if commands_open {
+                    commands.next().await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
+                let Some(request) = request else {
+                    commands_open = false;
+                    continue;
+                };
                 let id = next_id;
                 next_id += 1;
                 let command = format_command(&request.command);
                 let payload = json!({ "command": request.command, "request_id": id });
-                write_command(&mut write, &payload).await?;
+                if let Err(error) = write_command(&mut write, &payload).await {
+                    break 'pump Err(error);
+                }
                 pending.insert(id, Pending { command, reply: request.reply });
             }
             _ = ticker.tick() => {
                 if let Some(seconds) = positions.take(Instant::now())
                     && events.send(PlayerEvent::Position { seconds }).await.is_err()
                 {
-                    break Ok(());
+                    debug!("player event consumer went away; keeping the player alive");
                 }
             }
         }
@@ -322,12 +362,18 @@ where
 
     reader_task.abort();
     positions.clear();
+    // Tell every caller still waiting on a reply that its command cannot
+    // complete, rather than silently dropping the oneshot.
+    for (_, pending) in pending {
+        let _ = pending.reply.send(Err(Error::Closed));
+    }
     outcome
 }
 
 async fn write_command<W: AsyncWrite + Unpin>(write: &mut W, payload: &Value) -> Result<()> {
-    let mut line =
-        serde_json::to_vec(payload).map_err(|source| Error::Endpoint(source.to_string()))?;
+    let mut line = serde_json::to_vec(payload).map_err(|source| Error::Ipc {
+        source: std::io::Error::other(source.to_string()),
+    })?;
     line.push(b'\n');
     write
         .write_all(&line)
