@@ -100,6 +100,13 @@ impl PosterGrid {
         self.on_open = Some(Rc::new(on_open));
     }
 
+    /// Test-only: the Open callback a card's context menu invokes.
+    #[cfg(any(test, feature = "test-util"))]
+    #[doc(hidden)]
+    pub fn open_action(&self) -> Option<GridAction> {
+        self.on_open.clone()
+    }
+
     /// Handles Add to list on a card's context menu. The callback gets the
     /// card's index in the grid. Notify the view after changing this.
     pub fn on_add_to_list(

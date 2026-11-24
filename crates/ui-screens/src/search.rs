@@ -2,7 +2,7 @@
 //! virtualized result grid and one committed request per filter or page
 //! (ticket #59).
 
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
 use domain::MediaKind;
 use gpui_kit::{
@@ -29,6 +29,10 @@ use crate::search_catalog::AniListCatalog;
 /// How long a typed filter waits before it is committed as one request
 /// (decision #23).
 const DEBOUNCE: Duration = Duration::from_millis(350);
+
+/// The action run when a result card's Open menu item is used, carrying the
+/// result's AniList id.
+type CardAction = Rc<dyn Fn(u32, &mut Window, &mut App)>;
 
 /// What the screen asks its host to do.
 #[derive(Debug, Clone)]
@@ -62,6 +66,8 @@ pub(crate) struct SearchScreen {
     in_flight: bool,
     /// The saved grid offset to re-apply once restored results are drawn.
     scroll_pending: Option<Point<Pixels>>,
+    /// The action run when a result card's Open menu item is used.
+    on_open: Option<CardAction>,
 }
 
 impl std::fmt::Debug for SearchScreen {
@@ -239,11 +245,25 @@ impl SearchScreen {
                 requested_page: 0,
                 in_flight: false,
                 scroll_pending: None,
+                on_open: None,
             }
         });
         let weak = screen.downgrade();
         screen.update(cx, |screen, cx| {
             screen.grid.update(cx, |grid, cx| {
+                let open_weak = weak.clone();
+                grid.on_open(move |index, window, app| {
+                    let action = open_weak.update(app, |screen, _| {
+                        screen
+                            .session
+                            .results()
+                            .get(index)
+                            .map(|media| (media.anilist_id, screen.on_open.clone()))
+                    });
+                    if let Ok(Some((id, Some(open)))) = action {
+                        open(id, window, app);
+                    }
+                });
                 grid.on_near_end(move |_, app| {
                     let _ = weak.update(app, SearchScreen::maybe_next_page);
                 });
@@ -253,6 +273,13 @@ impl SearchScreen {
         // No request here: creation happens at startup. The first page is
         // fetched when the Search route is first shown.
         screen
+    }
+
+    /// Sets the action run when a result card's Open menu item is used. The
+    /// shell navigates to Entry with the result's AniList id; the local media
+    /// identity stays unminted until the first list save (ADR 0001).
+    pub(crate) fn set_on_open(&mut self, on_open: impl Fn(u32, &mut Window, &mut App) + 'static) {
+        self.on_open = Some(Rc::new(on_open));
     }
 
     /// Applies filters from a restored route without navigating again.
@@ -362,6 +389,12 @@ impl SearchScreen {
                 cx.notify();
             });
         }));
+    }
+
+    /// Test seam: the result grid, so a test can fire a card's Open action.
+    #[cfg(test)]
+    pub(crate) fn grid_entity(&self) -> Entity<PosterGrid> {
+        self.grid.clone()
     }
 
     /// Test seam: the error currently shown, if any.

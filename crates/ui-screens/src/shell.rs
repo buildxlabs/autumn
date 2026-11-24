@@ -194,6 +194,10 @@ impl AppShell {
         clippy::too_many_arguments,
         reason = "the shell receives its engine-side collaborators once, at construction"
     )]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the shell builds every store and subscription at construction"
+    )]
     pub fn new(
         prefs: RailPrefs,
         fetch_status: Entity<FetchStatus>,
@@ -371,6 +375,13 @@ impl AppShell {
         shell.lists_events = Some(events);
 
         let search = SearchScreen::new(SearchFilters::default(), anilist, window, cx);
+        let shell_handle = cx.entity().downgrade();
+        search.update(cx, |search, _cx| {
+            search.set_on_open(move |id, _, cx| {
+                let _ =
+                    shell_handle.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+            });
+        });
         let events = cx.subscribe(&search, |shell, _, event: &SearchEvent, cx| match event {
             SearchEvent::Filters(filters) => {
                 shell.navigate(Route::Search(filters.clone()), cx);
@@ -2381,6 +2392,8 @@ mod tests {
                 gpui_kit::open_window(options, cx, |window, cx| {
                     let fetch_status = cx.new(|_| FetchStatus::default());
                     let account = cx.new(|_| AccountStore::default());
+                    let entry_store = cx.new(|_| EntryStore::new(pending_services()));
+                    let home_store = cx.new(|_| HomeStore::new(pending_services()));
                     cx.new(|cx| {
                         AppShell::new_with_palette_sources(
                             RailPrefs::default(),
@@ -2393,6 +2406,8 @@ mod tests {
                             Rc::new(|_: Option<String>, _: &App| {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
+                            entry_store,
+                            home_store,
                             db,
                             anilist,
                             catalog,
@@ -2436,6 +2451,23 @@ mod tests {
 
         fn click(&self, cx: &mut TestAppContext, id: &'static str) {
             self.act(cx, |window, cx| window.click(id, cx));
+        }
+
+        fn fire_card_open(&self, cx: &mut TestAppContext, index: usize) {
+            self.act(cx, |window, app| {
+                let grid = self.view.read_with(app, |shell, app| {
+                    shell
+                        .search
+                        .as_ref()
+                        .map(|search| search.read_with(app, |search, _| search.grid_entity()))
+                });
+                if let Some(grid) = grid {
+                    let open = grid.read_with(app, |grid, _| grid.open_action());
+                    if let Some(open) = open {
+                        open(index, window, app);
+                    }
+                }
+            });
         }
 
         fn press(&self, cx: &mut TestAppContext, key: &'static str) {
@@ -2727,6 +2759,60 @@ mod tests {
             shell.requests.load(Ordering::SeqCst),
             requests,
             "the cancelled commit made no request"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn opening_a_result_then_back_restores_the_search_filters_and_grid(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        let filters = SearchFilters {
+            query: Some("frieren".to_owned()),
+            ..SearchFilters::EMPTY
+        };
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(filters.clone()), cx);
+        });
+        shell.settle(cx);
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            1,
+            "first page fetched"
+        );
+
+        let saved = point(px(0.), px(-600.));
+        shell.view.update(cx, |shell, cx| {
+            if let Some(search) = &shell.search {
+                search.update(cx, |search, cx| search.restore_scroll(saved, cx));
+            }
+        });
+        shell.settle(cx);
+        assert_eq!(shell.grid_offset(cx), saved, "the grid is scrolled");
+
+        // Open a result through the grid's Open callback, as the card's
+        // context menu does, so the on_open wiring is exercised end to end.
+        shell.fire_card_open(cx, 14);
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.view.read_with(cx, |shell, _| shell.route()),
+            Route::Entry { id: 10_014 },
+            "a result opens Entry with its AniList id"
+        );
+
+        shell.press(cx, BACK_KEY);
+        shell.settle(cx);
+
+        assert_eq!(
+            shell.view.read_with(cx, |shell, _| shell.route()),
+            Route::Search(filters.clone()),
+            "Back restores the committed filters"
+        );
+        assert_eq!(shell.query_text(cx), "frieren", "the query comes back");
+        assert_eq!(shell.grid_offset(cx), saved, "the grid offset comes back");
+        assert_eq!(
+            shell.requests.load(Ordering::SeqCst),
+            1,
+            "Back restores cached results without another request"
         );
     }
 }
