@@ -18,6 +18,8 @@ pub enum SettingsTab {
     Account,
     /// Disk cache usage and controls.
     Storage,
+    /// Data-source attribution and licences.
+    About,
 }
 
 /// One screen the route view can show.
