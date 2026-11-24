@@ -48,8 +48,12 @@ fn the_real_fixture_decodes_its_metadata() {
     assert_eq!(tracks[0].codec_id.as_deref(), Some("V_MPEG4/ISO/AVC"));
     assert_eq!(tracks[1].track_type, TrackType::Audio);
     assert_eq!(tracks[1].codec_id.as_deref(), Some("A_AAC/LC"));
+    // 0x88 TrackFlagDefault is absent/zero on both audio tracks: a reader
+    // that mistakes 0x55B0 (Colour) for it reports these as default.
+    assert!(!tracks[1].default);
     assert_eq!(tracks[2].track_type, TrackType::Audio);
     assert_eq!(tracks[2].codec_id.as_deref(), Some("A_AC3"));
+    assert!(!tracks[2].default);
     assert_eq!(tracks[3].track_type, TrackType::Subtitle);
     assert_eq!(tracks[3].codec_id.as_deref(), Some("S_TEXT/ASS"));
 

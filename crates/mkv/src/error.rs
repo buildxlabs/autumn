@@ -29,6 +29,10 @@ pub enum Error {
     #[error("unknown size elements are not supported")]
     UnknownSize,
 
+    /// A variable-length integer had no length marker.
+    #[error("invalid VINT: no length marker")]
+    InvalidVint,
+
     /// An element is larger than the limit for elements and attachments.
     #[error("element size {0} is too large")]
     ElementTooLarge(u64),

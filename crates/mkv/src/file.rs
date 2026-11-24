@@ -1,7 +1,47 @@
-// Ported from seanime's `internal/matroska` (GPL-3.0-only,
-// https://github.com/5rahim/seanime); the package is itself based on
-// matroska-go (MIT, github.com/luispater/matroska-go). Both notices are kept
-// as AGENTS.md requires.
+// Ported from seanime's `internal/matroska`
+// (https://github.com/5rahim/seanime), itself based on matroska-go
+// (https://github.com/luispater/matroska-go). Both notices are kept below.
+//
+// Seanime - Open-source media server with a web interface and desktop app for anime and manga.
+// Copyright (C) 2026  5rahim
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// ------------------------------------------------------------------
+//
+// matroska-go is licensed under the MIT License:
+//
+// MIT License
+// Copyright (c) 2025 Luis Pater
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 //! The Matroska file reader: [`File`], the model types and the parsing.
 //!
@@ -52,8 +92,8 @@ const ID_TRACK_NAME: u64 = 0x536E;
 const ID_TRACK_LANGUAGE: u64 = 0x0022_B59C;
 /// `CodecID`.
 const ID_TRACK_CODEC_ID: u64 = 0x86;
-/// `TrackFlagDefault`.
-const ID_TRACK_FLAG_DEFAULT: u64 = 0x55B0;
+/// `TrackFlagDefault` (0x88, not the `Colour` master element 0x55B0).
+const ID_TRACK_FLAG_DEFAULT: u64 = 0x88;
 /// `TrackFlagForced`.
 const ID_TRACK_FLAG_FORCED: u64 = 0x55AA;
 /// Cluster: the start of the media data.
@@ -76,6 +116,8 @@ const ID_CHAPTER_UID: u64 = 0x73C4;
 const ID_CHAPTER_TIME_START: u64 = 0x91;
 /// `ChapterTimeEnd`.
 const ID_CHAPTER_TIME_END: u64 = 0x92;
+/// `ChapterFlagHidden`.
+const ID_CHAPTER_FLAG_HIDDEN: u64 = 0x98;
 /// `ChapterDisplay`.
 const ID_CHAPTER_DISPLAY: u64 = 0x80;
 /// `ChapterString`.
@@ -173,6 +215,8 @@ pub struct Chapter {
     pub end: u64,
     /// The display names of the chapter, per language.
     pub display: Vec<ChapterDisplay>,
+    /// Whether the chapter atom is hidden.
+    pub hidden: bool,
     /// Nested chapters.
     pub children: Vec<Chapter>,
 }
@@ -370,10 +414,18 @@ fn child_reader(elem: &Element) -> ChildReader<'_> {
 }
 
 /// The next element of a child stream, or `None` at its end.
+///
+/// An `UnexpectedEof` with no bytes consumed is the clean end of the child
+/// stream. Anything else is a truncation inside a declared element.
 fn next(reader: &mut ChildReader<'_>) -> Result<Option<Element>, Error> {
+    let before = reader.pos();
     match reader.read_element() {
         Ok(elem) => Ok(Some(elem)),
-        Err(Error::Io(source)) if source.kind() == ErrorKind::UnexpectedEof => Ok(None),
+        Err(Error::Io(source))
+            if source.kind() == ErrorKind::UnexpectedEof && reader.pos() == before =>
+        {
+            Ok(None)
+        }
         Err(error) => Err(error),
     }
 }
@@ -447,20 +499,22 @@ fn parse_segment_info(elem: &Element) -> Result<SegmentInfo, Error> {
         }
     }
     let duration = duration_units.and_then(|units| {
-        // The EBML spec allows the Duration to be fractional; only whole
-        // seconds are used, as with the other integer reads.
-        let units = units.trunc();
         if !units.is_finite() || units < 0.0 {
             return None;
         }
         #[expect(
             clippy::as_conversions,
-            clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
-            clippy::cast_sign_loss,
-            reason = "the duration is a whole, non-negative number of seconds"
+            reason = "the timecode scale is an integer and f64 holds its magnitude"
         )]
-        Some((units * info.timecode_scale as f64) as u64)
+        let nanos = (units * info.timecode_scale as f64).round();
+        #[expect(
+            clippy::as_conversions,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "nanos is rounded, finite and non-negative; overflow saturates"
+        )]
+        Some(nanos as u64)
     });
     info.duration = duration;
     Ok(info)
@@ -546,6 +600,7 @@ fn parse_chapter_atom(elem: &Element) -> Result<Chapter, Error> {
         start: 0,
         end: 0,
         display: Vec::new(),
+        hidden: false,
         children: Vec::new(),
     };
     let mut reader = child_reader(elem);
@@ -555,6 +610,7 @@ fn parse_chapter_atom(elem: &Element) -> Result<Chapter, Error> {
             ID_CHAPTER_TIME_START => chapter.start = e.uint(),
             ID_CHAPTER_TIME_END => chapter.end = e.uint(),
             ID_CHAPTER_DISPLAY => chapter.display.push(parse_chapter_display(&e)?),
+            ID_CHAPTER_FLAG_HIDDEN => chapter.hidden = e.uint() != 0,
             ID_CHAPTER_ATOM => chapter.children.push(parse_chapter_atom(&e)?),
             _ => {}
         }
@@ -640,7 +696,7 @@ mod tests {
         }
         let length = u8::try_from(length).unwrap_or(8);
         if length == 8 {
-            let mut bytes = vec![0x00];
+            let mut bytes = vec![0x01];
             bytes.extend_from_slice(&value.to_be_bytes()[1..]);
             return bytes;
         }
@@ -657,9 +713,23 @@ mod tests {
         bytes
     }
 
+    /// An EBML ID keeps its length marker, so a 1-byte ID such as 0xAE is
+    /// written as one byte, not as four zero-padded bytes.
+    fn id_bytes(id: u64) -> Vec<u8> {
+        if id <= 0xFF {
+            vec![id as u8]
+        } else if id <= 0xFFFF {
+            (id as u16).to_be_bytes().to_vec()
+        } else if id <= 0xFF_FFFF {
+            let bytes = id.to_be_bytes();
+            vec![bytes[5], bytes[6], bytes[7]]
+        } else {
+            (id as u32).to_be_bytes().to_vec()
+        }
+    }
+
     fn elem(id: u64, data: Vec<u8>) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.extend_from_slice(&u32::try_from(id).unwrap_or_default().to_be_bytes());
+        let mut out = id_bytes(id);
         out.extend_from_slice(&vint(u64::try_from(data.len()).unwrap_or_default()));
         out.extend_from_slice(&data);
         out
@@ -844,6 +914,86 @@ mod tests {
                 "a {len}-byte prefix is truncated"
             );
         }
+    }
+
+    #[test]
+    fn a_truncated_child_element_is_an_error() {
+        // The EBML header has a valid doc type, then an EBMLVersion child
+        // whose declared one data byte is missing. `next` must not mistake
+        // that truncation for the end of the header's children.
+        let header = elem(
+            ID_EBML_HEADER,
+            cat(&[&str_elem(ID_EBML_DOC_TYPE, "matroska"), &[0x42, 0x86, 0x81]]),
+        );
+        let segment = elem(ID_SEGMENT, elem(ID_SEGMENT_INFO, uelem(ID_DURATION, 1)));
+        let stream = cat(&[&header, &segment]);
+        assert!(matches!(
+            File::parse(Cursor::new(stream)),
+            Err(Error::Io(_))
+        ));
+    }
+
+    #[test]
+    fn a_track_flag_default_of_zero_is_honoured() {
+        // 0x88 is TrackFlagDefault in the Matroska spec. Use the literal so
+        // the test cannot pass while the reader's constant is wrong.
+        let track = elem(
+            ID_TRACK_ENTRY,
+            cat(&[
+                &uelem(ID_TRACK_NUM, 2),
+                &uelem(ID_TRACK_TYPE, 2),
+                &elem(0x88, vec![0]),
+                &elem(ID_TRACK_FLAG_FORCED, vec![1]),
+            ]),
+        );
+        let stream = cat(&[
+            &elem(ID_EBML_HEADER, str_elem(ID_EBML_DOC_TYPE, "matroska")),
+            &elem(ID_SEGMENT, elem(ID_TRACKS, track)),
+        ]);
+        let file = File::parse(Cursor::new(stream)).unwrap();
+        assert!(!file.tracks()[0].default);
+        assert!(file.tracks()[0].forced);
+    }
+
+    #[test]
+    fn a_hidden_chapter_atom_is_marked_hidden() {
+        let atom = elem(
+            ID_CHAPTER_ATOM,
+            cat(&[
+                &elem(ID_CHAPTER_FLAG_HIDDEN, vec![1]),
+                &elem(ID_CHAPTER_DISPLAY, str_elem(ID_CHAPTER_STRING, "Ending")),
+            ]),
+        );
+        let stream = cat(&[
+            &elem(ID_EBML_HEADER, str_elem(ID_EBML_DOC_TYPE, "matroska")),
+            &elem(ID_SEGMENT, elem(ID_CHAPTERS, elem(ID_EDITION_ENTRY, atom))),
+        ]);
+        let file = File::parse(Cursor::new(stream)).unwrap();
+        assert!(file.editions()[0].chapters[0].hidden);
+    }
+
+    #[test]
+    fn a_leading_zero_byte_is_an_error() {
+        let mut stream = vec![0x00];
+        stream.extend(sample_stream());
+        assert!(File::parse(Cursor::new(stream)).is_err());
+    }
+
+    #[test]
+    fn a_fractional_duration_rounds_to_the_nearest_nanosecond() {
+        let info = elem(
+            ID_SEGMENT_INFO,
+            cat(&[
+                &uelem(ID_TIMESTAMP_SCALE, 1_000_000),
+                &f64_elem(ID_DURATION, 1.9),
+            ]),
+        );
+        let stream = cat(&[
+            &elem(ID_EBML_HEADER, str_elem(ID_EBML_DOC_TYPE, "matroska")),
+            &elem(ID_SEGMENT, info),
+        ]);
+        let file = File::parse(Cursor::new(stream)).unwrap();
+        assert_eq!(file.segment_info().unwrap().duration, Some(1_900_000));
     }
 
     #[test]

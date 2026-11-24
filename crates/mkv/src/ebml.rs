@@ -1,12 +1,51 @@
-// Ported from seanime's `internal/matroska/ebml.go` (see [`File`]'s crate
-// docs). Seanime's package is GPL-3.0-only (https://github.com/5rahim/seanime);
-// it is itself based on matroska-go (MIT, github.com/luispater/matroska-go).
-// Both notices are kept here as AGENTS.md requires.
+// Ported from seanime's `internal/matroska/ebml.go`
+// (https://github.com/5rahim/seanime), itself based on matroska-go
+// (https://github.com/luispater/matroska-go). Both notices are kept below.
+//
+// Seanime - Open-source media server with a web interface and desktop app for anime and manga.
+// Copyright (C) 2026  5rahim
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// ------------------------------------------------------------------
+//
+// matroska-go is licensed under the MIT License:
+//
+// MIT License
+// Copyright (c) 2025 Luis Pater
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 //! EBML elements and the reader over any seekable source.
 //!
-//! Ported from seanime's `internal/matroska/ebml.go` (see [`File`]'s crate
-//! docs).
+//! Ported from seanime's `internal/matroska/ebml.go` (see the crate docs).
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -179,11 +218,13 @@ impl<R: Read + Seek> Reader<R> {
     /// The first byte of the next VINT and its length: 1 for a byte of
     /// `0x80`, 2 for `0x40`, and so on up to 8 for `0x01`.
     ///
-    /// Leading `0x00` bytes are skipped to resync to the next VINT.
+    /// A leading `0x00` has no length marker, so it is malformed rather than
+    /// padding to skip: accepting it would let a corrupt file desynchronise
+    /// the reader and still parse.
     fn read_vint_header(&mut self) -> Result<(u8, u64), Error> {
-        let mut first = self.read_byte()?;
-        while first == 0x00 {
-            first = self.read_byte()?;
+        let first = self.read_byte()?;
+        if first == 0x00 {
+            return Err(Error::InvalidVint);
         }
         Ok((first, u64::from(first.leading_zeros()) + 1))
     }
@@ -247,6 +288,12 @@ mod tests {
     fn a_truncated_vint_is_an_error() {
         let mut reader = source(&[]);
         assert!(matches!(reader.read_vint(), Err(Error::Io(_))));
+    }
+
+    #[test]
+    fn a_vint_without_a_length_marker_is_an_error() {
+        let mut reader = source(&[0x00, 0x81]);
+        assert!(matches!(reader.read_vint(), Err(Error::InvalidVint)));
     }
 
     #[test]

@@ -28,7 +28,7 @@ def vint(value: int) -> bytes:
         if value < (1 << (7 * length)):
             break
     if length == 8:
-        return b"\x00" + value.to_bytes(7, "big")
+        return b"\x01" + value.to_bytes(7, "big")
     marker = 1 << (8 - length)
     shift = 8 * (length - 1)
     first = marker | ((value >> shift) & (marker - 1))
@@ -39,8 +39,19 @@ def vint(value: int) -> bytes:
     return out
 
 
+def id_bytes(element_id: int) -> bytes:
+    """EBML IDs keep their length marker; a 1-byte ID is one byte on disk."""
+    if element_id <= 0xFF:
+        return bytes([element_id])
+    if element_id <= 0xFFFF:
+        return element_id.to_bytes(2, "big")
+    if element_id <= 0xFFFFFF:
+        return element_id.to_bytes(3, "big")
+    return element_id.to_bytes(4, "big")
+
+
 def elem(element_id: int, data: bytes) -> bytes:
-    return element_id.to_bytes(4, "big") + vint(len(data)) + data
+    return id_bytes(element_id) + vint(len(data)) + data
 
 
 def uelem(element_id: int, value: int) -> bytes:
@@ -81,7 +92,7 @@ ID_TRACK_TYPE = 0x83
 ID_TRACK_NAME = 0x536E
 ID_TRACK_LANGUAGE = 0x22B59C
 ID_TRACK_CODEC_ID = 0x86
-ID_TRACK_FLAG_DEFAULT = 0x55B0
+ID_TRACK_FLAG_DEFAULT = 0x88
 ID_TRACK_FLAG_FORCED = 0x55AA
 ID_CLUSTER = 0x1F43B675
 ID_CHAPTERS = 0x1043A770
@@ -108,7 +119,7 @@ DURATION_UNITS = 240_000  # at a 1_000_000 ns scale, a 240 s segment
 def header() -> bytes:
     return elem(
         ID_EBML_HEADER,
-        elem(ID_EBML_VERSION, vint(1))
+        uelem(ID_EBML_VERSION, 1)
         + str_elem(ID_EBML_DOC_TYPE, "matroska")
         + uelem(ID_EBML_DOC_TYPE_VERSION, 2),
     )
