@@ -631,9 +631,21 @@ mod tests {
                                 if fail.load(Ordering::SeqCst) {
                                     return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({})));
                                 }
+                                // AniList answers with the stored entry.
+                                let sent = &request["variables"];
                                 return (
                                     StatusCode::OK,
-                                    Json(json!({"data": {"SaveMediaListEntry": {"id": 9001}}})),
+                                    Json(json!({"data": {"SaveMediaListEntry": {
+                                        "id": 9001, "mediaId": 154_587,
+                                        "status": sent["status"], "score": sent["scoreRaw"],
+                                        "progress": sent["progress"],
+                                        "progressVolumes": sent["progressVolumes"],
+                                        "repeat": sent["repeat"], "priority": sent["priority"],
+                                        "private": sent["private"], "notes": sent["notes"],
+                                        "hiddenFromStatusLists": sent["hidden"],
+                                        "startedAt": null, "completedAt": null,
+                                        "customLists": null
+                                    }}})),
                                 );
                             }
                             (StatusCode::OK, Json(json!({"data": {}})))

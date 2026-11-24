@@ -59,7 +59,21 @@ impl Mock {
                             let body = if query.contains("MediaListCollection(") {
                                 fixture("collection_with_custom_lists.json")
                             } else if query.contains("SaveMediaListEntry(") {
-                                json!({"data": {"SaveMediaListEntry": {"id": 9001}}})
+                                // AniList's answer: the stored entry, with a
+                                // status it changed on its own.
+                                json!({"data": {"SaveMediaListEntry": {
+                                    "id": 9001, "mediaId": 154_587, "status": "COMPLETED",
+                                    "score": 85, "progress": 13, "progressVolumes": null,
+                                    "repeat": null, "priority": null, "private": true,
+                                    "notes": null, "hiddenFromStatusLists": false,
+                                    "startedAt": null, "completedAt": null,
+                                    "customLists": [
+                                        {"name": "Favourites", "enabled": true},
+                                        {"name": "Watchlist", "enabled": false}
+                                    ]
+                                }}})
+                            } else if query.contains("mediaListOptions") {
+                                json!({"data": {"Viewer": fixture("collection_with_empty_custom_list.json")["data"]["Viewer"]}})
                             } else if query.contains("DeleteMediaListEntry(") {
                                 json!({"data": {"DeleteMediaListEntry": {"deleted": true}}})
                             } else if query.contains("UpdateUser(") {
@@ -155,13 +169,33 @@ async fn a_save_sends_every_field_as_raw_score_once() {
         private: Some(true),
         ..ListEntryInput::default()
     };
-    let id = mock
+    let saved = mock
         .client
         .save_list_entry("test-token", &input)
         .await
         .unwrap();
 
-    assert_eq!(id, 9001, "the list-entry id comes back for future deletes");
+    assert_eq!(saved.id, 9001, "the list-entry id comes back for deletes");
+    assert_eq!(saved.media_id, 154_587);
+    assert_eq!(
+        saved.status,
+        ListStatus::Completed,
+        "the stored entry, not the request, comes back"
+    );
+    assert_eq!(saved.score_raw, 85);
+    assert_eq!(saved.progress, 13);
+    assert_eq!(
+        saved.custom_lists,
+        vec!["Favourites"],
+        "only enabled custom lists"
+    );
+    assert!(
+        mock.request(0)["query"]
+            .as_str()
+            .unwrap()
+            .contains("customLists(asArray: true)"),
+        "the saved entry's custom lists are selected"
+    );
     assert_eq!(mock.count(), 1, "a mutation is sent once");
     let variables = mock.request(0)["variables"].clone();
     assert_eq!(variables["id"], 9001);
@@ -214,4 +248,22 @@ async fn a_failed_mutation_is_not_retried() {
         1,
         "no automatic retry, despite max_retries(3)"
     );
+}
+
+#[tokio::test]
+async fn custom_list_names_come_from_list_options_including_empty_lists() {
+    let mock = Mock::serve().await;
+    let names = mock.client.custom_list_names("test-token").await.unwrap();
+
+    assert_eq!(names.anime, vec!["Favourites", "Empty Shelf"]);
+    assert_eq!(names.manga, vec!["Read Later"]);
+    assert_eq!(names.for_kind(MediaKind::Anime), names.anime.as_slice());
+    assert_eq!(mock.count(), 1);
+    let query = mock.request(0)["query"].as_str().unwrap().to_owned();
+    assert!(query.contains("mediaListOptions"));
+    assert!(
+        !query.contains("MediaListCollection"),
+        "names are read without the collection"
+    );
+    assert_eq!(mock.auth(), vec!["Bearer test-token"]);
 }

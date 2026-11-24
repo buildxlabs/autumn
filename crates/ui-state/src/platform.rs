@@ -27,8 +27,10 @@ pub enum ActiveKind {
     AniList,
 }
 
-impl From<tracker::ActiveKind> for ActiveKind {
-    fn from(kind: tracker::ActiveKind) -> Self {
+impl ActiveKind {
+    // A private conversion, not a `From` impl: a public trait impl would put
+    // a tracker type in ui-state's API.
+    fn of(kind: tracker::ActiveKind) -> Self {
         match kind {
             tracker::ActiveKind::Local => Self::Local,
             tracker::ActiveKind::AniList => Self::AniList,
@@ -224,7 +226,7 @@ impl PlatformGateway {
     pub fn active(&self) -> ActiveKind {
         self.active
             .lock()
-            .map_or(ActiveKind::Local, |active| active.active().into())
+            .map_or(ActiveKind::Local, |active| ActiveKind::of(active.active()))
     }
 
     /// Connects AniList and makes it active; Local entries stay dormant.
@@ -279,15 +281,20 @@ impl PlatformGateway {
         self.classify(platform.save_entry(entry).await)
     }
 
-    /// Updates progress on the active platform.
+    /// Updates progress on the active platform and returns the entry as
+    /// stored, which may differ from the request (AniList can complete an
+    /// entry on its last episode).
     ///
     /// # Errors
     ///
     /// Returns a gateway error when the platform rejects the write.
-    pub async fn update_progress(&self, media: MediaId, progress: u32) -> Result<(), GatewayError> {
+    pub async fn update_progress(
+        &self,
+        media: MediaId,
+        progress: u32,
+    ) -> Result<ListEntry, GatewayError> {
         let platform = self.writable_platform()?;
-        self.classify(platform.update_progress(media, progress).await)?;
-        Ok(())
+        self.classify(platform.update_progress(media, progress).await)
     }
 
     /// Deletes an entry on the active platform.

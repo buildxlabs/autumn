@@ -16,24 +16,14 @@ use std::{
 };
 
 use db::Db;
-use domain::{
-    AdvancedScores, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score,
-};
+use domain::{AdvancedScores, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, Score};
 use metadata::{AniList, CustomListNames, ListEntryData, ListEntryInput};
 
 use crate::{Collection, Platform, PlatformError};
 
-/// An entry as AniList last reported it, cached so targeted writes can leave
-/// untouched fields alone and return the entry the UI should display.
-#[derive(Debug, Clone)]
-struct CachedEntry {
-    id: i32,
-    entry: ListEntry,
-}
-
-/// The last known entry for each local media id, keyed so delete and progress
+/// The AniList list-entry id for each local media id, so delete and progress
 /// updates need no collection request.
-type EntryCache = Arc<Mutex<HashMap<MediaId, CachedEntry>>>;
+type EntryCache = Arc<Mutex<HashMap<MediaId, i32>>>;
 
 /// A tracking platform backed by an AniList account.
 ///
@@ -46,8 +36,6 @@ pub struct AniListPlatform {
     token: String,
     user_name: String,
     entries: EntryCache,
-    /// Every configured custom-list name, so empty lists are not lost.
-    custom_names: Arc<Mutex<CustomListNames>>,
     truncated: Arc<AtomicBool>,
 }
 
@@ -72,7 +60,6 @@ impl Clone for AniListPlatform {
             token: self.token.clone(),
             user_name: self.user_name.clone(),
             entries: Arc::clone(&self.entries),
-            custom_names: Arc::clone(&self.custom_names),
             truncated: Arc::clone(&self.truncated),
         }
     }
@@ -89,7 +76,6 @@ impl AniListPlatform {
             token,
             user_name,
             entries: Arc::new(Mutex::new(HashMap::new())),
-            custom_names: Arc::new(Mutex::new(CustomListNames::default())),
             truncated: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -108,22 +94,18 @@ impl AniListPlatform {
         self.truncated.load(Ordering::SeqCst)
     }
 
-    /// Every custom-list name configured for `kind`, including lists with no
-    /// entries. Needed by callers that replace the whole name set (#67).
+    /// Every custom-list name configured on the account, for both kinds,
+    /// including lists with no entries. Read fresh from AniList's list
+    /// options in one small request, without downloading the collection.
+    ///
+    /// A caller that replaces the name set (the list transfer in #67) needs
+    /// the full current set: `UpdateUser` deletes every name it is not given.
     ///
     /// # Errors
     ///
     /// Returns the platform error when AniList cannot be read.
-    pub async fn custom_list_names(&self, kind: MediaKind) -> Result<Vec<String>, PlatformError> {
-        self.collection(kind).await?;
-        Ok(self.custom_names.lock().map_or_else(
-            |_| Vec::new(),
-            |names| match kind {
-                MediaKind::Anime => names.anime.clone(),
-                MediaKind::Manga => names.manga.clone(),
-                _ => Vec::new(),
-            },
-        ))
+    pub async fn custom_list_names(&self) -> Result<CustomListNames, PlatformError> {
+        Ok(self.client.custom_list_names(&self.token).await?)
     }
 
     async fn anilist_id(&self, media: MediaId) -> Result<u32, PlatformError> {
@@ -140,14 +122,16 @@ impl AniListPlatform {
         self.entries
             .lock()
             .ok()
-            .and_then(|entries| entries.get(&media).map(|cached| cached.id))
+            .and_then(|entries| entries.get(&media).copied())
     }
 
-    fn cached_entry(&self, media: MediaId) -> Option<ListEntry> {
-        self.entries
-            .lock()
-            .ok()
-            .and_then(|entries| entries.get(&media).map(|cached| cached.entry.clone()))
+    /// Caches the id of the entry AniList returned from a write and converts it for
+    /// the caller, so the UI shows what was stored rather than what was sent.
+    fn remember(&self, media: MediaId, saved: &ListEntryData) -> ListEntry {
+        if let Ok(mut cache) = self.entries.lock() {
+            cache.insert(media, saved.id);
+        }
+        Self::to_entry(saved, media)
     }
 
     fn to_entry(data: &ListEntryData, media: MediaId) -> ListEntry {
@@ -183,14 +167,7 @@ impl Platform for AniListPlatform {
         // the UI instead of pretending the list is complete.
         self.truncated
             .fetch_or(data.has_next_chunk, Ordering::SeqCst);
-        if let Ok(mut names) = self.custom_names.lock() {
-            *names = data.custom_lists.clone();
-        }
-        let custom_names: Vec<String> = match kind {
-            MediaKind::Anime => data.custom_lists.anime.clone(),
-            MediaKind::Manga => data.custom_lists.manga.clone(),
-            _ => Vec::new(),
-        };
+        let custom_names = data.custom_lists.for_kind(kind);
         let mut merged: HashMap<MediaId, (i32, ListEntry)> = HashMap::new();
         let mut order: Vec<MediaId> = Vec::new();
         for group in &data.lists {
@@ -215,18 +192,18 @@ impl Platform for AniListPlatform {
                 order.push(minted.media);
             }
         }
-        let entries: Vec<ListEntry> = order
-            .iter()
-            .filter_map(|media| merged.get(media).map(|(_, entry)| entry.clone()))
-            .collect();
-        if let Ok(mut cache) = self.entries.lock() {
-            for media in order {
-                if let Some((id, entry)) = merged.remove(&media) {
-                    cache.insert(media, CachedEntry { id, entry });
-                }
+        let mut entries = Vec::with_capacity(order.len());
+        let mut ids = Vec::with_capacity(order.len());
+        for media in order {
+            if let Some((id, entry)) = merged.remove(&media) {
+                ids.push((media, id));
+                entries.push(entry);
             }
         }
-        Ok(Collection::group(&entries, &custom_names))
+        if let Ok(mut cache) = self.entries.lock() {
+            cache.extend(ids);
+        }
+        Ok(Collection::group(&entries, custom_names))
     }
 
     async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, PlatformError> {
@@ -247,17 +224,8 @@ impl Platform for AniListPlatform {
             started_at: Some(entry.started_at),
             completed_at: Some(entry.completed_at),
         };
-        let id = self.client.save_list_entry(&self.token, &input).await?;
-        if let Ok(mut cache) = self.entries.lock() {
-            cache.insert(
-                entry.media,
-                CachedEntry {
-                    id,
-                    entry: entry.clone(),
-                },
-            );
-        }
-        Ok(entry.clone())
+        let saved = self.client.save_list_entry(&self.token, &input).await?;
+        Ok(self.remember(entry.media, &saved))
     }
 
     async fn update_progress(
@@ -265,60 +233,26 @@ impl Platform for AniListPlatform {
         media: MediaId,
         progress: u32,
     ) -> Result<ListEntry, PlatformError> {
-        let mut cached = self.cached_entry(media);
-        if cached.is_none() {
+        if self.entry_id(media).is_none() {
             // Cold start: an entry already on AniList must keep its status.
             // Look it up the same way delete does before deciding it is new.
             self.collection(MediaKind::Anime).await?;
-            if self.cached_entry(media).is_none() {
+            if self.entry_id(media).is_none() {
                 self.collection(MediaKind::Manga).await?;
             }
-            cached = self.cached_entry(media);
         }
+        let id = self.entry_id(media);
         let input = ListEntryInput {
-            id: self.entry_id(media),
+            id,
             media_id: Some(self.anilist_id(media).await?),
             // Only a brand-new progress update implies watching; an existing
             // entry keeps whatever status the user set.
-            status: cached.is_none().then_some(ListStatus::Current),
+            status: id.is_none().then_some(ListStatus::Current),
             progress: Some(progress),
             ..ListEntryInput::default()
         };
-        let id = self.client.save_list_entry(&self.token, &input).await?;
-        let entry = match cached {
-            Some(mut entry) => {
-                entry.progress = progress;
-                entry
-            }
-            None => ListEntry {
-                media,
-                status: ListStatus::Current,
-                score: Score::UNSCORED,
-                progress,
-                progress_volumes: 0,
-                repeat: 0,
-                started_at: FuzzyDate::UNKNOWN,
-                completed_at: FuzzyDate::UNKNOWN,
-                notes: String::new(),
-                private: false,
-                priority: 0,
-                advanced_scores: AdvancedScores::default(),
-                custom_lists: Vec::new(),
-                hidden_from_status_lists: false,
-                created_at: std::time::SystemTime::UNIX_EPOCH,
-                updated_at: std::time::SystemTime::UNIX_EPOCH,
-            },
-        };
-        if let Ok(mut cache) = self.entries.lock() {
-            cache.insert(
-                media,
-                CachedEntry {
-                    id,
-                    entry: entry.clone(),
-                },
-            );
-        }
-        Ok(entry)
+        let saved = self.client.save_list_entry(&self.token, &input).await?;
+        Ok(self.remember(media, &saved))
     }
 
     async fn delete_entry(&self, media: MediaId) -> Result<(), PlatformError> {

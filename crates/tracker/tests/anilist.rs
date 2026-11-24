@@ -21,12 +21,14 @@ use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tracker::{ActiveKind, ActivePlatform, AniListPlatform, ListName, Local, Platform};
 
-/// Recorded requests plus the flag that makes the next request a 401.
+/// Recorded requests, the collection body, the 401 flags, and fields
+/// AniList changes on its own when it saves an entry.
 type MockState = (
     Arc<Mutex<Vec<Value>>>,
     Arc<AtomicBool>,
     Arc<Mutex<Value>>,
     Arc<AtomicBool>,
+    Arc<Mutex<Value>>,
 );
 
 struct Mock {
@@ -34,6 +36,64 @@ struct Mock {
     requests: Arc<Mutex<Vec<Value>>>,
     reject_token: Arc<AtomicBool>,
     bare_401: Arc<AtomicBool>,
+    server_changes: Arc<Mutex<Value>>,
+}
+
+/// What AniList answers to `SaveMediaListEntry`: the stored entry (from the
+/// collection when it exists, else a new one) with the sent fields applied,
+/// then any `server_changes`.
+fn saved_entry(collection: &Value, variables: &Value, server_changes: &Value) -> Value {
+    let existing = collection["data"]["MediaListCollection"]["lists"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|group| group["entries"].as_array().cloned().unwrap_or_default())
+        .find(|entry| {
+            entry["id"] == variables["id"]
+                || (variables["id"].is_null() && entry["mediaId"] == variables["mediaId"])
+        });
+    let mut entry = existing.unwrap_or_else(|| {
+        // A new entry, with every field AniList selects present.
+        json!({
+            "id": 9100, "mediaId": variables["mediaId"], "status": "CURRENT",
+            "score": 0, "progress": 0, "progressVolumes": 0, "repeat": 0,
+            "priority": 0, "private": false, "notes": null,
+            "hiddenFromStatusLists": false, "startedAt": null, "completedAt": null,
+        })
+    });
+    for (sent, field) in [
+        ("status", "status"),
+        ("scoreRaw", "score"),
+        ("progress", "progress"),
+        ("progressVolumes", "progressVolumes"),
+        ("repeat", "repeat"),
+        ("priority", "priority"),
+        ("private", "private"),
+        ("notes", "notes"),
+        ("hidden", "hiddenFromStatusLists"),
+        ("startedAt", "startedAt"),
+        ("completedAt", "completedAt"),
+    ] {
+        if let Some(value) = variables.get(sent).filter(|value| !value.is_null()) {
+            entry[field] = value.clone();
+        }
+    }
+    let enabled: Vec<Value> = variables["customLists"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    entry["customLists"] = Value::Array(
+        enabled
+            .into_iter()
+            .map(|name| json!({"name": name, "enabled": true}))
+            .collect(),
+    );
+    if let Some(changes) = server_changes.as_object() {
+        for (field, value) in changes {
+            entry[field] = value.clone();
+        }
+    }
+    entry
 }
 
 impl Mock {
@@ -46,13 +106,15 @@ impl Mock {
         let body = Arc::new(Mutex::new(body));
         let reject_token = Arc::new(AtomicBool::new(false));
         let bare_401 = Arc::new(AtomicBool::new(false));
+        let server_changes = Arc::new(Mutex::new(Value::Null));
         let app = Router::new()
             .route(
                 "/",
                 post(
-                    move |State((seen, reject_token, collection_body, bare_401)): State<MockState>,
+                    move |State((seen, reject_token, collection_body, bare_401, changes)): State<MockState>,
                           Json(request): Json<Value>| {
                         let query = request["query"].as_str().unwrap_or_default().to_owned();
+                        let variables = request["variables"].clone();
                         let reject = reject_token.load(Ordering::SeqCst);
                         let bare = bare_401.load(Ordering::SeqCst);
                         async move {
@@ -65,7 +127,13 @@ impl Mock {
                             } else if query.contains("MediaListCollection(") {
                                 collection_body.lock().unwrap().clone()
                             } else if query.contains("SaveMediaListEntry(") {
-                                json!({"data": {"SaveMediaListEntry": {"id": 9001}}})
+                                let collection = collection_body.lock().unwrap().clone();
+                                let changes = changes.lock().unwrap().clone();
+                                json!({"data": {"SaveMediaListEntry":
+                                    saved_entry(&collection, &variables, &changes)}})
+                            } else if query.contains("mediaListOptions") {
+                                let collection = collection_body.lock().unwrap().clone();
+                                json!({"data": {"Viewer": collection["data"]["Viewer"]}})
                             } else if query.contains("DeleteMediaListEntry(") {
                                 json!({"data": {"DeleteMediaListEntry": {"deleted": true}}})
                             } else {
@@ -81,6 +149,7 @@ impl Mock {
                 Arc::clone(&reject_token),
                 Arc::clone(&body),
                 Arc::clone(&bare_401),
+                Arc::clone(&server_changes),
             ));
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -95,7 +164,13 @@ impl Mock {
             requests,
             reject_token,
             bare_401,
+            server_changes,
         }
+    }
+
+    /// Fields AniList sets on its own in the next saved entries.
+    fn change_on_save(&self, changes: Value) {
+        *self.server_changes.lock().unwrap() = changes;
     }
 
     fn reject_token(&self) {
@@ -360,18 +435,25 @@ async fn empty_custom_lists_keep_their_names_for_a_true_union() {
         .expect("an empty custom list is still reported");
     assert!(empty.entries.is_empty(), "and it has no entries");
 
+    let before = mock.count();
+    let names = anilist.custom_list_names().await.unwrap();
     assert_eq!(
-        anilist.custom_list_names(MediaKind::Anime).await.unwrap(),
-        vec!["Favourites".to_owned(), "Empty Shelf".to_owned()]
+        names.for_kind(MediaKind::Anime),
+        ["Favourites".to_owned(), "Empty Shelf".to_owned()]
     );
-    assert_eq!(
-        anilist.custom_list_names(MediaKind::Manga).await.unwrap(),
-        vec!["Read Later".to_owned()]
+    assert_eq!(names.for_kind(MediaKind::Manga), ["Read Later".to_owned()]);
+    assert_eq!(mock.count(), before + 1, "names need one request");
+    assert!(
+        !mock.request(before)["query"]
+            .as_str()
+            .unwrap()
+            .contains("MediaListCollection"),
+        "reading names does not download the collection"
     );
 }
 
 #[tokio::test]
-async fn update_progress_preserves_an_existing_status_and_returns_the_cached_entry() {
+async fn update_progress_preserves_an_existing_status_and_returns_the_saved_entry() {
     let dir = tempfile::tempdir().unwrap();
     let db = db_at(&dir.path().join("autumn.db")).await;
     let mock = Mock::serve().await;
@@ -399,12 +481,12 @@ async fn update_progress_preserves_an_existing_status_and_returns_the_cached_ent
     assert_eq!(
         updated.status,
         ListStatus::Completed,
-        "the returned entry keeps its cached status"
+        "the saved entry keeps its status"
     );
     assert_eq!(updated.progress, 50);
     assert!(
         updated.hidden_from_status_lists,
-        "unchanged cached fields come back too"
+        "unchanged stored fields come back too"
     );
 }
 
@@ -469,4 +551,50 @@ async fn connecting_anilist_keeps_local_entries_dormant_and_sign_out_restores_th
     assert_eq!(active.active(), ActiveKind::Local, "Local comes back");
     let restored = active.collection(MediaKind::Anime).await.unwrap();
     assert_eq!(restored.lists[0].entries[0].progress, 5, "untouched");
+}
+
+#[tokio::test]
+async fn writes_return_the_entry_anilist_stored_not_the_request() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(999_999)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+    // AniList completes an entry on its last episode and dates it.
+    mock.change_on_save(json!({
+        "status": "COMPLETED",
+        "completedAt": {"year": 2026, "month": 11, "day": 24},
+    }));
+
+    let updated = anilist.update_progress(minted.media, 12).await.unwrap();
+
+    assert_eq!(
+        updated.status,
+        ListStatus::Completed,
+        "AniList's status wins"
+    );
+    assert_eq!(
+        updated.completed_at,
+        FuzzyDate::new(Some(2026), Some(11), Some(24)).unwrap()
+    );
+    assert_eq!(updated.progress, 12);
+
+    let mut edited = updated.clone();
+    edited.custom_lists = vec!["Favourites".to_owned()];
+    edited.notes = "rewatch soon".to_owned();
+    mock.change_on_save(json!({"score": 90}));
+    let saved = anilist.save_entry(&edited).await.unwrap();
+    assert_eq!(saved.score.raw(), 90, "a server-side change comes back");
+    assert_eq!(saved.notes, "rewatch soon");
+    assert_eq!(
+        saved.custom_lists,
+        vec!["Favourites"],
+        "enabled custom lists are decoded from the saved entry"
+    );
+    let variables = mock.request(mock.count() - 1)["variables"].clone();
+    assert_eq!(variables["id"], 9100, "the new entry's id was cached");
 }

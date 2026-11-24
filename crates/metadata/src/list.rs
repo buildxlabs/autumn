@@ -19,6 +19,10 @@ use crate::{
     schema,
 };
 
+// AniList's `Json` scalar carries free-form maps such as an entry's custom
+// lists; it is decoded as plain JSON and read field by field.
+cynic::impl_scalar!(serde_json::Value, schema::Json);
+
 /// The account's score display format (AniList `ScoreFormat`).
 #[derive(cynic::Enum, Debug, Clone, PartialEq, Eq, Hash)]
 #[cynic(non_exhaustive)]
@@ -62,6 +66,29 @@ pub struct CustomListNames {
     pub anime: Vec<String>,
     /// Names configured on the manga list.
     pub manga: Vec<String>,
+}
+
+impl CustomListNames {
+    fn from_options(options: Option<&ListOptions>) -> Self {
+        let names = |kind: Option<&TypeOptions>| -> Vec<String> {
+            kind.and_then(|kind| kind.custom_lists.as_ref())
+                .map_or_default(|names| names.iter().flatten().cloned().collect())
+        };
+        Self {
+            anime: names(options.and_then(|options| options.anime_list.as_ref())),
+            manga: names(options.and_then(|options| options.manga_list.as_ref())),
+        }
+    }
+
+    /// The names configured for `kind`; empty for a kind AniList lacks.
+    #[must_use]
+    pub fn for_kind(&self, kind: MediaKind) -> &[String] {
+        match kind {
+            MediaKind::Anime => &self.anime,
+            MediaKind::Manga => &self.manga,
+            _ => &[],
+        }
+    }
 }
 
 /// One list entry as AniList stores it, before `MediaId` minting.
@@ -354,10 +381,45 @@ struct SaveMutation {
     entry: Option<SavedEntry>,
 }
 
+/// The entry AniList stored, with the custom lists it is enabled in.
+/// AniList may change fields the mutation did not send (finishing the last
+/// episode marks an entry Completed), so callers display this, not their
+/// input.
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(graphql_type = "MediaList")]
 struct SavedEntry {
-    id: i32,
+    #[cynic(spread)]
+    entry: Entry,
+    #[arguments(asArray: true)]
+    custom_lists: Option<serde_json::Value>,
+}
+
+/// One item of `MediaList.customLists(asArray: true)`.
+#[derive(serde::Deserialize)]
+struct CustomListFlag {
+    name: String,
+    enabled: bool,
+}
+
+impl SavedEntry {
+    fn into_data(self) -> Option<ListEntryData> {
+        let names = self
+            .custom_lists
+            .and_then(|value| serde_json::from_value::<Vec<CustomListFlag>>(value).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|flag| flag.enabled)
+            .map(|flag| flag.name)
+            .collect();
+        self.entry.into_data(names)
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Query")]
+struct ListOptionsQuery {
+    #[cynic(rename = "Viewer")]
+    viewer: Option<Viewer>,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -439,21 +501,14 @@ impl AniList {
         let data = self
             .authenticated(CollectionQuery::build(variables), token)
             .await?;
-        let viewer = data.viewer;
-        let options = viewer
+        let options = data
+            .viewer
             .as_ref()
             .and_then(|viewer| viewer.media_list_options.as_ref());
         let score_format = options
             .and_then(|options| options.score_format.clone())
             .unwrap_or(ScoreFormat::Point100);
-        let names = |kind: Option<&TypeOptions>| -> Vec<String> {
-            kind.and_then(|kind| kind.custom_lists.as_ref())
-                .map_or_default(|names| names.iter().flatten().cloned().collect())
-        };
-        let custom_lists = CustomListNames {
-            anime: names(options.and_then(|options| options.anime_list.as_ref())),
-            manga: names(options.and_then(|options| options.manga_list.as_ref())),
-        };
+        let custom_lists = CustomListNames::from_options(options);
         let collection = data.collection;
         let has_next_chunk = collection
             .as_ref()
@@ -512,13 +567,41 @@ impl AniList {
         })
     }
 
-    /// Saves one list entry and returns AniList's list-entry id. Sent once;
-    /// no automatic retry, so callers can offer Retry on failure.
+    /// Every custom-list name configured on the authenticated account,
+    /// including lists with no entries, from `Viewer.mediaListOptions`.
+    ///
+    /// One small request, unlike [`AniList::list_collection`], so a caller
+    /// that only needs the names (such as a list transfer deciding which
+    /// names [`AniList::update_custom_lists`] must add) does not download the
+    /// whole collection.
     ///
     /// # Errors
     ///
     /// The request's [`Error`] on a network, API or decode failure.
-    pub async fn save_list_entry(&self, token: &str, input: &ListEntryInput) -> Result<i32, Error> {
+    pub async fn custom_list_names(&self, token: &str) -> Result<CustomListNames, Error> {
+        let data = self
+            .authenticated(ListOptionsQuery::build(()), token)
+            .await?;
+        Ok(CustomListNames::from_options(
+            data.viewer
+                .as_ref()
+                .and_then(|viewer| viewer.media_list_options.as_ref()),
+        ))
+    }
+
+    /// Saves one list entry and returns the entry as AniList stored it,
+    /// including fields AniList changed on its own. Sent once; no automatic
+    /// retry, so callers can offer Retry on failure.
+    ///
+    /// # Errors
+    ///
+    /// The request's [`Error`] on a network, API or decode failure, or when
+    /// AniList returns no entry or one with a status this build cannot read.
+    pub async fn save_list_entry(
+        &self,
+        token: &str,
+        input: &ListEntryInput,
+    ) -> Result<ListEntryData, Error> {
         let status = match input.status {
             Some(status) => Some(match status {
                 ListStatus::Current => MediaListStatus::Current,
@@ -555,10 +638,12 @@ impl AniList {
             completed_at: input.completed_at.map(DateInput::new),
         };
         let data = self.mutation(SaveMutation::build(variables), token).await?;
-        data.entry.map(|entry| entry.id).ok_or_else(|| Error::Api {
-            status: None,
-            message: "AniList returned no saved list entry".to_owned(),
-        })
+        data.entry
+            .and_then(SavedEntry::into_data)
+            .ok_or_else(|| Error::Api {
+                status: None,
+                message: "AniList returned no readable saved list entry".to_owned(),
+            })
     }
 
     /// Deletes a list entry by its AniList list-entry id. Sent once.
