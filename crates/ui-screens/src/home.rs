@@ -496,6 +496,8 @@ mod tests {
                     cx.new(|cx| {
                         AppShell::new(
                             RailPrefs::default(),
+                            settings::PlaybackSettings::default(),
+                            crate::shell::PlaybackServices::inert(),
                             cx.new(|_| ui_state::fetch_status::FetchStatus::default()),
                             cx.new(|_| ui_state::account::AccountStore::default()),
                             "https://example.test/login".to_owned(),

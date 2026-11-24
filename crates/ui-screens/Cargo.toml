@@ -16,6 +16,7 @@ futures.workspace        = true
 gpui-kit.workspace       = true
 metadata.workspace       = true
 nucleo-matcher.workspace = true
+settings.workspace       = true
 time.workspace           = true
 ui-components.workspace  = true
 ui-state.workspace       = true

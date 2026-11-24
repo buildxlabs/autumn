@@ -125,7 +125,7 @@ mod tests {
     };
 
     use db::Db;
-    use settings::{AppearanceSettings, LibrarySettings, Settings};
+    use settings::{AppearanceSettings, LibrarySettings, PlaybackSettings, Settings};
     use tempfile::TempDir;
 
     use super::load;
@@ -145,6 +145,7 @@ mod tests {
                 ..AppearanceSettings::default()
             },
             library: LibrarySettings::default(),
+            playback: PlaybackSettings::default(),
         }
     }
 
@@ -169,8 +170,8 @@ mod tests {
         );
         assert_eq!(
             db.settings().rows().await.unwrap().len(),
-            2,
-            "two rows: the appearance and library tabs"
+            3,
+            "three rows: appearance, library and playback tabs"
         );
     }
 

@@ -1,9 +1,19 @@
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::SettingsError;
+
+/// The watched-at threshold bounds, as a percentage of a file's duration.
+pub const WATCHED_THRESHOLD_RANGE: std::ops::RangeInclusive<u8> = 50..=100;
+/// The default MPC-HC web-interface host, used when the field is left empty.
+pub const DEFAULT_MPCHC_HOST: &str = "127.0.0.1";
+/// The default MPC-HC web-interface port (#119).
+pub const DEFAULT_MPCHC_PORT: u16 = 13579;
 
 /// Every user setting, one field per settings tab.
 ///
@@ -14,6 +24,8 @@ use crate::SettingsError;
 pub struct Settings {
     /// The Appearance tab.
     pub appearance: AppearanceSettings,
+    /// The Playback tab.
+    pub playback: PlaybackSettings,
     /// The Library tab.
     pub library: LibrarySettings,
 }
@@ -45,6 +57,170 @@ pub struct AppearanceSettings {
     /// Sidebar items the user moved into the "More" menu, by route key.
     /// Unknown keys are ignored, so a removed route never breaks loading.
     pub sidebar_unpinned: Vec<String>,
+}
+
+/// The player families Autumn can launch. Kept in `settings` so this crate
+/// stays self-contained; the `player` crate owns the launch behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the Playback tab handles every player family"
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaybackKind {
+    /// mpv, over JSON IPC.
+    Mpv,
+    /// IINA on macOS, over its embedded mpv's JSON IPC.
+    Iina,
+    /// VLC, over its HTTP interface.
+    Vlc,
+    /// MPC-HC, over its web interface.
+    MpcHc,
+}
+
+impl PlaybackKind {
+    /// The name shown in settings.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mpv => "mpv",
+            Self::Iina => "IINA",
+            Self::Vlc => "VLC",
+            Self::MpcHc => "MPC-HC",
+        }
+    }
+}
+
+/// Which player to use. Detection resolves an [`PlayerChoice::Auto`] or
+/// [`PlayerChoice::Installed`] to a command at play time, so a player that was
+/// upgraded or moved since the setting was saved is still found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the Playback tab handles every choice"
+)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PlayerChoice {
+    /// Use the preferred installed player for this platform.
+    Auto,
+    /// Use the first installed player of this kind.
+    Installed {
+        /// The player family to launch.
+        kind: PlaybackKind,
+    },
+    /// Use an explicit executable chosen with the file picker.
+    Custom {
+        /// The player family the executable belongs to.
+        kind: PlaybackKind,
+        /// The executable path.
+        path: PathBuf,
+    },
+}
+
+/// The Settings → Playback tab.
+///
+/// Serde defaults let an older or newer row load without losing the other
+/// tabs. [`Self::validate`] checks the values the UI must keep in range.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these are independent toggles, not modes of one state machine"
+)]
+#[serde(default)]
+pub struct PlaybackSettings {
+    /// Which player to launch.
+    pub player: PlayerChoice,
+    /// The host of MPC-HC's web interface.
+    pub mpchc_host: String,
+    /// The port of MPC-HC's web interface.
+    pub mpchc_port: u16,
+    /// Percentage of a file's duration at which an episode counts as watched.
+    pub watched_threshold: u8,
+    /// Update the active platform's progress when an episode counts as watched.
+    pub auto_sync_progress: bool,
+    /// Seek to the saved position after the player reports media ready.
+    pub resume: bool,
+    /// Offer the next episode when one finishes.
+    pub auto_next: bool,
+    /// Seconds to wait before starting the next episode.
+    pub auto_next_seconds: u8,
+    /// Skip opening and ending chapters automatically.
+    pub skip_op_ed: bool,
+    /// Chapter titles treated as an opening, matched case-insensitively.
+    pub opening_patterns: Vec<String>,
+    /// Chapter titles treated as an ending, matched case-insensitively.
+    pub ending_patterns: Vec<String>,
+}
+
+impl Default for PlaybackSettings {
+    fn default() -> Self {
+        Self {
+            player: PlayerChoice::Auto,
+            mpchc_host: DEFAULT_MPCHC_HOST.to_owned(),
+            mpchc_port: DEFAULT_MPCHC_PORT,
+            watched_threshold: 80,
+            auto_sync_progress: true,
+            resume: true,
+            auto_next: true,
+            auto_next_seconds: 5,
+            skip_op_ed: true,
+            opening_patterns: vec!["op".to_owned(), "opening".to_owned()],
+            ending_patterns: vec!["ed".to_owned(), "ending".to_owned()],
+        }
+    }
+}
+
+impl PlaybackSettings {
+    /// Checks the values the Playback tab must keep in range.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SettingsError::Validation`] when the watched threshold is
+    /// outside 50–100, the countdown is zero, an MPC-HC field is unusable, or
+    /// a custom player does not point at a file.
+    pub fn validate(&self) -> Result<(), SettingsError> {
+        if !WATCHED_THRESHOLD_RANGE.contains(&self.watched_threshold) {
+            return Err(SettingsError::Validation {
+                field: "playback.watched_threshold",
+                message: "must be between 50 and 100 percent",
+            });
+        }
+        if self.auto_next_seconds == 0 {
+            return Err(SettingsError::Validation {
+                field: "playback.auto_next_seconds",
+                message: "the countdown must be at least one second",
+            });
+        }
+        let mpchc_selected = match &self.player {
+            PlayerChoice::Installed { kind } | PlayerChoice::Custom { kind, .. } => {
+                *kind == PlaybackKind::MpcHc
+            }
+            PlayerChoice::Auto => false,
+        };
+        if mpchc_selected {
+            if self.mpchc_host.trim().is_empty() {
+                return Err(SettingsError::Validation {
+                    field: "playback.mpchc_host",
+                    message: "host cannot be empty",
+                });
+            }
+            if self.mpchc_port == 0 {
+                return Err(SettingsError::Validation {
+                    field: "playback.mpchc_port",
+                    message: "port must not be zero",
+                });
+            }
+        }
+        if let PlayerChoice::Custom { path, .. } = &self.player
+            && !path.is_file()
+        {
+            return Err(SettingsError::Validation {
+                field: "playback.player.path",
+                message: "choose a player executable that exists",
+            });
+        }
+        Ok(())
+    }
 }
 
 impl Settings {
