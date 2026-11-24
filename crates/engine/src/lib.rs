@@ -14,7 +14,7 @@ use std::{future::Future, pin::Pin};
 use db::Db;
 use domain::{ExternalId, ListEntry, ListStatus, MediaId, MediaKind};
 use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail};
-use net::{Client, HostKind, PosterCache};
+use net::{Client, PosterCache};
 use settings::{AppPaths, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
@@ -97,11 +97,9 @@ impl Engine {
     pub fn new(runtime: &Runtime, paths: &AppPaths) -> Result<Self, EngineError> {
         let db = runtime.block_on(Db::open(&paths.database_file()))?;
         let settings = runtime.block_on(settings_store::load(&db, &paths.settings_file()))?;
-        let mut builder = Client::builder().anilist();
+        let builder = Client::builder().anilist();
         #[cfg(debug_assertions)]
-        {
-            builder = builder.host(DEBUG_HOST, 25, 5, HostKind::AniList);
-        }
+        let builder = builder.host(DEBUG_HOST, 25, 5, net::HostKind::AniList);
         let client = builder.build()?;
         let poster_cache = PosterCache::new(paths.cache_dir())?;
         let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());

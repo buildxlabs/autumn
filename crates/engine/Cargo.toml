@@ -16,7 +16,7 @@ metadata.workspace  = true
 net.workspace       = true
 settings.workspace  = true
 thiserror.workspace = true
-tokio               = { workspace = true }
+tokio.workspace     = true
 tracing.workspace   = true
 tracker.workspace   = true
 

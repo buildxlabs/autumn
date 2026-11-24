@@ -171,7 +171,13 @@ impl EntryStore {
         // A refresh for the previous Entry must not write into this one.
         self.refresh_task = None;
         let services = Arc::clone(&self.services);
+        // A save still in flight must land before the Local entry is read,
+        // or reopening the same Entry would show the list as it was.
+        let pending_save = self.save_task.take();
         self.open_task = Some(cx.spawn(async move |store, cx| {
+            if let Some(save) = pending_save {
+                save.await;
+            }
             let load = match call(cx, services.detail(anilist_id)).await {
                 Ok(load) => load,
                 Err(message) => {
@@ -460,9 +466,12 @@ mod tests {
         fn local_media(
             &self,
             _kind: MediaKind,
-            _ids: &[ExternalId],
+            ids: &[ExternalId],
         ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
-            let media = *self.media.lock().expect("the fake's media lock");
+            // A minted media belongs only to the ids it was minted for.
+            let minted = self.minted.lock().expect("the fake's minted lock");
+            let known = minted.last().is_none_or(|(_, minted)| minted == ids);
+            let media = (*self.media.lock().expect("the fake's media lock")).filter(|_| known);
             Box::pin(async move { Ok(media) })
         }
 
@@ -831,6 +840,48 @@ mod tests {
                     "the save landed"
                 );
                 assert_eq!(draft.progress, 4, "the newer edit survived the save");
+            }
+            #[expect(
+                clippy::panic,
+                reason = "the assertion prints the Entry's actual state"
+            )]
+            state => panic!("the Entry should be ready: {state:?}"),
+        }
+    }
+
+    #[gpui_kit::test]
+    async fn reopening_the_entry_during_a_save_shows_the_saved_entry(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = Arc::new(FakeServices {
+            save_delay: Duration::from_millis(150),
+            ..FakeServices::default()
+        });
+        let store = cx.new(|_| EntryStore::new(services.clone()));
+        cx.update(|cx| store.update(cx, |store, cx| store.open(ANILIST_ID, cx)));
+        cx.run_until_parked();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+        cx.update(|cx| {
+            store.update(cx, |store, _| {
+                store.draft_mut().expect("the Entry is ready").progress = 3;
+            });
+            store.update(cx, EntryStore::save);
+            store.update(cx, |store, cx| store.open(ANILIST_ID, cx));
+        });
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        cx.run_until_parked();
+
+        match store.read_with(cx, |store, _| store.state().clone()) {
+            EntryState::Ready { entry, draft, .. } => {
+                assert_eq!(
+                    entry.map(|entry| entry.progress),
+                    Some(3),
+                    "the reopen saw the save"
+                );
+                assert_eq!(draft.progress, 3);
             }
             #[expect(
                 clippy::panic,

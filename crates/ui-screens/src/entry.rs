@@ -116,7 +116,13 @@ pub(crate) fn observe(
                 detail.relations.len(),
                 detail.recommendations.len(),
             ),
-            _ => return,
+            EntryState::Loading => {
+                // A reopened Entry loads the stored notes again, dropping
+                // text typed but never saved.
+                editor.update(cx, |editor, _| editor.synced_for = None);
+                return;
+            }
+            EntryState::Failed(_) => return,
         };
         let (id, notes, relations, recommendations) = ready;
         editor.update(cx, |editor, cx| {
