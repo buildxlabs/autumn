@@ -104,6 +104,7 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 db            → domain
 auth           → domain, net
 metadata      → domain, net
+player        → domain
 tracker       → domain, db
 ui-state      → domain
 ui-components → (gpui-kit only)
