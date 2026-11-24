@@ -694,6 +694,7 @@ mod tests {
         Route,
         bridge::{self, BridgeError},
         entry_store::EntryStore,
+        home_store::HomeStore,
         test_support::CannedServices,
     };
 
@@ -795,6 +796,7 @@ mod tests {
                 };
                 gpui_kit::open_window(options, cx, |window, cx| {
                     let entry_store = cx.new(|_| EntryStore::new(services.clone()));
+                    let home_store = cx.new(|_| HomeStore::new(services.clone()));
                     cx.new(|cx| {
                         AppShell::new(
                             RailPrefs::default(),
@@ -808,6 +810,7 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             entry_store,
+                            home_store,
                             window,
                             cx,
                         )

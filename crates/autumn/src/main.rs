@@ -258,14 +258,14 @@ fn report_fatal(err: &impl Display) {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    use std::{rc::Rc, sync::Arc};
 
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::{
-        account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
-        home_store::HomeStore, test_support::pending_services,
+        account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
+        test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
