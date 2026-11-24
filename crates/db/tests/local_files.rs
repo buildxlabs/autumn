@@ -82,5 +82,6 @@ fn file(path: &str, size: i64, media: Option<MediaId>) -> LocalFile {
         locked: false,
         ignored: false,
         filler: false,
+        shelved: false,
     }
 }

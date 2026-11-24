@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 db.workspace        = true
 domain.workspace    = true
+flume.workspace     = true
+library.workspace   = true
 metadata.workspace  = true
 net.workspace       = true
 settings.workspace  = true

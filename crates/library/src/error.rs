@@ -24,4 +24,7 @@ pub enum LibraryError {
     /// Storage failed.
     #[error("library storage failed")]
     Db(#[from] DbError),
+    /// A library folder could not be watched.
+    #[error("cannot watch a library folder: {0}")]
+    Watcher(#[from] notify::Error),
 }

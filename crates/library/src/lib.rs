@@ -14,9 +14,10 @@ mod hydrate;
 mod matcher;
 mod normalize;
 mod scanner;
+mod watcher;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
@@ -31,6 +32,7 @@ pub use error::LibraryError;
 pub use matcher::{Candidate, DEFAULT_THRESHOLD, Match, Matcher};
 pub use normalize::{NormalizedTitle, normalize};
 pub use scanner::{ScannedFile, walk};
+pub use watcher::AutoScan;
 
 /// Files walked and matched so far in one scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,18 +96,6 @@ impl Library {
     ) -> Result<ScanSummary, LibraryError> {
         let started_at = SystemTime::now();
         let elapsed = Instant::now();
-        let mut scanned = Vec::new();
-        let matched = 0;
-        for folder in folders {
-            for file in walk(folder)? {
-                progress(ScanProgress {
-                    files_walked: scanned.len() + 1,
-                    files_matched: matched,
-                });
-                scanned.push(file);
-            }
-        }
-
         let existing: HashMap<String, LocalFile> = self
             .db
             .local_file()
@@ -114,7 +104,48 @@ impl Library {
             .into_iter()
             .map(|file| (file.path.to_string_lossy().into_owned(), file))
             .collect();
-        let eligible = eligible_files(&scanned, &existing);
+        let mut preserved: HashMap<String, LocalFile> = HashMap::new();
+        let mut scanned = Vec::new();
+        let matched = 0;
+        for folder in folders {
+            for (key, row) in &existing {
+                if !Path::new(key).starts_with(folder) {
+                    continue;
+                }
+                if !folder.is_dir() {
+                    // A missing drive shelves its files instead of losing them.
+                    let mut shelved = row.clone();
+                    shelved.shelved = true;
+                    preserved.insert(key.clone(), shelved);
+                } else if row.shelved {
+                    // The drive returned: keep the match without re-matching.
+                    let mut returned = row.clone();
+                    returned.shelved = false;
+                    preserved.insert(key.clone(), returned);
+                }
+            }
+            if !folder.is_dir() {
+                continue;
+            }
+            for file in walk(folder)? {
+                progress(ScanProgress {
+                    files_walked: scanned.len() + 1,
+                    files_matched: matched,
+                });
+                scanned.push(file);
+            }
+        }
+        let overrides: HashMap<String, LocalFile> = existing
+            .iter()
+            .filter(|(_, row)| row.locked || row.ignored || row.shelved)
+            .map(|(key, row)| (key.clone(), row.clone()))
+            .chain(
+                preserved
+                    .iter()
+                    .map(|(key, row)| (key.clone(), row.clone())),
+            )
+            .collect();
+        let eligible = eligible_files(&scanned, &overrides);
         let (wins, mut media) = self
             .match_groups(&scanned, &eligible, candidates, &mut progress, matched)
             .await?;
@@ -127,7 +158,16 @@ impl Library {
         } else {
             HashMap::new()
         };
-        let rows = build_rows(&scanned, &existing, &wins, &media, &hydrated);
+        let mut rows = build_rows(&scanned, &existing, &preserved, &wins, &media, &hydrated);
+        let walked: HashSet<String> = scanned
+            .iter()
+            .map(|file| file.path.to_string_lossy().into_owned())
+            .collect();
+        for (key, row) in &preserved {
+            if !walked.contains(key) {
+                rows.push(row.clone());
+            }
+        }
         self.db.local_file().sync(&rows).await?;
 
         let summary = summarize(
@@ -337,16 +377,13 @@ fn changed(rows: u64) -> usize {
     usize::try_from(rows).unwrap_or(usize::MAX)
 }
 
-/// Files the matcher may touch: neither overridden by the user nor untitled.
+/// Files the matcher may touch: neither overridden nor untitled.
 fn eligible_files(scanned: &[ScannedFile], existing: &HashMap<String, LocalFile>) -> Vec<bool> {
     scanned
         .iter()
         .map(|file| {
             let key = file.path.to_string_lossy();
-            let overridden = existing
-                .get(key.as_ref())
-                .is_some_and(|row| row.locked || row.ignored);
-            !overridden && !file.group_key.is_empty()
+            !existing.contains_key(key.as_ref()) && !file.group_key.is_empty()
         })
         .collect()
 }
@@ -356,6 +393,7 @@ fn eligible_files(scanned: &[ScannedFile], existing: &HashMap<String, LocalFile>
 fn build_rows(
     scanned: &[ScannedFile],
     existing: &HashMap<String, LocalFile>,
+    preserved: &HashMap<String, LocalFile>,
     wins: &HashMap<usize, Match>,
     media: &HashMap<usize, MediaId>,
     hydrated: &HashMap<usize, HydratedFile>,
@@ -365,7 +403,8 @@ fn build_rows(
         .enumerate()
         .map(|(index, file)| {
             let key = file.path.to_string_lossy().into_owned();
-            let prior = existing.get(&key);
+            let prior = preserved.get(&key).or_else(|| existing.get(&key));
+            let kept = preserved.contains_key(&key);
             let locked = prior.is_some_and(|row| row.locked);
             let ignored = prior.is_some_and(|row| row.ignored);
             let found = wins.get(&index).copied();
@@ -376,14 +415,14 @@ fn build_rows(
                 None
             } else {
                 media.get(&index).copied().or_else(|| {
-                    if locked {
+                    if locked || kept {
                         prior.and_then(|row| row.media_id)
                     } else {
                         None
                     }
                 })
             };
-            let (season, episode, kind, filler) = if locked {
+            let (season, episode, kind, filler) = if locked || kept {
                 (
                     prior.and_then(|row| row.season),
                     prior.and_then(|row| row.episode),
@@ -419,7 +458,7 @@ fn build_rows(
                 media_id,
                 confidence: if ignored || unmatched {
                     None
-                } else if locked {
+                } else if locked || kept {
                     prior.and_then(|row| row.confidence)
                 } else {
                     found.map(|matched| matched.confidence)
@@ -427,6 +466,7 @@ fn build_rows(
                 locked,
                 ignored,
                 filler,
+                shelved: prior.is_some_and(|row| row.shelved),
             }
         })
         .collect()
@@ -481,12 +521,12 @@ fn summarize(
         started_at,
         duration,
         folders: folders.to_vec(),
-        files_walked: rows.len(),
+        files_walked: scanned.len(),
         files_matched: rows.iter().filter(|row| row.media_id.is_some()).count(),
         files_unmatched: unmatched.len(),
         locked,
         ignored,
-        shelved: 0,
+        shelved: rows.iter().filter(|row| row.shelved).count(),
         by_media,
         unmatched,
     }

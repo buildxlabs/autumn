@@ -9,10 +9,18 @@
 
 mod settings_store;
 
-use std::{collections::HashSet, future::Future, pin::Pin};
+use std::{
+    collections::HashSet,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use db::Db;
-use domain::{ExternalId, ListEntry, ListStatus, MediaId, MediaKind};
+use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind};
+use flume::Sender;
+use library::{AutoScan, Library};
 use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
 use net::{Client, PosterCache};
 use settings::{AppPaths, Settings};
@@ -45,6 +53,12 @@ pub enum EngineError {
     /// A platform call failed.
     #[error("the platform call failed: {0}")]
     Platform(#[from] PlatformError),
+    /// A library scan failed.
+    #[error("the library scan failed: {0}")]
+    Library(#[from] library::LibraryError),
+    /// The watcher state lock was poisoned.
+    #[error("the library watcher lock was poisoned")]
+    WatcherLock,
 }
 
 /// The engine's services: what the Anime Entry and Home screens call through
@@ -87,6 +101,9 @@ pub struct Engine {
     catalog: CatalogCache,
     platform: Local,
     settings: Settings,
+    library: Library,
+    events: Option<Sender<AppEvent>>,
+    watcher: Arc<Mutex<Option<AutoScan>>>,
 }
 
 /// The loopback host of debug fetches; `fetch_status::observe` watches its rate limits.
@@ -112,6 +129,7 @@ impl Engine {
         let poster_cache = PosterCache::new(paths.cache_dir())?;
         let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());
         let platform = Local::new(db.clone());
+        let library = Library::new(db.clone());
         Ok(Self {
             db,
             client,
@@ -119,7 +137,101 @@ impl Engine {
             catalog,
             platform,
             settings,
+            library,
+            events: None,
+            watcher: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Attaches the engine-to-UI event channel used for scan progress and the
+    /// library-changed event.
+    #[must_use]
+    pub fn with_events(mut self, events: Sender<AppEvent>) -> Self {
+        self.events = Some(events);
+        self
+    }
+
+    /// The library service, for explicit scans from screens and the watcher.
+    #[must_use]
+    pub fn library(&self) -> &Library {
+        &self.library
+    }
+
+    /// Whether an auto-scan watcher is currently running.
+    #[must_use]
+    pub fn auto_scan_running(&self) -> bool {
+        self.watcher.lock().is_ok_and(|watcher| watcher.is_some())
+    }
+
+    /// Starts, restarts or stops the auto-scan watcher to match the Library
+    /// settings. Calling this after a settings save is the live reload.
+    ///
+    /// # Errors
+    ///
+    /// [`EngineError::WatcherLock`] if the watcher state lock is poisoned, or
+    /// [`EngineError::Library`] if a folder cannot be watched.
+    pub fn apply_library_settings(&self, settings: &Settings) -> Result<(), EngineError> {
+        let mut watcher = self.watcher.lock().map_err(|_| EngineError::WatcherLock)?;
+        if let Some(previous) = watcher.take() {
+            previous.stop();
+        }
+        let folders = &settings.library.folders;
+        if !settings.library.auto_scan || folders.is_empty() {
+            return Ok(());
+        }
+        let engine = self.clone();
+        let events = self.events.clone();
+        let auto_scan = AutoScan::start(folders, move |changed| {
+            let engine = engine.clone();
+            let events = events.clone();
+            tokio::spawn(async move {
+                engine.run_auto_scan(&changed, events).await;
+            });
+        })?;
+        *watcher = Some(auto_scan);
+        Ok(())
+    }
+
+    /// Runs one auto-scan and publishes its progress and completion.
+    async fn run_auto_scan(
+        &self,
+        folders: &[std::path::PathBuf],
+        events: Option<Sender<AppEvent>>,
+    ) {
+        // Candidates arrive from the metadata engine in #127; until then the
+        // scan still stores and shelves files, just without a match.
+        let last = Arc::new(Mutex::new(
+            Instant::now()
+                .checked_sub(Duration::from_secs(1))
+                .unwrap_or(Instant::now()),
+        ));
+        let result = self
+            .library
+            .scan(folders, &[], |progress| {
+                let Some(events) = &events else {
+                    return;
+                };
+                let Ok(mut last) = last.lock() else {
+                    return;
+                };
+                if last.elapsed() < Duration::from_millis(250) {
+                    return;
+                }
+                *last = Instant::now();
+                let _ = events.send(AppEvent::LibraryScanProgress {
+                    files_walked: progress.files_walked,
+                    files_matched: progress.files_matched,
+                });
+            })
+            .await;
+        match result {
+            Ok(_) => {
+                if let Some(events) = events {
+                    let _ = events.send(AppEvent::LibraryChanged);
+                }
+            }
+            Err(error) => tracing::warn!(%error, "auto-scan failed"),
+        }
     }
 
     /// The app database.
@@ -275,8 +387,8 @@ mod tests {
     use std::time::SystemTime;
 
     use domain::{AdvancedScores, ExternalId, FuzzyDate, ListStatus, MediaKind, Score};
-    use settings::AppPaths;
-    use tempfile::TempDir;
+    use settings::{AppPaths, Settings};
+    use tempfile::{TempDir, tempdir};
     use tokio::runtime::Builder;
 
     use super::{Engine, EngineServices};
@@ -310,6 +422,35 @@ mod tests {
             created_at: SystemTime::now(),
             updated_at: SystemTime::now(),
         }
+    }
+
+    #[test]
+    fn turning_auto_scan_off_stops_the_watcher_without_a_restart() {
+        let dir = tempdir().expect("a temp directory");
+        let paths = paths(&dir);
+        let folder = dir.path().join("shows");
+        std::fs::create_dir_all(&folder).expect("the library folder");
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _entered = runtime.enter();
+        let engine = Engine::new(&runtime, &paths).expect("the engine");
+        let mut settings = Settings::default();
+        settings.library.folders = vec![folder];
+        settings.library.auto_scan = true;
+
+        engine
+            .apply_library_settings(&settings)
+            .expect("the watcher starts with auto-scan on");
+        assert!(engine.auto_scan_running());
+
+        settings.library.auto_scan = false;
+        engine
+            .apply_library_settings(&settings)
+            .expect("the watcher stops");
+        assert!(!engine.auto_scan_running());
     }
 
     #[test]

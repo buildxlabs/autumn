@@ -28,6 +28,7 @@ library = { path = "crates/library" }
 metadata = { path = "crates/metadata" }
 mkv = { path = "crates/mkv" }
 net = { path = "crates/net" }
+notify = "9"
 nucleo-matcher = "0.3"
 rand = "0.10"
 release-parser = { path = "crates/release-parser" }

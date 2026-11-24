@@ -1,4 +1,7 @@
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -25,12 +28,18 @@ pub struct LibrarySettings {
     /// When on, library hydration looks up filler episode lists on
     /// animefillerlist.com. On by default.
     pub fetch_filler_episodes: bool,
+    /// Folders scanned for local files.
+    pub folders: Vec<PathBuf>,
+    /// Whether a watcher runs scans when the library folders change.
+    pub auto_scan: bool,
 }
 
 impl Default for LibrarySettings {
     fn default() -> Self {
         Self {
             fetch_filler_episodes: true,
+            folders: Vec::new(),
+            auto_scan: true,
         }
     }
 }

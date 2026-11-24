@@ -106,7 +106,7 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 ```text
 db            → domain
 auth           → domain, net
-engine         → domain, net, db, metadata, tracker, settings
+engine         → domain, net, db, metadata, tracker, settings, library
 library        → domain, db
 metadata      → domain, net
 player        → domain

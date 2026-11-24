@@ -81,6 +81,10 @@ fn main() -> ExitCode {
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), engine.poster_cache());
     let (engine_events, ui_events) = ui_state::events::channel();
+    let engine = engine.with_events(engine_events.clone());
+    if let Err(err) = engine.apply_library_settings(engine.settings()) {
+        tracing::warn!(%err, "the library watcher could not start");
+    }
     let gateway = PlatformGateway::with_events(engine.db().clone(), engine_events.clone());
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
