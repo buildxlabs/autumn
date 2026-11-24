@@ -20,6 +20,7 @@ use super::*;
 use crate::PlayerEvent;
 
 type Shared = (Arc<Mutex<Value>>, Arc<Mutex<Vec<String>>>);
+type Recorded = (String, Arc<Mutex<Vec<String>>>);
 
 async fn serve_vlc(shared: &Shared) -> String {
     let (body, hits) = shared.clone();
@@ -45,21 +46,34 @@ async fn serve_vlc(shared: &Shared) -> String {
     format!("http://{address}")
 }
 
-async fn serve_mpchc(html: &str) -> String {
+async fn serve_mpchc(html: &str) -> Recorded {
     let page = html.to_owned();
-    let app = Router::new().route(
-        "/variables.html",
-        get(move || {
-            let page = page.clone();
-            async move { Html(page).into_response() }
-        }),
-    );
+    let hits = Arc::new(Mutex::new(Vec::new()));
+    let page_hits = Arc::clone(&hits);
+    let app = Router::new()
+        .route(
+            "/variables.html",
+            get(move || {
+                let page = page.clone();
+                async move { Html(page).into_response() }
+            }),
+        )
+        .route(
+            "/browser.html",
+            get(move |uri: Uri| {
+                let hits = Arc::clone(&page_hits);
+                async move {
+                    hits.lock().unwrap().push(uri.to_string());
+                    Html("ok")
+                }
+            }),
+        );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    format!("http://{address}")
+    (format!("http://{address}"), hits)
 }
 
 fn control_at(base: String, player: Player) -> Control {
@@ -99,11 +113,12 @@ fn vlc_status_json_decodes_playing_and_stopped() {
 #[test]
 fn mpchc_variables_decode_playing_and_stopped() {
     let playing = parse_mpchc(
-        r#"<html><p id="state">2</p><p id="position">3.5</p>
-           <p id="duration">120.5</p><p id="file">ep.mkv</p></html>"#,
+        r#"<html><p id="state">2</p><p id="position">3500</p>
+           <p id="duration">120500</p><p id="file">ep.mkv</p></html>"#,
     );
     assert!(playing.playing);
     assert_eq!(playing.length, 120.5);
+    assert_eq!(playing.position, 3.5);
     assert_eq!(playing.path.as_deref(), Some("ep.mkv"));
 
     let stopped = parse_mpchc(r#"<p id="state">0</p><p id="duration">0</p>"#);
@@ -135,8 +150,8 @@ async fn recorded_vlc_status_is_fetched_and_seek_is_sent() {
     let hits = shared.1.lock().unwrap();
     assert!(
         hits.iter()
-            .any(|uri| uri.contains("command=seek") && uri.contains("val=2.5")),
-        "the seek must reach the recorded endpoint"
+            .any(|uri| uri.contains("command=seek") && uri.contains("val=00%3A00%3A02")),
+        "VLC must receive a whole-second clock, not a fractional value"
     );
 }
 
@@ -222,9 +237,9 @@ async fn an_intentional_stop_does_not_look_like_eof() {
 
 #[tokio::test]
 async fn recorded_mpc_hc_variables_are_fetched_over_http() {
-    let base = serve_mpchc(
-        r#"<html><p id="state">2</p><p id="position">4.0</p>
-           <p id="duration">90.0</p><p id="file">ep.mkv</p></html>"#,
+    let (base, _hits) = serve_mpchc(
+        r#"<html><p id="state">2</p><p id="position">4000</p>
+           <p id="duration">90000</p><p id="file">ep.mkv</p></html>"#,
     )
     .await;
 
@@ -254,9 +269,9 @@ async fn a_mpc_hc_that_never_opens_its_interface_is_a_typed_error() {
 
 #[tokio::test]
 async fn an_already_running_mpc_hc_is_reused() {
-    let base = serve_mpchc(
-        r#"<html><p id="state">2</p><p id="position">1.0</p>
-           <p id="duration">60.0</p></html>"#,
+    let (base, hits) = serve_mpchc(
+        r#"<html><p id="state">2</p><p id="position">1000</p>
+           <p id="duration">60000</p></html>"#,
     )
     .await;
     let address: Vec<&str> = base.trim_start_matches("http://").split(':').collect();
@@ -278,4 +293,11 @@ async fn an_already_running_mpc_hc_is_reused() {
     .expect("a reachable web interface must be reused without spawning");
 
     assert!(session.endpoint().as_str().contains(&port.to_string()));
+    assert!(
+        hits.lock()
+            .unwrap()
+            .iter()
+            .any(|uri| uri.contains("/browser.html") && uri.contains("path=ep.mkv")),
+        "a reused instance must still load the requested file"
+    );
 }

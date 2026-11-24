@@ -175,12 +175,16 @@ fn parse_mpchc(body: &str) -> Status {
     let state = html_field(body, "state")
         .and_then(|value| value.parse::<i32>().ok())
         .unwrap_or(0);
+    // MPC-HC reports position and duration in milliseconds, while the rest
+    // of the event stream speaks seconds.
     let position = html_field(body, "position")
         .and_then(|value| value.parse::<f64>().ok())
-        .unwrap_or(0.0);
+        .unwrap_or(0.0)
+        / 1000.0;
     let length = html_field(body, "duration")
         .and_then(|value| value.parse::<f64>().ok())
-        .unwrap_or(0.0);
+        .unwrap_or(0.0)
+        / 1000.0;
     Status {
         playing: state == 2,
         paused: state == 1,
@@ -194,6 +198,7 @@ fn parse_mpchc(body: &str) -> Status {
 /// Polls status at four hertz and publishes the same events as mpv IPC.
 async fn poll(control: Control, mut events: mpsc::Sender<PlayerEvent>, signals: Signals) {
     let mut ticker = tokio::time::interval(POLL_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     ticker.tick().await;
     let mut ready = false;
     let mut paused = false;
@@ -229,13 +234,13 @@ async fn poll(control: Control, mut events: mpsc::Sender<PlayerEvent>, signals: 
                 .await
                 .is_err()
             {
-                break;
+                debug!("player event consumer went away; keeping the player alive");
             }
         }
         if ready && status.paused != paused {
             paused = status.paused;
             if events.send(PlayerEvent::Paused(paused)).await.is_err() {
-                break;
+                debug!("player event consumer went away; keeping the player alive");
             }
         }
         if ready && (status.stopped || (status.length > 0.0 && status.position >= status.length)) {
@@ -244,7 +249,7 @@ async fn poll(control: Control, mut events: mpsc::Sender<PlayerEvent>, signals: 
                 continue;
             }
             if events.send(PlayerEvent::Eof).await.is_err() {
-                break;
+                debug!("player event consumer went away; keeping the player alive");
             }
             continue;
         }
@@ -257,7 +262,7 @@ async fn poll(control: Control, mut events: mpsc::Sender<PlayerEvent>, signals: 
                 .await
                 .is_err()
             {
-                break;
+                debug!("player event consumer went away; keeping the player alive");
             }
         }
     }
@@ -271,10 +276,12 @@ async fn dispatch(control: &Control, command: &[Value], signals: &Signals) -> Re
             let seconds = command.get(1).and_then(Value::as_f64).unwrap_or(0.0);
             match control.player {
                 Player::Vlc => {
+                    // VLC parses `val` with a whole-seconds pattern: `0.25`
+                    // would be read as 25 seconds. Send an HH:MM:SS clock.
                     control
                         .get(
                             "/requests/status.json",
-                            &[("command", "seek"), ("val", &seconds.to_string())],
+                            &[("command", "seek"), ("val", &clock(seconds))],
                         )
                         .await?;
                 }
@@ -456,6 +463,13 @@ pub async fn launch_mpchc(
     let endpoint = Endpoint::http(control.base.clone());
 
     if control.get("/variables.html", &[]).await.is_ok() {
+        // An existing instance must still play the requested file.
+        dispatch(
+            &control,
+            &[serde_json::json!("loadfile"), serde_json::json!(file)],
+            &Signals::default(),
+        )
+        .await?;
         let log = tempfile::Builder::new()
             .tempfile()
             .map_err(|source| Error::Log { source })?;
@@ -542,13 +556,29 @@ async fn supervise(
     requests: mpsc::UnboundedReceiver<Request>,
 ) {
     let signals = Signals::default();
-    let poller = tokio::spawn(poll(control.clone(), events.clone(), signals.clone()));
+    let mut poller = tokio::spawn(poll(control.clone(), events.clone(), signals.clone()));
     let commander = tokio::spawn(commands(control, requests, signals));
 
-    let _ = poller.await;
+    // Reap promptly when the player exits, instead of waiting for the poller
+    // to time out repeatedly. A poller that ends on its own (quit, EOF or a
+    // lost interface) still owns the session, so stop a child that survives.
+    if let Some(mut child) = child {
+        let poller_ended = {
+            let mut wait = Box::pin(child.wait());
+            tokio::select! {
+                _ = &mut wait => false,
+                _ = &mut poller => true,
+            }
+        };
+        if poller_ended {
+            kill(child).await;
+        }
+    } else {
+        let _ = (&mut poller).await;
+    }
     commander.abort();
-    if let Some(child) = child {
-        kill(child).await;
+    if !poller.is_finished() {
+        poller.abort();
     }
     let _ = events.send(PlayerEvent::Exited).await;
 }
