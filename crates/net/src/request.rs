@@ -135,6 +135,15 @@ impl Response {
         (200..300).contains(&self.status)
     }
 
+    /// The response's header value, if present.
+    #[must_use]
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.inner
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+    }
+
     /// Read the entire body as bytes.
     ///
     /// # Errors
