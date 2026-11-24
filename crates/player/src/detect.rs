@@ -162,6 +162,95 @@ pub struct SearchEnv {
     pub probe_versions: bool,
 }
 
+/// Binary roots and app bundles for a real machine.
+fn system_layout(
+    platform: Platform,
+    home: Option<&Path>,
+) -> (Vec<PathBuf>, Vec<(PlayerKind, PathBuf)>) {
+    let root = if cfg!(windows) {
+        std::env::var_os("SystemDrive").map_or_else(|| PathBuf::from("C:\\"), PathBuf::from)
+    } else {
+        PathBuf::from("/")
+    };
+
+    let mut roots = Vec::new();
+    let mut bundles = Vec::new();
+    match platform {
+        Platform::Macos => {
+            for bin in ["opt/homebrew/bin", "usr/local/bin", "opt/local/bin"] {
+                roots.push(root.join(bin));
+            }
+            if let Some(home) = home {
+                roots.push(home.join(".nix-profile/bin"));
+                bundles.push((
+                    PlayerKind::Iina,
+                    home.join("Applications/IINA.app/Contents/MacOS/iina-cli"),
+                ));
+                bundles.push((
+                    PlayerKind::Mpv,
+                    home.join("Applications/mpv.app/Contents/MacOS/mpv"),
+                ));
+                bundles.push((
+                    PlayerKind::Vlc,
+                    home.join("Applications/VLC.app/Contents/MacOS/VLC"),
+                ));
+            }
+            roots.push(root.join("run/current-system/sw/bin"));
+            roots.push(root.join("nix/var/nix/profiles/default/bin"));
+            for (kind, rel) in [
+                (
+                    PlayerKind::Iina,
+                    "Applications/IINA.app/Contents/MacOS/iina-cli",
+                ),
+                (PlayerKind::Mpv, "Applications/mpv.app/Contents/MacOS/mpv"),
+                (PlayerKind::Vlc, "Applications/VLC.app/Contents/MacOS/VLC"),
+            ] {
+                bundles.push((kind, root.join(rel)));
+            }
+        }
+        Platform::Linux => {
+            for bin in [
+                "usr/bin",
+                "usr/local/bin",
+                "bin",
+                "snap/bin",
+                "run/current-system/sw/bin",
+            ] {
+                roots.push(root.join(bin));
+            }
+            if let Some(home) = home {
+                roots.push(home.join(".nix-profile/bin"));
+                roots.push(home.join(".local/bin"));
+            }
+            roots.push(root.join("nix/var/nix/profiles/default/bin"));
+        }
+        Platform::Windows => {
+            let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
+            let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
+            let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+            for base in [program_files, program_files_x86].into_iter().flatten() {
+                roots.push(base.join("mpv"));
+                roots.push(base.join("VideoLAN\\VLC"));
+                roots.push(base.join("MPC-HC"));
+            }
+            if let Some(local) = local {
+                roots.push(local.join("Microsoft\\WinGet\\Links"));
+                roots.push(local.join("Programs\\mpv"));
+                roots.push(local.join("Programs\\VideoLAN\\VLC"));
+            }
+            if let Some(home) = home {
+                roots.push(home.join("scoop\\shims"));
+                roots.push(home.join("scoop\\apps\\mpv\\current"));
+                roots.push(home.join("scoop\\apps\\vlc\\current"));
+            }
+            let chocolatey = std::env::var_os("ProgramData")
+                .map_or_else(|| root.join("ProgramData"), PathBuf::from);
+            roots.push(chocolatey.join("chocolatey\\bin"));
+        }
+    }
+    (roots, bundles)
+}
+
 impl SearchEnv {
     /// Reads the real machine: `PATH`, home and each platform's install roots.
     #[must_use]
@@ -172,81 +261,7 @@ impl SearchEnv {
         let home = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
             .map(PathBuf::from);
-        let root = PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" });
-
-        let mut roots = Vec::new();
-        let mut bundles = Vec::new();
-        match platform {
-            Platform::Macos => {
-                for bin in ["opt/homebrew/bin", "usr/local/bin", "opt/local/bin"] {
-                    roots.push(root.join(bin));
-                }
-                if let Some(home) = &home {
-                    roots.push(home.join(".nix-profile/bin"));
-                    bundles.push((
-                        PlayerKind::Iina,
-                        home.join("Applications/IINA.app/Contents/MacOS/iina-cli"),
-                    ));
-                    bundles.push((
-                        PlayerKind::Mpv,
-                        home.join("Applications/mpv.app/Contents/MacOS/mpv"),
-                    ));
-                    bundles.push((
-                        PlayerKind::Vlc,
-                        home.join("Applications/VLC.app/Contents/MacOS/VLC"),
-                    ));
-                }
-                roots.push(root.join("run/current-system/sw/bin"));
-                roots.push(root.join("nix/var/nix/profiles/default/bin"));
-                for (kind, rel) in [
-                    (
-                        PlayerKind::Iina,
-                        "Applications/IINA.app/Contents/MacOS/iina-cli",
-                    ),
-                    (PlayerKind::Mpv, "Applications/mpv.app/Contents/MacOS/mpv"),
-                    (PlayerKind::Vlc, "Applications/VLC.app/Contents/MacOS/VLC"),
-                ] {
-                    bundles.push((kind, root.join(rel)));
-                }
-            }
-            Platform::Linux => {
-                for bin in [
-                    "usr/bin",
-                    "usr/local/bin",
-                    "bin",
-                    "snap/bin",
-                    "run/current-system/sw/bin",
-                ] {
-                    roots.push(root.join(bin));
-                }
-                if let Some(home) = &home {
-                    roots.push(home.join(".nix-profile/bin"));
-                    roots.push(home.join(".local/bin"));
-                }
-                roots.push(root.join("nix/var/nix/profiles/default/bin"));
-            }
-            Platform::Windows => {
-                let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
-                let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
-                let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-                for base in [program_files, program_files_x86].into_iter().flatten() {
-                    roots.push(base.join("mpv"));
-                    roots.push(base.join("VideoLAN\\VLC"));
-                    roots.push(base.join("MPC-HC"));
-                }
-                if let Some(local) = local {
-                    roots.push(local.join("Microsoft\\WinGet\\Links"));
-                    roots.push(local.join("Programs\\mpv"));
-                    roots.push(local.join("Programs\\VideoLAN\\VLC"));
-                }
-                if let Some(home) = &home {
-                    roots.push(home.join("scoop\\shims"));
-                    roots.push(home.join("scoop\\apps\\mpv\\current"));
-                    roots.push(home.join("scoop\\apps\\vlc\\current"));
-                }
-                roots.push(root.join("ProgramData\\chocolatey\\bin"));
-            }
-        }
+        let (roots, bundles) = system_layout(platform, home.as_deref());
 
         let flatpak_apps = if platform == Platform::Linux {
             probe_flatpak().await
@@ -273,9 +288,14 @@ impl SearchEnv {
         let bundle = |kind: PlayerKind, name: &str| (kind, root.join(name));
         let mut roots = vec![
             bin("bin"),
-            bin("opt/homebrew/bin"),
             bin("usr/bin"),
+            bin("usr/local/bin"),
+            bin("opt/homebrew/bin"),
+            bin("opt/local/bin"),
             bin("snap/bin"),
+            bin(".nix-profile/bin"),
+            bin(".local/bin"),
+            bin("nix/var/nix/profiles/default/bin"),
         ];
         if platform == Platform::Windows {
             roots.push(bin("Program Files/mpv"));
@@ -283,6 +303,8 @@ impl SearchEnv {
             roots.push(bin("Program Files/MPC-HC"));
             roots.push(bin("WinGet/Links"));
             roots.push(bin("scoop/shims"));
+            roots.push(bin("scoop/apps/mpv/current"));
+            roots.push(bin("scoop/apps/vlc/current"));
             roots.push(bin("chocolatey/bin"));
         }
         Self {
@@ -346,6 +368,27 @@ async fn probe_flatpak() -> Vec<(String, Option<String>)> {
     found
 }
 
+/// Turns a registry install value into a directory to search.
+///
+/// MPC-HC's `ExePath` names the executable itself, while VLC's `InstallDir`
+/// and the uninstall key's `InstallLocation` are already directories.
+#[cfg(any(windows, test))]
+fn registry_root(value: &str) -> PathBuf {
+    let path = PathBuf::from(value);
+    let is_executable = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("exe") || ext.eq_ignore_ascii_case("com"));
+    if is_executable {
+        match path.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => path,
+        }
+    } else {
+        path
+    }
+}
+
 #[cfg(windows)]
 fn registry_install_dirs() -> Vec<PathBuf> {
     use winreg::{
@@ -358,13 +401,21 @@ fn registry_install_dirs() -> Vec<PathBuf> {
         for (key, value) in [
             (r"SOFTWARE\VideoLAN\VLC", "InstallDir"),
             (r"SOFTWARE\WOW6432Node\VideoLAN\VLC", "InstallDir"),
-            (r"SOFTWARE\MPC-HC\MPC-HC", "InstallPath"),
-            (r"SOFTWARE\WOW6432Node\MPC-HC\MPC-HC", "InstallPath"),
+            (r"SOFTWARE\MPC-HC\MPC-HC", "ExePath"),
+            (r"SOFTWARE\WOW6432Node\MPC-HC\MPC-HC", "ExePath"),
+            (
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MPC-HC",
+                "InstallLocation",
+            ),
+            (
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MPC-HC",
+                "InstallLocation",
+            ),
         ] {
             if let Ok(subkey) = RegKey::predef(hive).open_subkey(key)
-                && let Ok(path) = subkey.get_value::<String, _>(value)
+                && let Ok(value) = subkey.get_value::<String, _>(value)
             {
-                roots.push(PathBuf::from(path));
+                roots.push(registry_root(&value));
             }
         }
     }
@@ -477,14 +528,36 @@ fn is_executable(env: &SearchEnv, path: &Path) -> bool {
     if env.platform == Platform::Windows {
         #[cfg(windows)]
         {
-            return matches!(
-                path.extension().and_then(|ext| ext.to_str()),
-                Some("exe" | "com" | "bat" | "cmd")
-            );
+            use std::io::Read;
+
+            let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+                return false;
+            };
+            let batch = ext.eq_ignore_ascii_case("bat") || ext.eq_ignore_ascii_case("cmd");
+            if !(batch || ext.eq_ignore_ascii_case("exe") || ext.eq_ignore_ascii_case("com")) {
+                return false;
+            }
+            if batch {
+                return true;
+            }
+            // Windows paths ignore case and a file named `mpv.exe` may still
+            // be an arbitrary text file; require the PE signature.
+            let Ok(mut file) = std::fs::File::open(path) else {
+                return false;
+            };
+            let mut magic = [0_u8; 2];
+            return file.read_exact(&mut magic).is_ok() && &magic == b"MZ";
         }
         #[cfg(not(windows))]
         {
-            return true;
+            return path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| {
+                    ["exe", "com", "bat", "cmd"]
+                        .iter()
+                        .any(|kind| ext.eq_ignore_ascii_case(kind))
+                });
         }
     }
     #[cfg(unix)]

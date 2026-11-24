@@ -153,10 +153,23 @@ async fn a_non_executable_custom_path_is_a_typed_error() {
 
     let result = validate_custom_path(&env, &path).await;
 
-    #[cfg(unix)]
     assert!(matches!(result, Err(Error::NotExecutable { .. })));
-    #[cfg(not(unix))]
-    assert!(result.is_ok() || matches!(result, Err(Error::NotExecutable { .. })));
+}
+
+#[test]
+fn registry_values_point_at_player_directories() {
+    assert_eq!(
+        registry_root("C:/Program Files/VideoLAN/VLC"),
+        Path::new("C:/Program Files/VideoLAN/VLC")
+    );
+    assert_eq!(
+        registry_root("C:/Program Files/MPC-HC/mpc-hc64.exe"),
+        Path::new("C:/Program Files/MPC-HC")
+    );
+    assert_eq!(
+        registry_root("D:/Programs/MPC-HC/MPC-HC.EXE"),
+        Path::new("D:/Programs/MPC-HC")
+    );
 }
 
 #[tokio::test]
@@ -173,14 +186,42 @@ async fn a_valid_custom_path_is_accepted() {
 }
 
 #[tokio::test]
+async fn every_declared_search_root_finds_a_player() {
+    for (platform, root) in [
+        (Platform::Macos, "opt/homebrew/bin"),
+        (Platform::Macos, "usr/local/bin"),
+        (Platform::Macos, "opt/local/bin"),
+        (Platform::Macos, "nix/var/nix/profiles/default/bin"),
+        (Platform::Linux, "usr/local/bin"),
+        (Platform::Linux, "snap/bin"),
+        (Platform::Linux, "nix/var/nix/profiles/default/bin"),
+        (Platform::Windows, "scoop/shims"),
+        (Platform::Windows, "chocolatey/bin"),
+        (Platform::Windows, "WinGet/Links"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let env = SearchEnv::fake(platform, dir.path());
+        let binary = format!("{root}/{}", name("mpv", platform));
+        place(dir.path(), &binary);
+
+        let players = detect(&env).await;
+
+        assert_eq!(
+            players.first().map(|player| &player.command),
+            Some(&LaunchCommand::Executable(dir.path().join(&binary))),
+            "root {root} on {platform:?}"
+        );
+    }
+}
+
+#[tokio::test]
 #[ignore = "logs the real players installed on this machine"]
 async fn list_real_installed_players() {
-    let _subscriber = tracing::subscriber::set_default(
-        tracing_subscriber::fmt()
-            .with_ansi(false)
-            .without_time()
-            .finish(),
-    );
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .without_time()
+        .finish();
+    let _ = tracing::subscriber::set_global_default(subscriber);
     let env = SearchEnv::system().await;
     let players = detect(&env).await;
     for player in players {
