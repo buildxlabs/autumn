@@ -215,3 +215,80 @@ impl EngineServices for Engine {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use domain::{AdvancedScores, ExternalId, FuzzyDate, ListStatus, MediaKind, Score};
+    use settings::AppPaths;
+    use tempfile::TempDir;
+    use tokio::runtime::Builder;
+
+    use super::{Engine, EngineServices};
+
+    fn paths(dir: &TempDir) -> AppPaths {
+        let paths = AppPaths::new(
+            dir.path().join("config"),
+            dir.path().join("data"),
+            dir.path().join("cache"),
+        );
+        paths.create_dirs().expect("the test directories");
+        paths
+    }
+
+    fn entry(media: domain::MediaId) -> domain::ListEntry {
+        domain::ListEntry {
+            media,
+            status: ListStatus::Current,
+            score: Score::UNSCORED,
+            progress: 3,
+            progress_volumes: 0,
+            repeat: 0,
+            started_at: FuzzyDate::UNKNOWN,
+            completed_at: FuzzyDate::UNKNOWN,
+            notes: String::new(),
+            private: false,
+            priority: 0,
+            advanced_scores: AdvancedScores::default(),
+            custom_lists: Vec::new(),
+            hidden_from_status_lists: false,
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
+        }
+    }
+
+    #[test]
+    fn a_local_list_entry_survives_an_engine_restart() {
+        let dir = tempfile::tempdir().expect("a temp directory");
+        let paths = paths(&dir);
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let ids = [ExternalId::AniList(154_587)];
+
+        {
+            let engine = Engine::new(&runtime, &paths).expect("the first engine");
+            let media = runtime
+                .block_on(engine.mint(MediaKind::Anime, &ids))
+                .expect("the media identity");
+            runtime
+                .block_on(engine.save_entry(&entry(media)))
+                .expect("the Local list save");
+        } // Drop the engine: the next one opens the same database afresh.
+
+        let reopened = Engine::new(&runtime, &paths).expect("the restarted engine");
+        let media = runtime
+            .block_on(reopened.local_media(MediaKind::Anime, &ids))
+            .expect("the cross-reference lookup")
+            .expect("the media is still known");
+        let saved = runtime
+            .block_on(reopened.local_entry(media))
+            .expect("the Local entry lookup")
+            .expect("the list entry is still there");
+        assert_eq!(saved.status, ListStatus::Current, "Watching survived");
+        assert_eq!(saved.progress, 3, "progress survived");
+    }
+}
