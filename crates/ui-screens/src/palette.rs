@@ -29,9 +29,10 @@ use crate::{
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 5] = [
+const ROUTES: [Route; 6] = [
     Route::Home,
     Route::Discover,
+    Route::Search(ui_state::SearchFilters::EMPTY),
     Route::Lists {
         status: ListTab::Status(ListStatus::Current),
     },
@@ -108,10 +109,6 @@ impl Mode {
 
 /// One row of the palette.
 #[derive(Debug, Clone)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "search rows are copied into the command list; boxing them would not change the row count"
-)]
 enum Entry {
     /// Navigates to the route.
     Route(Route),

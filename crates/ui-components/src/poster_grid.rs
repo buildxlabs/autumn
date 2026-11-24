@@ -6,7 +6,7 @@ use std::{cell::Cell, ops::Range, rc::Rc};
 
 use gpui_kit::{
     App, AppContext, Context, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
-    Render, SharedString, Size, Styled, TestSupportExt, Window, canvas,
+    Pixels, Point, Render, SharedString, Size, Styled, TestSupportExt, Window, canvas,
     component::{VirtualListScrollHandle, v_virtual_list},
     div, image_cache, px,
 };
@@ -15,6 +15,9 @@ use crate::{LruImageCache, MEDIA_CARD_HEIGHT, MediaCard, MediaCardView, POSTER_I
 
 /// A card action, called with the index of the card that was clicked.
 type GridAction = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+
+/// A scroll action, called when the grid nears its end.
+type GridScrollAction = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// A card's width at the widest common container; [`poster_columns`] targets
 /// it, so cards grow with the window until another column fits.
@@ -53,6 +56,8 @@ pub struct PosterGrid {
     scroll_handle: VirtualListScrollHandle,
     on_open: Option<GridAction>,
     on_add_to_list: Option<GridAction>,
+    /// Called when the user scrolls within one card height of the end.
+    on_near_end: Option<GridScrollAction>,
     add_label: Option<SharedString>,
 }
 
@@ -77,6 +82,7 @@ impl PosterGrid {
             scroll_handle: VirtualListScrollHandle::new(),
             on_open: None,
             on_add_to_list: None,
+            on_near_end: None,
             add_label: None,
         })
     }
@@ -92,6 +98,13 @@ impl PosterGrid {
     /// index in the grid. Notify the view after changing this.
     pub fn on_open(&mut self, on_open: impl Fn(usize, &mut Window, &mut App) + 'static) {
         self.on_open = Some(Rc::new(on_open));
+    }
+
+    /// Test-only: the Open callback a card's context menu invokes.
+    #[cfg(any(test, feature = "test-util"))]
+    #[doc(hidden)]
+    pub fn open_action(&self) -> Option<GridAction> {
+        self.on_open.clone()
     }
 
     /// Handles Add to list on a card's context menu. The callback gets the
@@ -141,6 +154,23 @@ impl PosterGrid {
     /// The grid's scroll handle.
     pub fn scroll_handle(&self) -> VirtualListScrollHandle {
         self.scroll_handle.clone()
+    }
+
+    /// The grid's own scroll offset, independent of the shell's route view.
+    #[must_use]
+    pub fn scroll_offset(&self) -> Point<Pixels> {
+        self.scroll_handle.offset()
+    }
+
+    /// Scrolls the grid to `offset`, for restoring a route's saved position.
+    pub fn set_scroll_offset(&self, offset: Point<Pixels>) {
+        self.scroll_handle.set_offset(offset);
+    }
+
+    /// Called when the user scrolls within two card heights of the end, so a
+    /// caller can page without a Load more button.
+    pub fn on_near_end(&mut self, on_near_end: impl Fn(&mut Window, &mut App) + 'static) {
+        self.on_near_end = Some(Rc::new(on_near_end));
     }
 }
 
@@ -206,12 +236,24 @@ impl Render for PosterGrid {
         .left_0()
         .size_full();
 
+        let near_end = self.on_near_end.clone();
+        let handle = self.scroll_handle.clone();
         div()
             .id("poster-grid")
             .test_support()
             .relative()
             .size_full()
             .px_8()
+            .on_scroll(move |event, window, cx| {
+                if let Some(near_end) = &near_end {
+                    // The listener runs before the scroll is applied, so use
+                    // the event's delta to predict the resulting offset.
+                    let projected = handle.offset().y + event.delta.pixel_delta(px(20.)).y;
+                    if handle.max_offset().y + projected <= px(MEDIA_CARD_HEIGHT * 2.) {
+                        near_end(window, cx);
+                    }
+                }
+            })
             .child(image_cache(self.cache.clone()).child(grid))
             .child(measure)
     }
