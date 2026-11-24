@@ -109,6 +109,29 @@ async fn a_rescan_adds_and_removes_files_without_changing_media_ids() {
     );
 }
 
+#[tokio::test]
+async fn a_file_with_no_title_anywhere_stays_unmatched() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("Season 01");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("- 01.mkv"), b"").unwrap();
+
+    let summary = Library::new(db.clone())
+        .scan(slice::from_ref(&folder), &candidates(), |_| {})
+        .await
+        .unwrap();
+    assert_eq!(summary.files_walked, 1);
+    assert_eq!(
+        summary.files_matched, 0,
+        "no title cannot match a candidate"
+    );
+
+    let rows = db.local_file().all().await.unwrap();
+    let row = rows.first().unwrap();
+    assert_eq!(row.media_id, None);
+    assert_eq!(row.confidence, None);
+}
+
 /// Test helpers, in `cfg(test)` so the workspace's test-only lint
 /// allowances apply.
 #[cfg(test)]

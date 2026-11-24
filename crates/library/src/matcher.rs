@@ -158,6 +158,8 @@ mod tests {
         assert!(below.is_some(), "just below the score still matches");
         let at = Matcher::new(score).best(&title, &candidates);
         assert_eq!(at, None, "a score equal to the threshold does not match");
+        let above = Matcher::new(score + f64::EPSILON).best(&title, &candidates);
+        assert_eq!(above, None, "a threshold just above the score rejects");
     }
 
     #[test]

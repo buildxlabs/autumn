@@ -3,8 +3,11 @@
 //! A normalized title keeps the words a release name actually says, with
 //! season and year markers extracted and romanization and punctuation folded
 //! away. `base` drops format words and roman numerals so sequels still share
-//! a root title. This is behavior ported from seanime's title normalizer
-//! (GPL-3.0); see the notice at the crate root.
+//! a root title.
+//!
+//! Ported from seanime's `internal/library/scanner/title_normalization.go`,
+//! GPL-3.0. Original copyright stays with the seanime authors; the license is
+//! in `reference/seanime/LICENSE`.
 
 const NOISE: &[&str] = &[
     "the",

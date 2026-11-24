@@ -5,9 +5,9 @@
 //! fetches them. See ARCHITECTURE §6 for the scan pipeline.
 //!
 //! The title normalizer follows behavior from seanime's
-//! `internal/library/scanner/title_normalization.go`, licensed GPL-3.0:
-//! Copyright (c) 2024 seanime contributors. That notice stays with the ported
-//! behavior in [`normalize`].
+//! `internal/library/scanner/title_normalization.go` (GPL-3.0). Original
+//! copyright stays with the seanime authors; see `reference/seanime/LICENSE`.
+//! The notice is kept with the ported behavior in [`normalize`].
 
 mod error;
 mod matcher;
@@ -114,6 +114,11 @@ impl Library {
             let Some(file) = scanned.get(first) else {
                 continue;
             };
+            // A file with no title in its name or any parent folder must stay
+            // unmatched, not bind to the first candidate by coincidence.
+            if file.group_key.is_empty() {
+                continue;
+            }
             let title = normalize(file.release.title.as_deref().unwrap_or(&file.group_key));
             let Some(found) = self.matcher.best(&title, candidates) else {
                 continue;
