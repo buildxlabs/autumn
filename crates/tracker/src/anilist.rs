@@ -128,6 +128,24 @@ impl AniListPlatform {
         Ok(self.client.custom_list_names(&self.token).await?)
     }
 
+    /// Replaces the custom-list names for `kind` with `names`. The transfer
+    /// engine passes the full desired set, read from this account first, so
+    /// names already on AniList survive (#67).
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when AniList cannot be updated.
+    pub(crate) async fn add_custom_lists(
+        &self,
+        kind: MediaKind,
+        names: &[String],
+    ) -> Result<(), PlatformError> {
+        self.client
+            .update_custom_lists(&self.token, kind, names)
+            .await?;
+        Ok(())
+    }
+
     async fn anilist_id(&self, media: MediaId) -> Result<u32, PlatformError> {
         let ids = self.db.media().external_ids(media).await?;
         ids.iter()

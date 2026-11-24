@@ -8,6 +8,7 @@ mod local_list;
 mod media;
 mod scan_summary;
 mod settings;
+mod transfer;
 
 use std::{path::Path, time::Duration};
 
@@ -24,6 +25,7 @@ pub use scan_summary::{
     MediaMatchSummary, ScanSummary, ScanSummaryRepo, UnmatchedFile, UnmatchedReason,
 };
 pub use settings::SettingsRepo;
+pub use transfer::TransferRepo;
 
 /// How long a write waits for another connection's lock before failing.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -80,6 +82,11 @@ impl Db {
     /// Settings rows, one per settings tab.
     pub fn settings(&self) -> SettingsRepo<'_> {
         SettingsRepo::new(&self.pool)
+    }
+
+    /// Resume points for one-shot list transfers.
+    pub fn transfer(&self) -> TransferRepo<'_> {
+        TransferRepo::new(&self.pool)
     }
 
     /// SQLite's journal mode for this database, such as `"wal"`.

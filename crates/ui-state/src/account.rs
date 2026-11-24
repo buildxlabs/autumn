@@ -2,7 +2,10 @@
 
 use std::time::SystemTime;
 
-use domain::{ANILIST_RELOGIN_WINDOW, AniListAccountState, AppEvent};
+use domain::{
+    ANILIST_RELOGIN_WINDOW, AniListAccountState, AppEvent, MediaId, TransferChoice,
+    TransferDirection, TransferPreview, TransferProgress, TransferState,
+};
 use gpui_kit::{Context, EventEmitter, Task};
 
 /// A command from the Account settings tab to the owner of the token.
@@ -13,6 +16,23 @@ pub enum AccountCommand {
     Login(String),
     /// Delete the token and return to the account-free platform.
     SignOut,
+    /// Show the reviewed preview for this transfer direction.
+    TransferPreview {
+        /// Where the entries will be copied.
+        direction: TransferDirection,
+    },
+    /// Run the reviewed transfer with the user's per-entry overrides.
+    TransferConfirm {
+        /// Where the entries will be copied.
+        direction: TransferDirection,
+        /// One choice per reviewed entry, keyed by media.
+        choices: Vec<(MediaId, TransferChoice)>,
+    },
+    /// Dismiss the preview. On sign-out this still completes the sign-out.
+    TransferCancel {
+        /// The dismissed transfer.
+        direction: TransferDirection,
+    },
 }
 
 /// What the shell knows about the AniList account. It never holds a token.
@@ -22,6 +42,10 @@ pub struct AccountStore {
     error: Option<String>,
     /// Moves an active account into the prompt and read-only states on time.
     expiry_task: Option<Task<()>>,
+    /// The reviewed plan awaiting confirmation, if any.
+    transfer: Option<TransferPreview>,
+    /// The latest progress from a background transfer.
+    transfer_progress: Option<TransferProgress>,
 }
 
 impl AccountStore {
@@ -32,6 +56,8 @@ impl AccountStore {
             state,
             error: None,
             expiry_task: None,
+            transfer: None,
+            transfer_progress: None,
         }
     }
 }
@@ -42,6 +68,8 @@ impl Default for AccountStore {
             state: AniListAccountState::LoggedOut,
             error: None,
             expiry_task: None,
+            transfer: None,
+            transfer_progress: None,
         }
     }
 }
@@ -110,6 +138,30 @@ impl AccountStore {
         cx.emit(command);
     }
 
+    /// The plan awaiting review and confirmation.
+    #[must_use]
+    pub fn transfer_preview(&self) -> Option<&TransferPreview> {
+        self.transfer.as_ref()
+    }
+
+    /// Progress from the latest background transfer.
+    #[must_use]
+    pub fn transfer_progress(&self) -> Option<&TransferProgress> {
+        self.transfer_progress.as_ref()
+    }
+
+    /// Overrides one entry's decision in the open preview.
+    pub fn choose(&mut self, media: MediaId, choice: TransferChoice, cx: &mut Context<'_, Self>) {
+        if let Some(item) = self
+            .transfer
+            .as_mut()
+            .and_then(|preview| preview.items.iter_mut().find(|item| item.media == media))
+        {
+            item.choice = choice;
+            cx.notify();
+        }
+    }
+
     /// Apply an event from the foreground pump and notify observing views.
     pub fn apply(&mut self, event: AppEvent, cx: &mut Context<'_, Self>) {
         match event {
@@ -125,6 +177,18 @@ impl AccountStore {
             }
             AppEvent::AccountError(message) => {
                 self.error = Some(message);
+                cx.notify();
+            }
+            AppEvent::TransferPreview(preview) => {
+                self.transfer = preview;
+                self.transfer_progress = None;
+                cx.notify();
+            }
+            AppEvent::TransferProgress(progress) => {
+                if progress.state == TransferState::Done {
+                    self.transfer = None;
+                }
+                self.transfer_progress = Some(progress);
                 cx.notify();
             }
             _ => {}
@@ -207,5 +271,83 @@ mod tests {
             None
         );
         assert_eq!(notified.get(), 2);
+    }
+
+    #[gpui_kit::test]
+    fn a_transfer_preview_can_be_overridden_and_cleared_by_progress(cx: &mut TestAppContext) {
+        use domain::{
+            AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, Score, TransferChoice,
+            TransferDirection, TransferItem, TransferPreview, TransferProgress, TransferState,
+        };
+        use std::time::SystemTime;
+
+        let store = cx.new(|_| AccountStore::default());
+        let entry = |media, progress| ListEntry {
+            media,
+            status: ListStatus::Current,
+            score: Score::UNSCORED,
+            progress,
+            progress_volumes: 0,
+            repeat: 0,
+            started_at: FuzzyDate::UNKNOWN,
+            completed_at: FuzzyDate::UNKNOWN,
+            notes: String::new(),
+            private: false,
+            priority: 0,
+            advanced_scores: AdvancedScores::default(),
+            custom_lists: Vec::new(),
+            hidden_from_status_lists: false,
+            created_at: SystemTime::UNIX_EPOCH,
+            updated_at: SystemTime::UNIX_EPOCH,
+        };
+        let media = MediaId::new(7);
+        let preview = TransferPreview {
+            direction: TransferDirection::ToAniList,
+            items: vec![TransferItem::new(
+                domain::MediaKind::Anime,
+                entry(media, 12),
+                Some(entry(media, 6)),
+            )],
+            custom_lists: Vec::new(),
+        };
+
+        store.update(cx, |store, cx| {
+            store.apply(AppEvent::TransferPreview(Some(preview)), cx);
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store
+                .transfer_preview()
+                .and_then(|preview| preview.items.first())
+                .map(|item| item.choice)),
+            Some(TransferChoice::Keep),
+            "the destination wins by default"
+        );
+
+        store.update(cx, |store, cx| {
+            store.choose(media, TransferChoice::Copy, cx);
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store
+                .transfer_preview()
+                .and_then(|preview| preview.items.first())
+                .map(|item| item.choice)),
+            Some(TransferChoice::Copy)
+        );
+
+        store.update(cx, |store, cx| {
+            store.apply(
+                AppEvent::TransferProgress(TransferProgress {
+                    direction: TransferDirection::ToAniList,
+                    done: 1,
+                    total: 1,
+                    state: TransferState::Done,
+                }),
+                cx,
+            );
+        });
+        assert!(
+            store.read_with(cx, |store, _| store.transfer_preview().is_none()),
+            "a finished transfer closes the review"
+        );
     }
 }

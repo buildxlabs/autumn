@@ -11,11 +11,17 @@ use std::{
 };
 
 use db::Db;
-use domain::{AniListAccountState, AppEvent, ListEntry, MediaId, MediaKind};
+use domain::{
+    AniListAccountState, AppEvent, ListEntry, MediaId, MediaKind, TransferDirection,
+    TransferPreview, TransferProgress,
+};
 use metadata::AniList;
 
 use crate::events::Sender;
-use tracker::{ActivePlatform, AniListPlatform, Local, Platform, PlatformError};
+use tracker::{
+    ActivePlatform, AniListPlatform, DbCheckpoints, ListTransfer, Local, Platform, PlatformError,
+    TransferError, TransferOutcome,
+};
 
 /// Which platform reads and writes list entries right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +54,8 @@ pub enum GatewayErrorKind {
     Unauthorized,
     /// A write was attempted while AniList is read-only.
     ReadOnly,
+    /// A list transfer needs a connected account.
+    NotConnected,
     /// Any other platform failure.
     Other,
 }
@@ -85,7 +93,9 @@ impl GatewayError {
     pub fn is_retryable(&self) -> bool {
         !matches!(
             self.kind,
-            GatewayErrorKind::Unauthorized | GatewayErrorKind::ReadOnly
+            GatewayErrorKind::Unauthorized
+                | GatewayErrorKind::ReadOnly
+                | GatewayErrorKind::NotConnected
         )
     }
 }
@@ -123,27 +133,56 @@ pub struct PlatformGateway {
     generation: Arc<AtomicU64>,
     read_only: Arc<AtomicBool>,
     events: Option<Sender>,
+    db: Db,
+}
+
+/// The two platform orders a transfer can take. `Platform` is not object
+/// safe, so both concrete engines live here rather than behind a trait object.
+enum GatewayTransfer {
+    ToAniList(ListTransfer<Local, AniListPlatform, DbCheckpoints>),
+    ToLocal(ListTransfer<AniListPlatform, Local, DbCheckpoints>),
+}
+
+impl GatewayTransfer {
+    async fn preview(&self) -> Result<TransferPreview, TransferError> {
+        match self {
+            Self::ToAniList(transfer) => transfer.preview().await,
+            Self::ToLocal(transfer) => transfer.preview().await,
+        }
+    }
+
+    async fn apply(
+        &self,
+        preview: &TransferPreview,
+        progress: impl FnMut(TransferProgress),
+    ) -> Result<TransferOutcome, TransferError> {
+        match self {
+            Self::ToAniList(transfer) => transfer.apply(preview, progress).await,
+            Self::ToLocal(transfer) => transfer.apply(preview, progress).await,
+        }
+    }
 }
 
 impl PlatformGateway {
     /// Starts with the account-free Local platform over `db` active.
     #[must_use]
     pub fn new(db: Db) -> Self {
-        Self::from_local(Local::new(db), None)
+        Self::from_local(db.clone(), Local::new(db), None)
     }
 
     /// A gateway that publishes a rejected token as an expired account.
     #[must_use]
     pub fn with_events(db: Db, events: Sender) -> Self {
-        Self::from_local(Local::new(db), Some(events))
+        Self::from_local(db.clone(), Local::new(db), Some(events))
     }
 
-    fn from_local(local: Local, events: Option<Sender>) -> Self {
+    fn from_local(db: Db, local: Local, events: Option<Sender>) -> Self {
         Self {
             active: Arc::new(Mutex::new(ActivePlatform::new(local))),
             generation: Arc::new(AtomicU64::new(0)),
             read_only: Arc::new(AtomicBool::new(false)),
             events,
+            db,
         }
     }
 
@@ -305,6 +344,77 @@ impl PlatformGateway {
     pub async fn delete_entry(&self, media: MediaId) -> Result<(), GatewayError> {
         let platform = self.writable_platform()?;
         self.classify(platform.delete_entry(media).await)
+    }
+
+    /// Whether a list transfer can be previewed: AniList must still be
+    /// connected so both sides of the transfer can be read.
+    #[must_use]
+    pub fn can_transfer(&self) -> bool {
+        self.platform()
+            .is_ok_and(|active| active.anilist().is_some())
+    }
+
+    fn transfer(&self, direction: TransferDirection) -> Result<GatewayTransfer, GatewayError> {
+        let active = self.platform()?;
+        let Some(anilist) = active.anilist() else {
+            return Err(GatewayError::new(
+                GatewayErrorKind::NotConnected,
+                "connect AniList before transferring lists",
+            ));
+        };
+        let local = active.local();
+        let checkpoints = DbCheckpoints::new(self.db.clone());
+        Ok(match direction {
+            TransferDirection::ToAniList => GatewayTransfer::ToAniList(ListTransfer::new(
+                direction,
+                local,
+                anilist,
+                checkpoints,
+            )),
+            TransferDirection::ToLocal => {
+                GatewayTransfer::ToLocal(ListTransfer::new(direction, anilist, local, checkpoints))
+            }
+        })
+    }
+
+    fn classify_transfer<T>(&self, result: Result<T, TransferError>) -> Result<T, GatewayError> {
+        match result {
+            Ok(value) => Ok(value),
+            Err(TransferError::Platform(error)) => self.classify(Err(error)),
+            _ => Err(GatewayError::new(
+                GatewayErrorKind::Other,
+                "the list transfer failed",
+            )),
+        }
+    }
+
+    /// Builds the preview for `direction` from both platforms. Identical
+    /// entries and entries confirmed by an unfinished run are left out.
+    ///
+    /// # Errors
+    ///
+    /// Returns a gateway error when either platform cannot be read.
+    pub async fn transfer_preview(
+        &self,
+        direction: TransferDirection,
+    ) -> Result<TransferPreview, GatewayError> {
+        self.classify_transfer(self.transfer(direction)?.preview().await)
+    }
+
+    /// Applies the reviewed transfer in the background, reporting one progress
+    /// snapshot per entry. A rejected token makes the gateway read-only.
+    ///
+    /// # Errors
+    ///
+    /// Returns a gateway error when a write or checkpoint fails; the saved
+    /// checkpoint lets the next run resume.
+    pub async fn transfer_apply(
+        &self,
+        direction: TransferDirection,
+        preview: &TransferPreview,
+        progress: impl FnMut(TransferProgress),
+    ) -> Result<TransferOutcome, GatewayError> {
+        self.classify_transfer(self.transfer(direction)?.apply(preview, progress).await)
     }
 }
 

@@ -2,10 +2,13 @@
 
 use std::{path::PathBuf, rc::Rc};
 
+use domain::{
+    ListStatus, TransferChoice, TransferDirection, TransferPreview, TransferProgress, TransferState,
+};
 use gpui_kit::{
-    App, ClickEvent, Context, Display, InteractiveElement, IntoElement, ObjectFit, ParentElement,
-    PathPromptOptions, SharedString, StyleRefinement, Styled, StyledImage, Task, TestSupportExt,
-    Window,
+    App, ClickEvent, Context, Display, Entity, InteractiveElement, IntoElement, ObjectFit,
+    ParentElement, PathPromptOptions, SharedString, StyleRefinement, Styled, StyledImage, Task,
+    TestSupportExt, Window,
     component::{
         ActiveTheme, Disableable,
         button::Button,
@@ -407,6 +410,8 @@ impl AppShell {
                     .to_owned();
                 let error = self.account.read(cx).error().map(str::to_owned);
                 let expiring = self.account.read(cx).expiring();
+                let review = self.account.read(cx).transfer_preview().cloned();
+                let progress = self.account.read(cx).transfer_progress().cloned();
                 let avatar_bg = cx.theme().colors.accent;
                 (
                     "Account",
@@ -459,6 +464,53 @@ impl AppShell {
                             .when_some(error.clone(), |column, message| {
                                 column.child(Label::new(message).text_sm())
                             })
+                            .when(review.is_some() || progress.is_some(), |column| {
+                                column.child(transfer_review(
+                                    account.clone(),
+                                    review.as_ref(),
+                                    progress.as_ref(),
+                                ))
+                            })
+                            .when(
+                                review.is_none() && logged_in && !expired,
+                                |column| {
+                                    let both = account.clone();
+                                    let to_local = account.clone();
+                                    column.child(
+                                        div()
+                                            .flex()
+                                            .gap_3()
+                                            .child(
+                                                Button::new("transfer-to-anilist")
+                                                    .label("Copy Local lists to AniList")
+                                                    .on_click(move |_, _, cx| {
+                                                        both.update(cx, |_, cx| {
+                                                            AccountStore::request(
+                                                                AccountCommand::TransferPreview {
+                                                                    direction: domain::TransferDirection::ToAniList,
+                                                                },
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }),
+                                            )
+                                            .child(
+                                                Button::new("transfer-to-local")
+                                                    .label("Copy AniList lists to Local")
+                                                    .on_click(move |_, _, cx| {
+                                                        to_local.update(cx, |_, cx| {
+                                                            AccountStore::request(
+                                                                AccountCommand::TransferPreview {
+                                                                    direction: domain::TransferDirection::ToLocal,
+                                                                },
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }),
+                                            ),
+                                    )
+                                },
+                            )
                             .child(
                                 Input::new(&token).aria_label("AniList token"),
                             )
@@ -937,6 +989,172 @@ impl AppShell {
                         ),
                 ),
             )
+    }
+}
+
+/// The reviewed preview and progress of a list transfer in Settings → Account.
+fn transfer_review(
+    account: Entity<AccountStore>,
+    preview: Option<&TransferPreview>,
+    progress: Option<&TransferProgress>,
+) -> impl IntoElement {
+    let mut column = div()
+        .id("list-transfer-review")
+        .test_support()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(Label::new("List transfer"));
+    if let Some(preview) = preview {
+        column = column
+            .child(
+                Label::new(format!(
+                    "Copy {} lists to {}",
+                    preview.direction.source_label(),
+                    preview.direction.destination_label()
+                ))
+                .text_sm(),
+            )
+            .child(transfer_items(&account, preview));
+        if !preview.custom_lists.is_empty() {
+            let names: Vec<_> = preview
+                .custom_lists
+                .iter()
+                .map(|(_, name)| name.as_str())
+                .collect();
+            column = column
+                .child(Label::new(format!("Create custom lists: {}", names.join(", "))).text_sm());
+        }
+        column = column.child(transfer_actions(account, preview));
+    }
+    if let Some(progress) = progress {
+        column = column.child(transfer_progress(progress));
+    }
+    column
+}
+
+/// One row per list entry, with a button that overrides that entry's choice.
+fn transfer_items(account: &Entity<AccountStore>, preview: &TransferPreview) -> impl IntoElement {
+    let rows = preview.items.iter().map(|item| {
+        let media = item.media;
+        let decision = choice_label(item.destination.as_ref(), item.choice, preview.direction);
+        let next = next_choice(item.destination.as_ref(), item.choice);
+        let destination = item
+            .destination
+            .as_ref()
+            .map_or_else(|| "new".to_owned(), |entry| entry.progress.to_string());
+        let row = account.clone();
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .child(Label::new(format!(
+                "Media {} · {} · {} → {}",
+                item.media.get(),
+                status_label(item.source.status),
+                item.source.progress,
+                destination
+            )))
+            .child(
+                Button::new(format!("transfer-choice-{}", media.get()))
+                    .label(decision)
+                    .on_click(move |_, _, cx| {
+                        row.update(cx, |store, cx| store.choose(media, next, cx));
+                    }),
+            )
+    });
+    div().flex().flex_col().gap_2().children(rows)
+}
+
+fn choice_label(
+    destination: Option<&domain::ListEntry>,
+    choice: TransferChoice,
+    direction: TransferDirection,
+) -> String {
+    match (destination.is_some(), choice) {
+        (true, TransferChoice::Keep) => format!("Keep {}", direction.destination_label()),
+        (true, TransferChoice::Copy) => format!("Use {}", direction.source_label()),
+        (true, TransferChoice::Skip) => "Skip".to_owned(),
+        (false, TransferChoice::Skip) => "Skipped".to_owned(),
+        (false, _) => "Add".to_owned(),
+        _ => "Keep".to_owned(),
+    }
+}
+
+fn next_choice(destination: Option<&domain::ListEntry>, choice: TransferChoice) -> TransferChoice {
+    if destination.is_none() {
+        return TransferChoice::Copy;
+    }
+    match choice {
+        TransferChoice::Copy => TransferChoice::Skip,
+        TransferChoice::Skip => TransferChoice::Keep,
+        _ => TransferChoice::Copy,
+    }
+}
+
+/// Confirm or dismiss the preview. Both finish a sign-out that was waiting on it.
+fn transfer_actions(account: Entity<AccountStore>, preview: &TransferPreview) -> impl IntoElement {
+    let confirm = account.clone();
+    let choices: Vec<_> = preview
+        .items
+        .iter()
+        .map(|item| (item.media, item.choice))
+        .collect();
+    let direction = preview.direction;
+    div()
+        .flex()
+        .gap_3()
+        .child(
+            Button::new("transfer-confirm")
+                .label("Transfer entries")
+                .on_click(move |_, _, cx| {
+                    confirm.update(cx, |_, cx| {
+                        AccountStore::request(
+                            AccountCommand::TransferConfirm {
+                                direction,
+                                choices: choices.clone(),
+                            },
+                            cx,
+                        );
+                    });
+                }),
+        )
+        .child(
+            Button::new("transfer-cancel")
+                .label("Cancel")
+                .on_click(move |_, _, cx| {
+                    account.update(cx, |_, cx| {
+                        AccountStore::request(AccountCommand::TransferCancel { direction }, cx);
+                    });
+                }),
+        )
+}
+
+fn transfer_progress(progress: &TransferProgress) -> impl IntoElement {
+    let message = match &progress.state {
+        TransferState::Running => format!(
+            "Transferring {} of {} entries…",
+            progress.done, progress.total
+        ),
+        TransferState::Done => format!("Transferred {} entries", progress.done),
+        TransferState::Failed(message) => {
+            format!("Transfer stopped after {}: {message}", progress.done)
+        }
+        _ => "Transfer finished".to_owned(),
+    };
+    Label::new(message).text_sm()
+}
+
+fn status_label(status: ListStatus) -> &'static str {
+    match status {
+        ListStatus::Current => "Watching",
+        ListStatus::Repeating => "Repeating",
+        ListStatus::Planning => "Planned",
+        ListStatus::Completed => "Completed",
+        ListStatus::Paused => "Paused",
+        ListStatus::Dropped => "Dropped",
+        _ => "Listed",
     }
 }
 

@@ -26,6 +26,9 @@ pub enum PlatformError {
     /// and the UI offers no retry until the user logs in again.
     #[error("AniList rejected the token")]
     Unauthorized,
+    /// A saved list-transfer resume point cannot be decoded.
+    #[error("the list transfer resume point is corrupt")]
+    CorruptCheckpoint(#[source] serde_json::Error),
 }
 
 impl From<metadata::Error> for PlatformError {
@@ -35,6 +38,12 @@ impl From<metadata::Error> for PlatformError {
         } else {
             Self::Remote(error)
         }
+    }
+}
+
+impl From<serde_json::Error> for PlatformError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::CorruptCheckpoint(error)
     }
 }
 

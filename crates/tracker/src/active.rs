@@ -60,6 +60,20 @@ impl ActivePlatform {
     pub fn active(&self) -> ActiveKind {
         self.active
     }
+
+    /// The Local platform, active or dormant. A transfer reads it on both
+    /// connect and sign-out; nothing writes to it while AniList is active.
+    #[must_use]
+    pub fn local(&self) -> Local {
+        self.local.clone()
+    }
+
+    /// The connected AniList platform, if there is one. Available during the
+    /// sign-out preview, before the account is dropped.
+    #[must_use]
+    pub fn anilist(&self) -> Option<AniListPlatform> {
+        self.anilist.clone()
+    }
 }
 
 impl Platform for ActivePlatform {
