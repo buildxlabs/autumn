@@ -1,6 +1,6 @@
 //! External player launch and control over JSON IPC.
 //!
-//! Phase 2 plays video in mpv (and later IINA, VLC and MPC-HC) from a
+//! Phase 2 plays video in mpv, IINA, VLC and MPC-HC from a
 //! supervised, detached process. This crate owns the launch, the per-launch
 //! IPC endpoint and the typed event stream. Detection of installed players
 //! and continuity are separate concerns.
@@ -10,6 +10,7 @@
 
 mod endpoint;
 mod event;
+mod iina;
 mod ipc;
 mod mpv;
 #[cfg(test)]
@@ -17,6 +18,7 @@ mod testing;
 
 pub use endpoint::{Endpoint, Retry, fresh_endpoint, sweep_stale};
 pub use event::{Chapter, PlayerEvent};
+pub use iina::launch_iina;
 pub use ipc::Client;
 pub use mpv::{LaunchOptions, Session, launch_mpv};
 

@@ -5,7 +5,10 @@ use std::{path::PathBuf, process::Stdio, sync::OnceLock};
 use domain::MediaId;
 use futures::{SinkExt, StreamExt, channel::mpsc};
 use tempfile::NamedTempFile;
-use tokio::process::{Child, Command};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    process::{Child, Command},
+};
 use tracing::{debug, warn};
 
 use crate::{
@@ -40,6 +43,23 @@ impl LaunchOptions {
             media: None,
         }
     }
+
+    /// Options for IINA, whose embedded mpv takes longer to open IPC.
+    pub fn iina(cache_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            ipc_retry: Retry::iina(),
+            ..Self::new(cache_dir)
+        }
+    }
+}
+
+/// What the supervisor does with the child when IPC closes first.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ChildPolicy {
+    /// mpv: IPC closing means the session is over, so reap the child.
+    KillOnIpcClose,
+    /// IINA: closing the window leaves the app running; just end the session.
+    LeaveOnIpcClose,
 }
 
 /// A running, supervised player session.
@@ -194,10 +214,25 @@ impl Session {
 /// # Errors
 ///
 /// Returns an error if the endpoint, log or process cannot be created.
-pub async fn launch_mpv(
+pub fn launch_mpv(
     executable: impl AsRef<std::path::Path>,
     file: &str,
     options: &LaunchOptions,
+) -> Result<Session> {
+    launch(
+        executable,
+        |endpoint| mpv_args(endpoint, file),
+        options,
+        ChildPolicy::KillOnIpcClose,
+    )
+}
+
+/// Shared launch path for players that speak mpv's JSON IPC.
+pub(crate) fn launch(
+    executable: impl AsRef<std::path::Path>,
+    args: impl FnOnce(&Endpoint) -> Vec<String>,
+    options: &LaunchOptions,
+    policy: ChildPolicy,
 ) -> Result<Session> {
     SWEPT.get_or_init(|| {
         if let Err(error) = sweep_stale(&options.cache_dir) {
@@ -219,7 +254,7 @@ pub async fn launch_mpv(
 
     let mut command = Command::new(executable);
     command
-        .args(mpv_args(&endpoint, file))
+        .args(args(&endpoint))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(stderr));
@@ -238,6 +273,7 @@ pub async fn launch_mpv(
         endpoint.clone(),
         log,
         options.ipc_retry,
+        policy,
         event_tx,
         command_rx,
     ));
@@ -309,10 +345,11 @@ async fn connect_with_retry(
 
 /// Owns the child and the pump until the player or its IPC connection ends.
 async fn supervise(
-    mut child: Child,
+    child: Child,
     endpoint: Endpoint,
     _log: NamedTempFile,
     retry: Retry,
+    policy: ChildPolicy,
     mut events: mpsc::Sender<PlayerEvent>,
     commands: mpsc::UnboundedReceiver<Request>,
 ) {
@@ -320,6 +357,7 @@ async fn supervise(
         Ok(stream) => stream,
         Err(error) => {
             warn!("{error}");
+            let mut child = child;
             let _ = child.kill().await;
             let _ = endpoint.remove();
             let _ = events.send(PlayerEvent::Exited).await;
@@ -327,6 +365,21 @@ async fn supervise(
         }
     };
 
+    supervise_connected(stream, child, endpoint, policy, events, commands).await;
+}
+
+/// Drives an already-connected session; tests inject a fake transport here.
+pub(crate) async fn supervise_connected<S>(
+    stream: S,
+    mut child: Child,
+    endpoint: Endpoint,
+    policy: ChildPolicy,
+    mut events: mpsc::Sender<PlayerEvent>,
+    commands: mpsc::UnboundedReceiver<Request>,
+) -> Child
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let mut pump = tokio::spawn(run_ipc(stream, commands, events.clone()));
     let mut wait = Box::pin(child.wait());
 
@@ -348,12 +401,15 @@ async fn supervise(
 
     pump.abort();
     drop(wait);
-    if child.try_wait().ok().flatten().is_none() {
-        let _ = child.kill().await;
+    if matches!(policy, ChildPolicy::KillOnIpcClose) {
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = child.kill().await;
+        }
+        let _ = child.wait().await;
     }
-    let _ = child.wait().await;
     let _ = endpoint.remove();
     let _ = events.send(PlayerEvent::Exited).await;
+    child
 }
 
 #[cfg(test)]

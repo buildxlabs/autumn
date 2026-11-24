@@ -66,8 +66,7 @@ async fn a_real_mpv_session_reports_events_and_removes_its_socket() -> Result<()
     write_fixture(&media)?;
     let cache = dir.path().join("cache");
 
-    let mut session =
-        launch_mpv("mpv", &media.to_string_lossy(), &LaunchOptions::new(&cache)).await?;
+    let mut session = launch_mpv("mpv", &media.to_string_lossy(), &LaunchOptions::new(&cache))?;
     let socket = session.endpoint().as_str().to_owned();
     let socket_open = timeout(Duration::from_secs(5), async {
         loop {
