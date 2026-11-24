@@ -13,10 +13,12 @@ const STATUS_ORDER: [ListStatus; 6] = [
 /// A user's list for one media kind, as lists of entries.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Collection {
-    /// Non-empty status lists in a fixed order (Current, Repeating, Planning,
-    /// Completed, Paused, Dropped), then non-empty custom lists by name. An
-    /// entry in custom lists appears in each of them, and also in its status
-    /// list unless it is hidden from status lists.
+    /// Status lists in a fixed order (Current, Repeating, Planning,
+    /// Completed, Paused, Dropped), then custom lists by name. Empty status
+    /// lists are dropped; configured custom lists stay even when empty, so a
+    /// caller can see every name AniList knows about. An entry in custom lists
+    /// appears in each of them, and also in its status list unless it is
+    /// hidden from status lists.
     pub lists: Vec<List>,
 }
 
@@ -41,8 +43,9 @@ pub enum ListName {
 
 impl Collection {
     /// Groups `entries`, which are already ordered most recently updated
-    /// first.
-    pub(crate) fn group(entries: &[ListEntry]) -> Self {
+    /// first. `custom_names` are the account's configured custom lists, so
+    /// empty ones survive grouping.
+    pub(crate) fn group(entries: &[ListEntry], custom_names: &[String]) -> Self {
         let mut lists: Vec<List> = STATUS_ORDER
             .iter()
             .map(|&status| List {
@@ -54,10 +57,12 @@ impl Collection {
                     .collect(),
             })
             .collect();
-        let mut names: Vec<&String> = entries
-            .iter()
-            .flat_map(|entry| &entry.custom_lists)
-            .collect();
+        let mut names = custom_names.to_vec();
+        for name in entries.iter().flat_map(|entry| &entry.custom_lists) {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
         names.sort();
         names.dedup();
         lists.extend(names.into_iter().map(|name| {
@@ -65,12 +70,12 @@ impl Collection {
                 name: ListName::Custom(name.clone()),
                 entries: entries
                     .iter()
-                    .filter(|entry| entry.custom_lists.contains(name))
+                    .filter(|entry| entry.custom_lists.contains(&name))
                     .cloned()
                     .collect(),
             }
         }));
-        lists.retain(|list| !list.entries.is_empty());
+        lists.retain(|list| matches!(&list.name, ListName::Custom(_)) || !list.entries.is_empty());
         Self { lists }
     }
 }

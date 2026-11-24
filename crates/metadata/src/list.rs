@@ -55,6 +55,15 @@ pub struct ListGroup {
     pub entries: Vec<ListEntryData>,
 }
 
+/// All custom-list names on an account, including lists with no entries.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CustomListNames {
+    /// Names configured on the anime list.
+    pub anime: Vec<String>,
+    /// Names configured on the manga list.
+    pub manga: Vec<String>,
+}
+
 /// One list entry as AniList stores it, before `MediaId` minting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -100,6 +109,8 @@ pub struct ListCollection {
     pub score_format: ScoreFormat,
     /// Whether AniList stopped at its 11,000-entry cap.
     pub has_next_chunk: bool,
+    /// Every configured custom-list name, including empty lists.
+    pub custom_lists: CustomListNames,
 }
 
 /// The writable fields of a list entry. `None` leaves a field unchanged.
@@ -199,6 +210,14 @@ struct Viewer {
 #[cynic(graphql_type = "MediaListOptions")]
 struct ListOptions {
     score_format: Option<ScoreFormat>,
+    anime_list: Option<TypeOptions>,
+    manga_list: Option<TypeOptions>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "MediaListTypeOptions")]
+struct TypeOptions {
+    custom_lists: Option<Vec<Option<String>>>,
 }
 
 #[derive(cynic::Enum, Debug, Clone, PartialEq, Eq)]
@@ -420,11 +439,21 @@ impl AniList {
         let data = self
             .authenticated(CollectionQuery::build(variables), token)
             .await?;
-        let score_format = data
-            .viewer
-            .and_then(|viewer| viewer.media_list_options)
-            .and_then(|options| options.score_format)
+        let viewer = data.viewer;
+        let options = viewer
+            .as_ref()
+            .and_then(|viewer| viewer.media_list_options.as_ref());
+        let score_format = options
+            .and_then(|options| options.score_format.clone())
             .unwrap_or(ScoreFormat::Point100);
+        let names = |kind: Option<&TypeOptions>| -> Vec<String> {
+            kind.and_then(|kind| kind.custom_lists.as_ref())
+                .map_or_default(|names| names.iter().flatten().cloned().collect())
+        };
+        let custom_lists = CustomListNames {
+            anime: names(options.and_then(|options| options.anime_list.as_ref())),
+            manga: names(options.and_then(|options| options.manga_list.as_ref())),
+        };
         let collection = data.collection;
         let has_next_chunk = collection
             .as_ref()
@@ -479,6 +508,7 @@ impl AniList {
             lists,
             score_format,
             has_next_chunk,
+            custom_lists,
         })
     }
 
@@ -489,15 +519,23 @@ impl AniList {
     ///
     /// The request's [`Error`] on a network, API or decode failure.
     pub async fn save_list_entry(&self, token: &str, input: &ListEntryInput) -> Result<i32, Error> {
-        let status = input.status.map(|status| match status {
-            ListStatus::Current => MediaListStatus::Current,
-            ListStatus::Planning => MediaListStatus::Planning,
-            ListStatus::Completed => MediaListStatus::Completed,
-            ListStatus::Dropped => MediaListStatus::Dropped,
-            ListStatus::Paused => MediaListStatus::Paused,
-            ListStatus::Repeating => MediaListStatus::Repeating,
-            _ => MediaListStatus::Other(String::new()),
-        });
+        let status = match input.status {
+            Some(status) => Some(match status {
+                ListStatus::Current => MediaListStatus::Current,
+                ListStatus::Planning => MediaListStatus::Planning,
+                ListStatus::Completed => MediaListStatus::Completed,
+                ListStatus::Dropped => MediaListStatus::Dropped,
+                ListStatus::Paused => MediaListStatus::Paused,
+                ListStatus::Repeating => MediaListStatus::Repeating,
+                other => {
+                    return Err(Error::Api {
+                        status: None,
+                        message: format!("unsupported list status: {other:?}"),
+                    });
+                }
+            }),
+            None => None,
+        };
         let variables = SaveVariables {
             id: input.id,
             media_id: input.media_id.and_then(|id| i32::try_from(id).ok()),

@@ -9,8 +9,7 @@ use db::Db;
 use domain::{AniListAccountState, AppEvent};
 use gpui_kit::{App, Task};
 use metadata::AniList;
-use tracker::AniListPlatform;
-use ui_state::{PlatformGateway, account::AccountCommand, events::Sender};
+use ui_state::{AniListHandle, PlatformGateway, account::AccountCommand, events::Sender};
 
 /// The account name to show for a connected account.
 pub(crate) fn name(state: &AniListAccountState) -> String {
@@ -51,13 +50,18 @@ pub(crate) fn request(
                     let state = auth.login(&token, SystemTime::now()).await?;
                     if matches!(state, AniListAccountState::LoggedOut) {
                         gateway.sign_out();
-                    } else if let Ok(Some(connected_token)) = auth.token().await {
-                        gateway.connect_anilist(AniListPlatform::new(
-                            db.clone(),
-                            anilist.clone(),
-                            connected_token,
-                            name(&state),
-                        ));
+                    } else {
+                        // A keychain read failure must reach the UI, not leave
+                        // the app on Local with a supposedly connected account.
+                        match auth.token().await? {
+                            Some(connected_token) => gateway.connect_anilist(AniListHandle::new(
+                                db.clone(),
+                                anilist.clone(),
+                                connected_token,
+                                name(&state),
+                            )),
+                            None => gateway.sign_out(),
+                        }
                     }
                     Ok(Some(state))
                 }
