@@ -28,6 +28,7 @@ use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
+    entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
 };
 
@@ -44,6 +45,7 @@ mod settings;
 
 use crate::{
     discover::{DiscoverLoader, DiscoverView},
+    entry::{EntryEditor, observe as observe_entry, render as render_entry},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{mock_media_views, placeholder},
@@ -120,6 +122,12 @@ pub struct AppShell {
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
     fetch_status: Entity<FetchStatus>,
+    /// The Anime Entry screen's store; `show` opens the current Entry.
+    entry_store: Entity<EntryStore>,
+    /// The Entry list editor's UI state (the notes input).
+    entry_editor: Entity<EntryEditor>,
+    /// Keeps the editor sync subscribed to Entry store notifications.
+    _entry_events: Subscription,
     account: Entity<AccountStore>,
     token_input: Entity<InputState>,
     login_url: SharedString,
@@ -152,6 +160,8 @@ pub struct AppShell {
     lists_events: Option<Subscription>,
     /// The Discover screen, loaded stale-first when that route is shown.
     discover_view: Entity<DiscoverView>,
+    /// Shared decoded-image cache for the Entry banner and carousels.
+    banner_cache: Entity<LruImageCache>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -181,6 +191,7 @@ impl AppShell {
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
+        entry_store: Entity<EntryStore>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -211,9 +222,11 @@ impl AppShell {
         );
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
+        let entry_editor = EntryEditor::new(window, cx);
+        let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
         let home_grid = PosterGrid::new(mock_media_views(), cx);
         let user = account.read(cx).name().map(str::to_owned);
-        let discover_view = DiscoverView::new(user, discover_loader, banner_cache, cx);
+        let discover_view = DiscoverView::new(user, discover_loader, banner_cache.clone(), cx);
         // Missed Sequels reads the signed-in account's collection, so a new
         // account replaces the old data instead of showing it under a new name.
         cx.observe(&account, |shell, account, cx| {
@@ -233,6 +246,9 @@ impl AppShell {
             palette,
             _palette_events: palette_events,
             fetch_status,
+            entry_store,
+            entry_editor,
+            _entry_events: entry_events,
             account,
             token_input,
             login_url: login_url.into(),
@@ -255,6 +271,7 @@ impl AppShell {
             lists: None,
             lists_events: None,
             discover_view,
+            banner_cache,
         }
     }
 
@@ -273,6 +290,7 @@ impl AppShell {
         poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
+        entry_store: Entity<EntryStore>,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -288,6 +306,7 @@ impl AppShell {
             poster_cache,
             account_request,
             discover_loader,
+            entry_store,
             window,
             cx,
         );
@@ -315,7 +334,8 @@ impl AppShell {
         self.router.current().clone()
     }
 
-    fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
+    /// Opens `route`, saving the current route's scroll offset.
+    pub(crate) fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
         let restore = self.router.push(route, self.scroll.offset());
         self.show(restore, cx);
     }
@@ -382,6 +402,9 @@ impl AppShell {
     /// [`ScrollRestore`] keeps the offset so an async screen's
     /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
+        if let Route::Entry { id } = self.route() {
+            self.entry_store.update(cx, |store, cx| store.open(id, cx));
+        }
         if let Some(offset) = restore {
             self.scroll.restore(offset);
             if self.route() == Route::Discover {
@@ -651,6 +674,17 @@ impl AppShell {
                 .track_scroll(self.scroll.handle())
                 .child(self.discover_view.clone())
                 .into_any_element(),
+            Route::Entry { id } => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(render_entry(
+                    &self.entry_store,
+                    &self.entry_editor,
+                    *id,
+                    &self.banner_cache,
+                    cx,
+                ))
+                .into_any_element(),
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
@@ -706,8 +740,26 @@ impl AppShell {
     }
 }
 
+#[cfg(test)]
+impl AppShell {
+    /// The Entry store, for screen tests that exercise Entry actions.
+    pub(crate) fn entry_store(&self) -> &Entity<EntryStore> {
+        &self.entry_store
+    }
+
+    /// The Entry editor, for screen tests that exercise carousel actions.
+    pub(crate) fn entry_editor(&self) -> &Entity<EntryEditor> {
+        &self.entry_editor
+    }
+
+    /// The banner cache shared with Entry's banner and carousels.
+    pub(crate) fn banner_cache(&self) -> &Entity<LruImageCache> {
+        &self.banner_cache
+    }
+}
+
 impl Render for AppShell {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let expiring = self.account.read(cx).expiring();
         let expired = self.account.read(cx).expired();
@@ -857,6 +909,7 @@ fn rail_id(route: &Route) -> String {
 pub(crate) fn title(route: &Route) -> SharedString {
     match route {
         Route::Home => "Home",
+        Route::Entry { .. } => "Entry",
         Route::Discover => "Discover",
         Route::Lists { .. } => "My Lists",
         Route::Schedule => "Schedule",
@@ -872,7 +925,8 @@ pub(crate) fn title(route: &Route) -> SharedString {
 fn rows(route: &Route) -> usize {
     match route {
         Route::Discover => 100,
-        Route::Home
+        Route::Entry { .. }
+        | Route::Home
         | Route::Lists { .. }
         | Route::Schedule
         | Route::Manga
@@ -885,6 +939,7 @@ fn rows(route: &Route) -> usize {
 pub(crate) fn icon(route: &Route) -> IconName {
     match route {
         Route::Home => IconName::House,
+        Route::Entry { .. } => IconName::Clapperboard,
         Route::Discover => IconName::Compass,
         Route::Lists { .. } => IconName::List,
         Route::Schedule => IconName::Calendar,
@@ -915,6 +970,8 @@ mod tests {
         point, px, size,
         test::{ClickOptions, TestEventExt, TestWindowExt},
     };
+    use ui_state::entry_store::EntryStore;
+    use ui_state::test_support::pending_services;
     use ui_state::{
         Route, SettingsTab,
         account::AccountStore,
@@ -995,6 +1052,7 @@ mod tests {
                     let account = cx.new(|_| {
                         session.map_or_else(AccountStore::default, AccountStore::from_state)
                     });
+                    let entry_store = cx.new(|_| EntryStore::new(pending_services()));
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
@@ -1024,6 +1082,7 @@ mod tests {
                                 )]);
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
+                            entry_store,
                             window,
                             cx,
                         )

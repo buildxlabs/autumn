@@ -1,0 +1,25 @@
+[package]
+name                   = "engine"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[lints]
+workspace = true
+
+[dependencies]
+db.workspace        = true
+domain.workspace    = true
+metadata.workspace  = true
+net.workspace       = true
+settings.workspace  = true
+thiserror.workspace = true
+tokio.workspace     = true
+tracing.workspace   = true
+tracker.workspace   = true
+
+[dev-dependencies]
+tempfile.workspace           = true
+tracing-subscriber.workspace = true

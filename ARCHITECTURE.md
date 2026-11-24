@@ -72,7 +72,10 @@ Every crate lives at `crates/<crate-name>/` and is picked up by the `crates/*` m
 
 The existing `crates/autumn` crate becomes the binary in Phase 0.
 
-Until `engine` exists, the startup work it will own lives in the `autumn` binary: building the Tokio runtime, opening `db`, and the one-time `settings.json` import (`settings_store`). It moves into `engine` when that crate lands.
+The thin `engine` owns the Tokio-side services: settings rows, the database,
+the shared client, the poster and metadata caches, and the Local platform.
+The `autumn` binary still builds the Tokio runtime and resolves the app paths;
+that startup work moves into the full engine in Phase 2.
 
 ## 3. Dependency rules
 
@@ -103,13 +106,18 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 ```text
 db            → domain
 auth           → domain, net
+engine         → domain, net, db, metadata, tracker, settings
 metadata      → domain, net
 tracker       → domain, db
-ui-state      → domain
+ui-state      → domain, engine, metadata
 ui-components → (gpui-kit only)
-ui-screens    → ui-components, ui-state, db, metadata, domain, futures (ui-theme as a dev-dependency only)
-autumn        → settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
+ui-screens    → ui-components, ui-state, db, metadata, domain, futures, time (ui-theme as a dev-dependency only)
+autumn        → engine, settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
 ```
+
+Screens never depend on `engine`: they reach its services only through the
+ui-state stores. Engine fakes for screen tests live in `ui_state::test_support`
+(behind the `test-util` feature), not in `ui-screens`.
 
 Adding an edge means changing these lists in the same commit, with the reason in the commit body.
 

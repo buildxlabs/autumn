@@ -94,6 +94,15 @@ pub enum Lookup<T> {
 /// with an error or an unexpected shape; keep showing the stale value.
 pub struct Refresh<T>(Pin<Box<dyn Future<Output = Result<Cached<T>, Error>> + Send>>);
 
+impl<T> Refresh<T> {
+    /// Wraps a pending fetch. Callers that build a stale-first load by hand
+    /// (for example a test fake) can use this instead of a catalog cache.
+    #[must_use]
+    pub fn new(future: impl Future<Output = Result<Cached<T>, Error>> + Send + 'static) -> Self {
+        Self(Box::pin(future))
+    }
+}
+
 impl<T> Future for Refresh<T> {
     type Output = Result<Cached<T>, Error>;
 

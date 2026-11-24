@@ -5,7 +5,6 @@ mod fetch_status;
 mod http_client;
 mod logging;
 mod rail_prefs;
-mod settings_store;
 mod startup;
 
 use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
@@ -13,6 +12,7 @@ use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 use auth::{AniListAuth, SystemKeychain, login_url};
 use db::Db;
 use domain::AppEvent;
+use engine::{Engine, EngineServices};
 use gpui_kit::{
     App, AppContext, Bounds, Entity, Pixels, Task, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
@@ -21,8 +21,11 @@ use metadata::{AniList, CatalogCache};
 use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
-use ui_state::account::{AccountCommand, AccountStore};
-use ui_state::fetch_status::FetchStatus;
+use ui_state::{
+    account::{AccountCommand, AccountStore},
+    entry_store::EntryStore,
+    fetch_status::FetchStatus,
+};
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
@@ -43,25 +46,34 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let started = match startup::run(&runtime) {
+    let started = match startup::run() {
         Ok(started) => started,
         Err(err) => {
             report_fatal(&format_args!("startup failed: {err:#}"));
             return ExitCode::FAILURE;
         }
     };
-    // One runtime: startup opened the database on it, and the bridge runs
+    // The engine owns the database, settings, shared client, poster cache
+    // and Local platform; the one runtime is shared by everything below.
+    let engine = match Engine::new(&runtime, &started.paths) {
+        Ok(engine) => engine,
+        Err(err) => {
+            report_fatal(&format_args!("the engine failed to start: {err}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    // One runtime: the engine opened the database on it, and the bridge runs
     // UI-requested futures on it.
     let handle = runtime.handle().clone();
     // The one shared client: posters, the fetch-status feed and (in debug
     // builds) the fetch-status debug actions all go through it.
-    let client = started.client;
+    let client = engine.client();
     // The palette searches the Local platform's list and the public AniList
     // catalog through the shared HTTP client.
     let anilist = AniList::new(client.clone());
     // My Lists reads card text from the stale-first cache only, so it makes
     // no network requests while the Local platform is active.
-    let catalog = CatalogCache::new(anilist.clone(), started.poster_cache.clone());
+    let catalog = CatalogCache::new(anilist.clone(), engine.poster_cache());
     let (engine_events, ui_events) = ui_state::events::channel();
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
@@ -73,11 +85,11 @@ fn main() -> ExitCode {
         let events = engine_events.clone();
         async move { fetch_status::observe(&client, events).await }
     });
-    let prefs = rail_prefs::from_settings(&started.settings);
-    let storage_request = poster_cache_request(started.poster_cache.clone());
-    let save_prefs = rail_prefs::saver(started.db.clone(), started.settings);
+    let prefs = rail_prefs::from_settings(engine.settings());
+    let storage_request = poster_cache_request(engine.poster_cache());
+    let save_prefs = rail_prefs::saver(engine.db().clone(), engine.settings().clone());
     let discover_catalog = RealDiscoverCatalog::new(
-        CatalogCache::new(anilist.clone(), started.poster_cache.clone()),
+        CatalogCache::new(anilist.clone(), engine.poster_cache()),
         anilist.clone(),
     );
     let discover_loader: DiscoverLoader = Rc::new(move |user, cx| {
@@ -88,7 +100,7 @@ fn main() -> ExitCode {
     });
 
     let http_client =
-        http_client::PosterHttpClient::new(client.clone(), started.poster_cache, handle.clone());
+        http_client::PosterHttpClient::new(client.clone(), engine.poster_cache(), handle.clone());
     gpui_kit::application()
         .with_assets(AllAssets)
         .with_http_client(Arc::new(http_client))
@@ -98,6 +110,8 @@ fn main() -> ExitCode {
             ui_theme::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
+            let entry_store = cx.new(|_| EntryStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
@@ -119,7 +133,8 @@ fn main() -> ExitCode {
                 storage_request,
                 account_request,
                 discover_loader,
-                started.db.clone(),
+                entry_store,
+                engine.db().clone(),
                 anilist,
                 catalog,
                 cx,
@@ -173,6 +188,7 @@ fn open_main_window(
     storage_request: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     discover_loader: DiscoverLoader,
+    entry_store: Entity<EntryStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -191,6 +207,7 @@ fn open_main_window(
                 storage_request,
                 account_request,
                 discover_loader,
+                entry_store,
                 db,
                 anilist,
                 catalog,
@@ -238,11 +255,13 @@ fn report_fatal(err: &impl Display) {
 mod tests {
     use std::rc::Rc;
 
-    use db::Db;
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
     use ui_screens::{DiscoverUpdate, RailPrefs};
-    use ui_state::{account::AccountStore, bridge::BridgeError};
+    use ui_state::{
+        account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
+        test_support::pending_services,
+    };
 
     use super::{FetchStatus, open_main_window};
 
@@ -254,17 +273,19 @@ mod tests {
             .build()
             .expect("a test runtime");
         let db = runtime
-            .block_on(Db::open(&dir.path().join("palette.db")))
+            .block_on(db::Db::open(&dir.path().join("palette.db")))
             .expect("a test database");
         let anilist = AniList::new(net::Client::new().expect("a test HTTP client"));
         let catalog = CatalogCache::new(
             anilist.clone(),
             net::PosterCache::new(dir.path()).expect("a test poster cache"),
         );
+        let services = pending_services();
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
+            let entry_store = cx.new(|_| EntryStore::new(services));
             open_main_window(
                 RailPrefs::default(),
                 fetch_status,
@@ -276,6 +297,7 @@ mod tests {
                 Rc::new(|_: Option<String>, _: &App| {
                     Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                 }),
+                entry_store,
                 db,
                 anilist,
                 catalog,

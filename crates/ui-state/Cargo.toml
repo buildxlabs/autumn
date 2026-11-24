@@ -9,10 +9,15 @@ publish                = false
 [lints]
 workspace = true
 
+[features]
+test-util = [  ]
+
 [dependencies]
 domain.workspace    = true
+engine.workspace    = true
 flume.workspace     = true
 gpui-kit.workspace  = true
+metadata.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
 
