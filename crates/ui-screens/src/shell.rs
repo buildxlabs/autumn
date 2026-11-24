@@ -1709,6 +1709,29 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn about_tab_credits_the_anime_offline_database(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-about");
+
+        assert_eq!(
+            shell.route(cx),
+            Route::Settings {
+                tab: SettingsTab::About
+            }
+        );
+        shell.act(cx, |window, _| {
+            let texts = gpui_kit::base::test_support::texts(window);
+            assert!(
+                texts
+                    .iter()
+                    .any(|text| text.visible() && text.text().contains("Open Database License")),
+                "Settings → About credits the ODbL dataset"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
     fn clicking_the_account_row_opens_the_account_tab(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
 

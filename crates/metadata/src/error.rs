@@ -41,4 +41,8 @@ pub enum Error {
     /// The response did not match the query's shape.
     #[error("failed to decode the AniList response: {0}")]
     Decode(#[source] serde_json::Error),
+
+    /// The latest anime-offline-database release has no asset named `{0}`.
+    #[error("the latest anime-offline-database release has no asset named {0:?}")]
+    MissingAsset(String),
 }

@@ -16,6 +16,7 @@ use gpui_kit::{
     prelude::FluentBuilder,
     px,
 };
+use metadata::ODBL_CREDIT;
 use ui_state::{
     Route, SettingsTab,
     account::{AccountCommand, AccountStore},
@@ -101,15 +102,17 @@ impl AppShell {
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 3] = [
+        const TABS: [SettingsTab; 4] = [
             SettingsTab::Appearance,
             SettingsTab::Account,
             SettingsTab::Storage,
+            SettingsTab::About,
         ];
         let selected = match tab {
             SettingsTab::Appearance => 0,
             SettingsTab::Account => 1,
             SettingsTab::Storage => 2,
+            SettingsTab::About => 3,
         };
         let tabs = TabBar::new("settings-tabs")
             .underline()
@@ -117,6 +120,7 @@ impl AppShell {
             .child(settings_tab("settings-appearance", "Appearance"))
             .child(settings_tab("settings-account", "Account"))
             .child(settings_tab("settings-storage", "Storage"))
+            .child(settings_tab("settings-about", "About"))
             .on_click(cx.listener(|shell, index: &usize, _, cx| {
                 if let Some(&tab) = TABS.get(*index) {
                     shell.navigate(Route::Settings { tab }, cx);
@@ -266,6 +270,17 @@ impl AppShell {
                     }),
                 )
             }
+            SettingsTab::About => (
+                "About",
+                SettingItem::render(move |_, _, _| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child("Attribution")
+                        .child(Label::new(ODBL_CREDIT).text_sm())
+                }),
+            ),
             SettingsTab::Storage => {
                 let status = self.storage_status;
                 let shell = cx.entity().downgrade();
