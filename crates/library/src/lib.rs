@@ -104,29 +104,9 @@ impl Library {
             .into_iter()
             .map(|file| (file.path.to_string_lossy().into_owned(), file))
             .collect();
-        let mut preserved: HashMap<String, LocalFile> = HashMap::new();
         let mut scanned = Vec::new();
         let matched = 0;
-        for folder in folders {
-            for (key, row) in &existing {
-                if !Path::new(key).starts_with(folder) {
-                    continue;
-                }
-                if !folder.is_dir() {
-                    // A missing drive shelves its files instead of losing them.
-                    let mut shelved = row.clone();
-                    shelved.shelved = true;
-                    preserved.insert(key.clone(), shelved);
-                } else if row.shelved {
-                    // The drive returned: keep the match without re-matching.
-                    let mut returned = row.clone();
-                    returned.shelved = false;
-                    preserved.insert(key.clone(), returned);
-                }
-            }
-            if !folder.is_dir() {
-                continue;
-            }
+        for folder in folders.iter().filter(|folder| folder.is_dir()) {
             for file in walk(folder)? {
                 progress(ScanProgress {
                     files_walked: scanned.len() + 1,
@@ -134,6 +114,29 @@ impl Library {
                 });
                 scanned.push(file);
             }
+        }
+        let walked: HashSet<String> = scanned
+            .iter()
+            .map(|file| file.path.to_string_lossy().into_owned())
+            .collect();
+        let mut preserved: HashMap<String, LocalFile> = HashMap::new();
+        for (key, row) in &existing {
+            let under_missing = folders
+                .iter()
+                .any(|folder| !folder.is_dir() && Path::new(key).starts_with(folder));
+            if under_missing {
+                // A missing drive shelves its files instead of losing them.
+                let mut shelved = row.clone();
+                shelved.shelved = true;
+                preserved.insert(key.clone(), shelved);
+            } else if row.shelved && walked.contains(key) {
+                // The drive returned: keep the match without re-matching.
+                let mut returned = row.clone();
+                returned.shelved = false;
+                preserved.insert(key.clone(), returned);
+            }
+            // A shelved file that is still absent from a present folder is
+            // deliberately not preserved: `sync` deletes its row.
         }
         let overrides: HashMap<String, LocalFile> = existing
             .iter()
@@ -159,10 +162,6 @@ impl Library {
             HashMap::new()
         };
         let mut rows = build_rows(&scanned, &existing, &preserved, &wins, &media, &hydrated);
-        let walked: HashSet<String> = scanned
-            .iter()
-            .map(|file| file.path.to_string_lossy().into_owned())
-            .collect();
         for (key, row) in &preserved {
             if !walked.contains(key) {
                 rows.push(row.clone());
@@ -486,7 +485,11 @@ fn summarize(
     let mut locked = 0;
     let mut ignored = 0;
     let mut unmatched = Vec::new();
-    for (index, row) in rows.iter().enumerate() {
+    let parsed: HashMap<String, &ScannedFile> = scanned
+        .iter()
+        .map(|file| (file.path.to_string_lossy().into_owned(), file))
+        .collect();
+    for row in rows {
         if row.locked {
             locked += 1;
         }
@@ -506,9 +509,12 @@ fn summarize(
         let reason = if row.ignored {
             UnmatchedReason::Ignored
         } else {
-            scanned.get(index).map_or(UnmatchedReason::NoTitle, |file| {
-                unmatched_reason(matcher, file, candidates)
-            })
+            let key = row.path.to_string_lossy();
+            parsed
+                .get(key.as_ref())
+                .map_or(UnmatchedReason::NoTitle, |file| {
+                    unmatched_reason(matcher, file, candidates)
+                })
         };
         unmatched.push(UnmatchedFile {
             path: row.path.clone(),

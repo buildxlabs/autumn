@@ -125,6 +125,48 @@ async fn a_returning_drive_unshelves_without_rematching() {
 }
 
 #[tokio::test]
+async fn a_file_deleted_while_the_drive_is_away_is_deleted_on_return() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("drive");
+    fs::create_dir_all(&folder).unwrap();
+    let gone = release(&folder, "Series Alpha", 1);
+    let kept = release(&folder, "Series Bravo", 1);
+    let library = Library::new(db.clone());
+    let candidates = [
+        candidate("Series Alpha", 1001),
+        candidate("Series Bravo", 1002),
+    ];
+    library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    fs::remove_dir_all(&folder).unwrap();
+    library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+    assert_eq!(
+        db.local_file().all().await.unwrap().len(),
+        2,
+        "both files were shelved"
+    );
+
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(&kept, b"").unwrap();
+    library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    let rows = db.local_file().all().await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows.first().unwrap().path, kept);
+    assert!(!rows.first().unwrap().shelved);
+    assert!(!rows.iter().any(|row| row.path == gone));
+}
+
+#[tokio::test]
 async fn deleting_a_file_from_a_present_folder_deletes_its_row() {
     let (dir, db) = database().await;
     let folder = dir.path().join("drive");

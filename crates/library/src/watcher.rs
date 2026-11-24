@@ -1,9 +1,9 @@
 //! Watches library folders and batches file events into one auto-scan.
 //!
-//! The OS watcher feeds a bounded channel; a task waits for ten seconds of
-//! quiet, then reports the affected library folders once. Dropping or stopping
-//! the watcher ends that task, which is how turning auto-scan off takes effect
-//! without a restart.
+//! The OS watcher feeds a channel; a task waits for ten seconds of quiet, then
+//! reports each affected library folder once. Dropping or stopping the watcher
+//! ends that task, which is how turning auto-scan off takes effect without a
+//! restart.
 
 use std::{fmt, path::PathBuf, time::Duration};
 
@@ -38,9 +38,10 @@ impl AutoScan {
     /// [`LibraryError::Watcher`] when a folder cannot be watched.
     pub fn start(
         folders: &[PathBuf],
+        handle: &tokio::runtime::Handle,
         on_change: impl FnMut(Vec<PathBuf>) + Send + 'static,
     ) -> Result<Self, LibraryError> {
-        Self::with_quiet(folders, DEFAULT_QUIET, on_change)
+        Self::with_quiet(folders, DEFAULT_QUIET, handle, on_change)
     }
 
     /// A watcher with a caller-supplied quiet period, for tests and settings.
@@ -51,6 +52,7 @@ impl AutoScan {
     pub fn with_quiet(
         folders: &[PathBuf],
         quiet: Duration,
+        handle: &tokio::runtime::Handle,
         on_change: impl FnMut(Vec<PathBuf>) + Send + 'static,
     ) -> Result<Self, LibraryError> {
         let (events, receiver) = flume::unbounded();
@@ -73,9 +75,17 @@ impl AutoScan {
             }
         })?;
         for folder in folders {
-            watcher.watch(folder, RecursiveMode::Recursive)?;
+            if !folder.is_dir() {
+                // A disconnected drive has nothing to watch now; its files are
+                // shelved by the scan that notices its absence.
+                tracing::warn!(folder = %folder.display(), "not watching a missing library folder");
+                continue;
+            }
+            if let Err(error) = watcher.watch(folder, RecursiveMode::Recursive) {
+                tracing::warn!(%error, folder = %folder.display(), "could not watch a library folder");
+            }
         }
-        let task = tokio::spawn(async move {
+        let task = handle.spawn(async move {
             debounce(receiver, stopped, quiet, on_change).await;
         });
         Ok(Self {
@@ -107,7 +117,10 @@ pub(crate) async fn debounce(
                 let Ok(path) = received else {
                     break;
                 };
-                pending.push(path);
+                // A burst in one folder is one scan of that folder.
+                if !pending.contains(&path) {
+                    pending.push(path);
+                }
             }
             () = tokio::time::sleep(quiet), if !pending.is_empty() => {
                 on_change(std::mem::take(&mut pending));
@@ -138,17 +151,19 @@ mod tests {
             })
             .await;
         });
-        for index in 0..50 {
-            events
-                .send(PathBuf::from(format!("/library/show-{index}.mkv")))
-                .unwrap();
+        for _ in 0..50 {
+            events.send(PathBuf::from("/library/show-01.mkv")).unwrap();
         }
         tokio::time::sleep(Duration::from_millis(120)).await;
 
         {
             let seen = batches.lock().unwrap();
             assert_eq!(seen.len(), 1, "the burst became one batch");
-            assert_eq!(seen.first().map(Vec::len), Some(50));
+            assert_eq!(
+                seen.first().map(Vec::len),
+                Some(1),
+                "fifty events in one folder produce one path"
+            );
         }
         let _ = stop.send(());
         task.await.unwrap();

@@ -102,6 +102,7 @@ pub struct Engine {
     platform: Local,
     settings: Settings,
     library: Library,
+    handle: tokio::runtime::Handle,
     events: Option<Sender<AppEvent>>,
     watcher: Arc<Mutex<Option<AutoScan>>>,
 }
@@ -138,6 +139,7 @@ impl Engine {
             platform,
             settings,
             library,
+            handle: runtime.handle().clone(),
             events: None,
             watcher: Arc::new(Mutex::new(None)),
         })
@@ -172,23 +174,30 @@ impl Engine {
     /// [`EngineError::Library`] if a folder cannot be watched.
     pub fn apply_library_settings(&self, settings: &Settings) -> Result<(), EngineError> {
         let mut watcher = self.watcher.lock().map_err(|_| EngineError::WatcherLock)?;
-        if let Some(previous) = watcher.take() {
-            previous.stop();
-        }
         let folders = &settings.library.folders;
         if !settings.library.auto_scan || folders.is_empty() {
+            if let Some(previous) = watcher.take() {
+                previous.stop();
+            }
             return Ok(());
         }
         let engine = self.clone();
         let events = self.events.clone();
-        let auto_scan = AutoScan::start(folders, move |changed| {
+        let handle = self.handle.clone();
+        let callback_handle = handle.clone();
+        // Build the replacement first: a failed restart must not leave the
+        // engine with no watcher at all.
+        let auto_scan = AutoScan::start(folders, &handle, move |changed| {
             let engine = engine.clone();
             let events = events.clone();
-            tokio::spawn(async move {
+            let handle = callback_handle.clone();
+            handle.spawn(async move {
                 engine.run_auto_scan(&changed, events).await;
             });
         })?;
-        *watcher = Some(auto_scan);
+        if let Some(previous) = watcher.replace(auto_scan) {
+            previous.stop();
+        }
         Ok(())
     }
 
@@ -225,8 +234,14 @@ impl Engine {
             })
             .await;
         match result {
-            Ok(_) => {
+            Ok(summary) => {
                 if let Some(events) = events {
+                    // The throttle can drop the last intermediate update, so
+                    // publish the final counts before the completion event.
+                    let _ = events.send(AppEvent::LibraryScanProgress {
+                        files_walked: summary.files_walked,
+                        files_matched: summary.files_matched,
+                    });
                     let _ = events.send(AppEvent::LibraryChanged);
                 }
             }
@@ -435,7 +450,6 @@ mod tests {
             .enable_all()
             .build()
             .expect("a test runtime");
-        let _entered = runtime.enter();
         let engine = Engine::new(&runtime, &paths).expect("the engine");
         let mut settings = Settings::default();
         settings.library.folders = vec![folder];
