@@ -27,8 +27,8 @@ pub enum DbError {
     /// This build does not store that media kind.
     #[error("unsupported media kind {0:?}")]
     UnsupportedKind(MediaKind),
-    /// This build does not store that kind of external id. Phase 1 stores
-    /// only AniList ids and `idMal`.
+    /// This build does not store that kind of external id. Stored providers
+    /// are AniList, `idMal`, AniDB and Kitsu; custom sources cannot be minted.
     #[error("unsupported external id {0:?}")]
     UnsupportedExternalId(ExternalId),
     /// This build does not store that list status.

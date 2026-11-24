@@ -281,12 +281,18 @@ async fn an_id_naming_a_media_of_the_other_kind_is_not_reused() {
 }
 
 #[tokio::test]
-async fn ids_beyond_phase_1_are_refused() {
+async fn custom_source_ids_cannot_be_minted() {
     let (_dir, db) = fresh_db().await;
 
     let err = db
         .media()
-        .find_or_mint(MediaKind::Anime, &[ExternalId::Kitsu(1)])
+        .find_or_mint(
+            MediaKind::Anime,
+            &[ExternalId::Custom {
+                source: "test".to_owned(),
+                key: "1".to_owned(),
+            }],
+        )
         .await
         .unwrap_err();
 

@@ -10,6 +10,10 @@ const BEGIN_WRITE: &str = "BEGIN IMMEDIATE";
 
 /// The `provider` column value for AniList ids.
 const ANILIST: &str = "anilist";
+/// The `provider` column value for AniDB ids (Phase 2 matcher, ADR 0001).
+const ANIDB: &str = "anidb";
+/// The `provider` column value for Kitsu ids (Phase 2 matcher, ADR 0001).
+const KITSU: &str = "kitsu";
 
 /// Media identity and cross-references (ADR 0001).
 #[derive(Debug, Clone, Copy)]
@@ -86,6 +90,8 @@ impl<'a> MediaRepo<'a> {
             .into_iter()
             .filter_map(|(provider, key)| match provider.as_str() {
                 ANILIST => key.parse::<u32>().ok().map(ExternalId::AniList),
+                ANIDB => key.parse::<u32>().ok().map(ExternalId::AniDb),
+                KITSU => key.parse::<u32>().ok().map(ExternalId::Kitsu),
                 "mal_anime" | "mal_manga" => key.parse::<u32>().ok().map(ExternalId::Mal),
                 _ => None,
             })
@@ -277,7 +283,7 @@ async fn owner(
 }
 
 /// The `(provider, external_id)` columns for an external id of a `kind`
-/// media. Phase 1 stores only AniList ids and `idMal` (ADR 0001).
+/// media. Phase 2 adds AniDB and Kitsu ids from the matching index (ADR 0001).
 ///
 /// AniList numbers anime and manga in one sequence, but MyAnimeList numbers
 /// them separately (anime 1 and manga 1 are different works), so MAL ids are
@@ -285,12 +291,17 @@ async fn owner(
 fn columns(kind: MediaKind, id: &ExternalId) -> Result<(&'static str, String), DbError> {
     let provider = match (id, kind) {
         (ExternalId::AniList(_), _) => ANILIST,
+        (ExternalId::AniDb(_), _) => ANIDB,
+        (ExternalId::Kitsu(_), _) => KITSU,
         (ExternalId::Mal(_), MediaKind::Anime) => "mal_anime",
         (ExternalId::Mal(_), MediaKind::Manga) => "mal_manga",
         _ => return Err(DbError::UnsupportedExternalId(id.clone())),
     };
     let key = match id {
-        ExternalId::AniList(key) | ExternalId::Mal(key) => key.to_string(),
+        ExternalId::AniList(key)
+        | ExternalId::Mal(key)
+        | ExternalId::AniDb(key)
+        | ExternalId::Kitsu(key) => key.to_string(),
         _ => return Err(DbError::UnsupportedExternalId(id.clone())),
     };
     Ok((provider, key))

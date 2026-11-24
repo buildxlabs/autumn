@@ -25,6 +25,36 @@ _Avoid_: mapping, alias
 **Custom source**:
 A provider of media that are not in the AniList catalog, supplied by an extension.
 
+### Library
+
+**Local file**:
+A video on disk that Autumn has found in a library folder and can play directly.
+_Avoid_: media file, video file, entry
+
+**Episode**:
+A numbered installment of a media's main run, distinct from its specials and creditless clips.
+_Avoid_: file, local file
+
+**Special / NC**:
+Video attached to a media but outside its episode numbering: an OVA, special, movie, NCOP or NCED.
+_Avoid_: extra, episode
+
+**Locked file**:
+A local file whose match a re-scan never changes.
+_Avoid_: pinned file, frozen file
+
+**Ignored file**:
+A local file a scan deliberately leaves out of the library.
+_Avoid_: hidden file, excluded file
+
+**Shelved file**:
+A local file on a disconnected drive, kept with its match until the drive returns.
+_Avoid_: missing file, offline file
+
+**Scan summary**:
+The outcome of one scan: files found, files matched and files left unmatched.
+_Avoid_: report, scan log
+
 ### Extensions
 
 **Declarative source**:
