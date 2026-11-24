@@ -142,6 +142,14 @@ impl MediaCarousel {
         self.add_label = Some(label.into());
         self
     }
+
+    /// Fires a card's Open action, as its context menu does.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn fire_open(&self, index: usize, window: &mut Window, cx: &mut App) {
+        if let Some(on_open) = self.on_open.as_ref() {
+            on_open(index, window, cx);
+        }
+    }
 }
 
 impl RenderOnce for MediaCarousel {

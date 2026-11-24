@@ -255,17 +255,12 @@ fn report_fatal(err: &impl Display) {
 mod tests {
     use std::rc::Rc;
 
-    use std::{rc::Rc, sync::Arc};
-
-    use db::Db;
-    use engine::{BoxFuture, EngineError, EngineServices};
     use gpui_kit::{App, AppContext, Task, TestAppContext};
-    use metadata::{AniList, CatalogCache, Load, MediaDetail};
+    use metadata::{AniList, CatalogCache};
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::{
-        account::AccountStore,
-        bridge::BridgeError,
-        entry_store::EntryStore,
+        account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
+        test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
@@ -285,7 +280,7 @@ mod tests {
             anilist.clone(),
             net::PosterCache::new(dir.path()).expect("a test poster cache"),
         );
-        let services: Arc<dyn EngineServices> = Arc::new(EmptyServices);
+        let services = pending_services();
         cx.update(|cx| {
             gpui_kit::init(cx);
             let fetch_status = cx.new(|_| FetchStatus::default());
@@ -312,64 +307,6 @@ mod tests {
         });
 
         assert_eq!(cx.windows().len(), 1, "expected exactly one window");
-    }
-
-    /// The shell tests exercise the shell, not the stores' data, so the fake
-    /// calls never return: no test waits on them.
-    struct EmptyServices;
-
-    impl EngineServices for EmptyServices {
-        fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn local_media(
-            &self,
-            _kind: domain::MediaKind,
-            _ids: &[domain::ExternalId],
-        ) -> BoxFuture<Result<Option<domain::MediaId>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn local_entry(
-            &self,
-            _media: domain::MediaId,
-        ) -> BoxFuture<Result<Option<domain::ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn save_entry(
-            &self,
-            _entry: &domain::ListEntry,
-        ) -> BoxFuture<Result<domain::ListEntry, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn mint(
-            &self,
-            _kind: domain::MediaKind,
-            _ids: &[domain::ExternalId],
-        ) -> BoxFuture<Result<domain::MediaId, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn home(&self) -> BoxFuture<Result<Load<metadata::HomeLoad>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn collection(
-            &self,
-            _kind: domain::MediaKind,
-        ) -> BoxFuture<Result<Vec<domain::ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
-
-        fn missed_sequels(
-            &self,
-            _kind: domain::MediaKind,
-        ) -> BoxFuture<Result<Vec<domain::ListEntry>, EngineError>> {
-            Box::pin(std::future::pending())
-        }
     }
 
     /// On Linux the window options request client-side decorations, so only

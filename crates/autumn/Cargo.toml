@@ -33,3 +33,4 @@ gpui-kit             = { features = [ "test-support" ], workspace = true }
 serde_json.workspace = true
 tempfile.workspace   = true
 tokio                = { features = [ "macros", "rt" ], workspace = true }
+ui-state             = { features = [ "test-util" ], workspace = true }

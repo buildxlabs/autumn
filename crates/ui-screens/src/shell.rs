@@ -160,6 +160,8 @@ pub struct AppShell {
     lists_events: Option<Subscription>,
     /// The Discover screen, loaded stale-first when that route is shown.
     discover_view: Entity<DiscoverView>,
+    /// Shared decoded-image cache for the Entry banner and carousels.
+    banner_cache: Entity<LruImageCache>,
 }
 
 impl std::fmt::Debug for AppShell {
@@ -224,7 +226,7 @@ impl AppShell {
         let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
         let home_grid = PosterGrid::new(mock_media_views(), cx);
         let user = account.read(cx).name().map(str::to_owned);
-        let discover_view = DiscoverView::new(user, discover_loader, banner_cache, cx);
+        let discover_view = DiscoverView::new(user, discover_loader, banner_cache.clone(), cx);
         // Missed Sequels reads the signed-in account's collection, so a new
         // account replaces the old data instead of showing it under a new name.
         cx.observe(&account, |shell, account, cx| {
@@ -269,6 +271,7 @@ impl AppShell {
             lists: None,
             lists_events: None,
             discover_view,
+            banner_cache,
         }
     }
 
@@ -737,6 +740,24 @@ impl AppShell {
     }
 }
 
+#[cfg(test)]
+impl AppShell {
+    /// The Entry store, for screen tests that exercise Entry actions.
+    pub(crate) fn entry_store(&self) -> &Entity<EntryStore> {
+        &self.entry_store
+    }
+
+    /// The Entry editor, for screen tests that exercise carousel actions.
+    pub(crate) fn entry_editor(&self) -> &Entity<EntryEditor> {
+        &self.entry_editor
+    }
+
+    /// The banner cache shared with Entry's banner and carousels.
+    pub(crate) fn banner_cache(&self) -> &Entity<LruImageCache> {
+        &self.banner_cache
+    }
+}
+
 impl Render for AppShell {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
@@ -903,8 +924,9 @@ pub(crate) fn title(route: &Route) -> SharedString {
 /// Discover gets a long list so scroll restore can be tried by hand.
 fn rows(route: &Route) -> usize {
     match route {
-        Route::Entry { .. } | Route::Discover => 100,
-        Route::Home
+        Route::Discover => 100,
+        Route::Entry { .. }
+        | Route::Home
         | Route::Lists { .. }
         | Route::Schedule
         | Route::Manga

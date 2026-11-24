@@ -36,6 +36,7 @@ sha2 = "0.10"
 sqlx = { default-features = false, version = "0.9" }
 tempfile = "3.27"
 thiserror = "2"
+time = { features = [ "local-offset" ], version = "0.3" }
 tokio = { default-features = false, features = [
   "macros",
   "net",

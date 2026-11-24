@@ -1,10 +1,7 @@
 //! The Anime Entry route (#58): the hero header, media card, Characters & VA,
 //! Relations/Recommendations carousels and the Local list editor.
 
-use std::{
-    rc::Rc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::rc::Rc;
 
 use domain::{FuzzyDate, ListStatus, Score};
 use gpui_kit::{
@@ -137,6 +134,7 @@ pub(crate) fn render(
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
     let state = entry_store.read(cx).state().clone();
+    let save_error = entry_store.read(cx).save_error().map(str::to_owned);
     match state {
         EntryState::Loading => div().child(fetch_loader()).into_any_element(),
         EntryState::Failed(message) => {
@@ -168,6 +166,7 @@ pub(crate) fn render(
                 "Not on your Local list yet"
             },
             &draft,
+            save_error.as_deref(),
             cx,
         )
         .into_any_element(),
@@ -187,6 +186,7 @@ fn render_ready(
     detail: &metadata::MediaDetail,
     list_label: &str,
     draft: &EntryDraft,
+    save_error: Option<&str>,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
     let relations = detail
@@ -262,6 +262,16 @@ fn render_ready(
             recommendations_carousel,
         ))
         .child(editor_section(entry_store, editor, draft, cx))
+        .children(save_error.map(|message| {
+            let store = entry_store.clone();
+            div().px_1().child(error_card(
+                "entry-save-error",
+                FetchError::Request(message),
+                move |_, _, cx: &mut App| {
+                    store.update(cx, EntryStore::save);
+                },
+            ))
+        }))
         .into_any_element()
 }
 
@@ -457,13 +467,7 @@ fn editor_section(
 ) -> impl IntoElement {
     let mut status_row = div().flex().flex_wrap().gap_2();
     for status in STATUSES {
-        status_row = status_row.child(field_button(
-            format!("entry-status-{status:?}"),
-            status_label(status),
-            store,
-            cx,
-            move |draft| draft.status = status,
-        ));
+        status_row = status_row.child(status_button(status, store, editor, cx));
     }
     let progress_row = div()
         .flex()
@@ -584,6 +588,30 @@ fn date_field(
         )
 }
 
+/// A status choice is a user fact: save it at once, with whatever the notes
+/// field currently holds, like My Lists' quick editor.
+fn status_button(
+    status: ListStatus,
+    store: &Entity<EntryStore>,
+    editor: &Entity<EntryEditor>,
+    _cx: &mut Context<'_, AppShell>,
+) -> impl IntoElement {
+    let store = store.clone();
+    let editor = editor.clone();
+    Button::new(format!("entry-status-{status:?}"))
+        .label(status_label(status))
+        .on_click(move |_, _, cx| {
+            store.update(cx, |store, cx| {
+                if let Some(draft) = store.draft_mut() {
+                    draft.status = status;
+                    draft.notes = editor.read(cx).notes(cx);
+                }
+                cx.notify();
+            });
+            store.update(cx, EntryStore::save);
+        })
+}
+
 /// A button that applies one draft change to the store.
 fn field_button(
     id: impl Into<ElementId>,
@@ -624,43 +652,50 @@ fn format_fuzzy_date(date: FuzzyDate) -> String {
     }
 }
 
-/// Today's date, from the Unix clock. AniList accepts a partial date, but a
-/// full one is what the Today shortcut means here.
+/// Today's date in the user's local time. AniList accepts a partial date, but
+/// a full one is what the Today shortcut means here.
 fn today() -> FuzzyDate {
-    let Ok(since_epoch) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+    // The local UTC offset can be indeterminate; UTC is still a full date.
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let Ok(year) = u16::try_from(now.year()) else {
         return FuzzyDate::UNKNOWN;
     };
-    let Ok(days) = i64::try_from(since_epoch.as_secs() / 86_400) else {
-        return FuzzyDate::UNKNOWN;
-    };
-    // Days from 1970-01-01 to a civil date, after Howard Hinnant's algorithm.
-    let shifted = days + 719_468;
-    let era = if shifted >= 0 {
-        shifted
-    } else {
-        shifted - 146_096
-    } / 146_097;
-    let day_of_era = shifted - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    if month <= 2 {
-        year += 1;
-    }
-    let (Ok(year), Ok(month), Ok(day)) =
-        (u16::try_from(year), u8::try_from(month), u8::try_from(day))
-    else {
-        return FuzzyDate::UNKNOWN;
-    };
-    FuzzyDate::new(Some(year), Some(month), Some(day)).unwrap_or(FuzzyDate::UNKNOWN)
+    FuzzyDate::new(Some(year), Some(u8::from(now.month())), Some(now.day()))
+        .unwrap_or(FuzzyDate::UNKNOWN)
 }
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::clone_on_ref_ptr,
+        reason = "the screen test keeps a concrete handle to the canned fake"
+    )]
+    #![expect(
+        clippy::indexing_slicing,
+        reason = "the screen test checks the one recorded save"
+    )]
+
+    use std::{rc::Rc, sync::Arc, time::Duration};
+
+    use domain::{FuzzyDate, ListStatus, MediaKind};
+    use gpui_kit::{
+        App, AppContext, Bounds, Task, TestAppContext, WindowBounds, WindowOptions, base::Root,
+        point, px, size, test::TestWindowExt,
+    };
+    use metadata::{MediaDetail, MediaSummary, MediaTitle, Relation};
+    use tokio::runtime::Builder;
+    use ui_state::{
+        Route,
+        bridge::{self, BridgeError},
+        entry_store::EntryStore,
+        test_support::CannedServices,
+    };
+
+    use crate::{
+        discover::DiscoverUpdate,
+        shell::{AppShell, RailPrefs},
+    };
+
     use super::{format_fuzzy_date, today};
 
     #[test]
@@ -680,5 +715,161 @@ mod tests {
         assert!(date.year().is_some_and(|year| year >= 2026));
         assert!(date.month().is_some_and(|month| (1..=12).contains(&month)));
         assert!(date.day().is_some_and(|day| (1..=31).contains(&day)));
+    }
+
+    fn summary(id: u32, title: &str) -> MediaSummary {
+        MediaSummary {
+            anilist_id: id,
+            mal_id: None,
+            kind: Some(MediaKind::Anime),
+            title: MediaTitle {
+                romaji: Some(title.to_owned()),
+                ..MediaTitle::default()
+            },
+            poster: None,
+            banner: None,
+            format: None,
+            status: None,
+            season: None,
+            season_year: None,
+            episodes: Some(12),
+            chapters: None,
+            mean_score: None,
+            genres: Vec::new(),
+            is_adult: false,
+        }
+    }
+
+    fn detail() -> MediaDetail {
+        MediaDetail {
+            summary: summary(100, "An Entry"),
+            description: Some("A synopsis.".to_owned()),
+            start_date: FuzzyDate::UNKNOWN,
+            end_date: FuzzyDate::UNKNOWN,
+            duration: None,
+            studios: Vec::new(),
+            popularity: None,
+            characters: Vec::new(),
+            relations: vec![Relation {
+                relation: None,
+                media: summary(200, "A Relation"),
+            }],
+            recommendations: vec![summary(300, "A Recommendation")],
+        }
+    }
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one screen test covers rendering, saving and carousel navigation"
+    )]
+    async fn the_entry_screen_renders_saves_and_opens_a_related_entry(cx: &mut TestAppContext) {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+
+        let services = Arc::new(CannedServices::new(detail()));
+        let fake = Arc::clone(&services);
+        let (window, view) = cx
+            .update(|cx| {
+                gpui_kit::init(cx);
+                ui_theme::init(cx);
+                cx.set_reduce_motion(true);
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: point(px(0.), px(0.)),
+                        size: size(px(1280.), px(2200.)),
+                    })),
+                    ..WindowOptions::default()
+                };
+                gpui_kit::open_window(options, cx, |window, cx| {
+                    let entry_store = cx.new(|_| EntryStore::new(services.clone()));
+                    cx.new(|cx| {
+                        AppShell::new(
+                            RailPrefs::default(),
+                            cx.new(|_| ui_state::fetch_status::FetchStatus::default()),
+                            cx.new(|_| ui_state::account::AccountStore::default()),
+                            "https://example.test/login".to_owned(),
+                            |_, _| Task::ready(()),
+                            |_, _| Task::ready(Ok(0)),
+                            |_, _| Task::ready(()),
+                            Rc::new(|_: Option<String>, _: &App| {
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
+                            }),
+                            entry_store,
+                            window,
+                            cx,
+                        )
+                    })
+                })
+            })
+            .expect("a test window");
+        let window = window.downcast::<Root>().expect("the root window");
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |shell, cx| shell.navigate(Route::Entry { id: 100 }, cx));
+        })
+        .expect("navigation");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            let hero = window.find("entry-hero-banner").bounds();
+            assert!(
+                hero.size.width > px(0.) && hero.size.height > px(0.),
+                "the Entry hero has real bounds"
+            );
+            window.click("entry-status-Current", cx);
+            window.render_frame(cx);
+        })
+        .expect("the rendered Entry");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+        let saves = fake.saved();
+        assert_eq!(saves.len(), 1, "clicking a status button saved the draft");
+        assert_eq!(saves[0].status, ListStatus::Current);
+
+        let relation_carousel = cx
+            .update(|cx| {
+                view.update(cx, |shell, cx| {
+                    let store = shell.entry_store().clone();
+                    let editor = shell.entry_editor().clone();
+                    let cache = shell.banner_cache().clone();
+                    let (relations, recommendations) = match store.read(cx).state() {
+                        super::EntryState::Ready { detail, .. } => (
+                            detail
+                                .relations
+                                .iter()
+                                .map(|relation| relation.media.clone())
+                                .collect::<Vec<_>>(),
+                            detail.recommendations.clone(),
+                        ),
+                        _ => return None,
+                    };
+                    let relation_refs = relations.iter().collect::<Vec<_>>();
+                    let recommendation_refs = recommendations.iter().collect::<Vec<_>>();
+                    let [relations, _] =
+                        super::carousels(&relation_refs, &recommendation_refs, &editor, &cache, cx);
+                    Some(relations)
+                })
+            })
+            .expect("the Relations carousel");
+        cx.update_window(window.into(), |_, window, cx| {
+            relation_carousel.fire_open(0, window, cx);
+            window.render_frame(cx);
+        })
+        .expect("the carousel Open action");
+        assert_eq!(
+            view.read_with(cx, |shell, _| shell.route()),
+            Route::Entry { id: 200 },
+            "Open on a relation card navigated to its Entry"
+        );
     }
 }

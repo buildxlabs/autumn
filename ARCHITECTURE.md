@@ -72,7 +72,10 @@ Every crate lives at `crates/<crate-name>/` and is picked up by the `crates/*` m
 
 The existing `crates/autumn` crate becomes the binary in Phase 0.
 
-Until `engine` exists, the startup work it will own lives in the `autumn` binary: building the Tokio runtime, opening `db`, and the one-time `settings.json` import (`settings_store`). It moves into `engine` when that crate lands.
+The thin `engine` owns the Tokio-side services: settings rows, the database,
+the shared client, the poster and metadata caches, and the Local platform.
+The `autumn` binary still builds the Tokio runtime and resolves the app paths;
+that startup work moves into the full engine in Phase 2.
 
 ## 3. Dependency rules
 

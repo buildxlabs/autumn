@@ -3,7 +3,7 @@
 //! Screens reach the engine only through ui-state stores, so their test
 //! fakes live here with the stores rather than in `ui-screens`.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use domain::{ExternalId, ListEntry, MediaId, MediaKind};
 use engine::{BoxFuture, EngineError, EngineServices};
@@ -24,6 +24,97 @@ impl Default for PendingServices {
 #[must_use]
 pub fn pending_services() -> Arc<dyn EngineServices> {
     Arc::new(PendingServices)
+}
+
+/// An engine fake that serves one Entry detail and records its saves.
+#[derive(Debug, Clone)]
+pub struct CannedServices {
+    detail: MediaDetail,
+    saved: Arc<Mutex<Vec<ListEntry>>>,
+}
+
+impl CannedServices {
+    /// Serves `detail` from the Entry store.
+    #[must_use]
+    pub fn new(detail: MediaDetail) -> Self {
+        Self {
+            detail,
+            saved: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// The entries handed to `save_entry`, oldest first.
+    #[must_use]
+    pub fn saved(&self) -> Vec<ListEntry> {
+        self.saved
+            .lock()
+            .map_or_else(|_| Vec::new(), |saved| saved.clone())
+    }
+}
+
+/// Returns a canned engine fake behind the service trait.
+#[must_use]
+pub fn canned_services(detail: MediaDetail) -> Arc<dyn EngineServices> {
+    Arc::new(CannedServices::new(detail))
+}
+
+impl EngineServices for CannedServices {
+    fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+        let detail = self.detail.clone();
+        Box::pin(async move {
+            Ok(Load {
+                cached: metadata::Cached {
+                    value: detail,
+                    updated_at: std::time::SystemTime::now(),
+                    offline: false,
+                },
+                refresh: None,
+            })
+        })
+    }
+
+    fn local_media(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
+        Box::pin(async move { Ok(Some(MediaId::new(1))) })
+    }
+
+    fn local_entry(&self, _media: MediaId) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
+        Box::pin(async move { Ok(None) })
+    }
+
+    fn save_entry(&self, entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
+        let entry = entry.clone();
+        let saved = Arc::clone(&self.saved);
+        Box::pin(async move {
+            if let Ok(mut saved) = saved.lock() {
+                saved.push(entry.clone());
+            }
+            Ok(entry)
+        })
+    }
+
+    fn mint(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<MediaId, EngineError>> {
+        Box::pin(async move { Ok(MediaId::new(1)) })
+    }
+
+    fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn missed_sequels(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
 }
 
 impl EngineServices for PendingServices {
