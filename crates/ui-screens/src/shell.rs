@@ -50,7 +50,7 @@ use crate::{
     home::{HomeCarousels, observe as observe_home, render as render_home},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
-    placeholder::{mock_media_views, placeholder},
+    placeholder::{episode_gallery, mock_media_views, placeholder},
     search::{SearchEvent, SearchScreen},
 };
 
@@ -806,6 +806,11 @@ impl AppShell {
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
                 .child(self.discover_view.clone())
+                .into_any_element(),
+            Route::Schedule => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(episode_gallery(&self.banner_cache))
                 .into_any_element(),
             Route::Entry { id } => route_view
                 .overflow_y_scroll()
