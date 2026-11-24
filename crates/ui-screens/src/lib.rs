@@ -4,6 +4,7 @@
 
 mod discover;
 mod entry;
+mod home;
 mod lists;
 mod lists_source;
 mod palette;
