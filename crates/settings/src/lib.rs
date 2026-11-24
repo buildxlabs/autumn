@@ -8,4 +8,4 @@ mod settings;
 
 pub use error::SettingsError;
 pub use paths::AppPaths;
-pub use settings::{AppearanceSettings, Settings};
+pub use settings::{AppearanceSettings, LibrarySettings, Settings};

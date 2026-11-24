@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use settings::{AppearanceSettings, Settings, SettingsError};
+use settings::{AppearanceSettings, LibrarySettings, Settings, SettingsError};
 
 #[test]
 fn missing_file_reads_as_none() {
@@ -26,6 +26,7 @@ fn a_valid_file_reads_its_values() {
             sidebar_click_pin: true,
             ..AppearanceSettings::default()
         },
+        library: LibrarySettings::default(),
     };
     assert_eq!(read, Some(expected));
 }

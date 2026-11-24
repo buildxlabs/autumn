@@ -14,6 +14,25 @@ use crate::SettingsError;
 pub struct Settings {
     /// The Appearance tab.
     pub appearance: AppearanceSettings,
+    /// The Library tab.
+    pub library: LibrarySettings,
+}
+
+/// The Library tab.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LibrarySettings {
+    /// When on, library hydration looks up filler episode lists on
+    /// animefillerlist.com. On by default.
+    pub fetch_filler_episodes: bool,
+}
+
+impl Default for LibrarySettings {
+    fn default() -> Self {
+        Self {
+            fetch_filler_episodes: true,
+        }
+    }
 }
 
 /// The Appearance tab.
