@@ -1,4 +1,7 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use domain::MediaId;
 use sqlx::{FromRow, SqlitePool};
@@ -35,6 +38,25 @@ pub struct LocalFile {
     pub locked: bool,
     /// Whether the file is deliberately excluded from the library.
     pub ignored: bool,
+}
+
+/// Whether a library file flag is being set or cleared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FileFlag {
+    /// Set the flag.
+    Set,
+    /// Clear the flag.
+    Clear,
+}
+
+impl FileFlag {
+    fn bit(self) -> i64 {
+        match self {
+            Self::Set => 1,
+            Self::Clear => 0,
+        }
+    }
 }
 
 /// Storage for the files found by library scans.
@@ -124,6 +146,78 @@ impl<'a> LocalFileRepo<'a> {
         }
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Sets one file's lock flag, returning the number of rows changed.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails.
+    pub async fn set_locked(&self, path: &Path, flag: FileFlag) -> Result<u64, DbError> {
+        Ok(
+            sqlx::query("UPDATE local_file SET locked = ? WHERE path = ?")
+                .bind(flag.bit())
+                .bind(path.to_string_lossy())
+                .execute(self.pool)
+                .await?
+                .rows_affected(),
+        )
+    }
+
+    /// Sets every file of `media` to `locked`, returning the rows changed.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails.
+    pub async fn set_media_locked(&self, media: MediaId, flag: FileFlag) -> Result<u64, DbError> {
+        Ok(
+            sqlx::query("UPDATE local_file SET locked = ? WHERE media_id = ?")
+                .bind(flag.bit())
+                .bind(media.get())
+                .execute(self.pool)
+                .await?
+                .rows_affected(),
+        )
+    }
+
+    /// Sets one file's ignored flag, returning the number of rows changed.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails.
+    pub async fn set_ignored(&self, path: &Path, flag: FileFlag) -> Result<u64, DbError> {
+        Ok(
+            sqlx::query("UPDATE local_file SET ignored = ? WHERE path = ?")
+                .bind(flag.bit())
+                .bind(path.to_string_lossy())
+                .execute(self.pool)
+                .await?
+                .rows_affected(),
+        )
+    }
+
+    /// Assigns one file to `media`, optionally numbering it, and locks it.
+    /// Returns the number of rows changed.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails.
+    pub async fn manual_match(
+        &self,
+        path: &Path,
+        media: MediaId,
+        episode: Option<u32>,
+    ) -> Result<u64, DbError> {
+        Ok(sqlx::query(
+            "UPDATE local_file SET media_id = ?, episode = COALESCE(?, episode),
+                    confidence = 1.0, locked = 1 WHERE path = ?",
+        )
+        .bind(media.get())
+        .bind(episode.map(i64::from))
+        .bind(path.to_string_lossy())
+        .execute(self.pool)
+        .await?
+        .rows_affected())
     }
 }
 

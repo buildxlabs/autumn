@@ -10,10 +10,11 @@ publish                = false
 workspace = true
 
 [dependencies]
-domain.workspace    = true
-sqlx                = { features = [ "macros", "migrate", "runtime-tokio", "sqlite-bundled" ], workspace = true }
-thiserror.workspace = true
-tracing.workspace   = true
+domain.workspace     = true
+serde_json.workspace = true
+sqlx                 = { features = [ "macros", "migrate", "runtime-tokio", "sqlite-bundled" ], workspace = true }
+thiserror.workspace  = true
+tracing.workspace    = true
 
 [dev-dependencies]
 tempfile.workspace           = true
