@@ -39,6 +39,7 @@ async fn hydration_numbers_absolute_episodes_and_splits_special_kinds() {
     let s2 = find("Test Series S2 - 03.mkv");
     assert_eq!((s2.season, s2.episode), (Some(2), Some(3)));
     assert_eq!(s2.kind, "episode");
+    assert!(!s2.filler, "a season-local 3 is not absolute filler 3");
 
     let absolute = find("Test Series - 28.mkv");
     assert_eq!(
@@ -62,7 +63,10 @@ async fn hydration_numbers_absolute_episodes_and_splits_special_kinds() {
         "one AniZip lookup for the media"
     );
     assert_eq!(
-        requests.iter().filter(|path| *path == "/shows").count(),
+        requests
+            .iter()
+            .filter(|path| *path == "/shows/test-series")
+            .count(),
         1,
         "one filler lookup for the media"
     );
@@ -102,6 +106,80 @@ async fn an_out_of_range_number_is_retried_on_the_sequel() {
             .count(),
         2,
         "the media and its sequel were each looked up once"
+    );
+}
+
+#[tokio::test]
+async fn a_numbered_special_maps_to_its_anizip_s_number() {
+    let mock = Mock::new(Filler::Disabled).await;
+    let folder = mock.dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("Test Series SP1.mkv"), b"").unwrap();
+    let candidates = [Candidate::new(
+        "Test Series",
+        vec![ExternalId::AniList(1001)],
+    )];
+
+    mock.library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    let rows = mock.db.local_file().all().await.unwrap();
+    let row = rows.first().unwrap();
+    assert_eq!(row.kind, "special");
+    assert_eq!((row.season, row.episode), (Some(0), Some(1)));
+}
+
+#[tokio::test]
+async fn a_season_tagged_out_of_range_number_uses_the_sequel() {
+    let mock = Mock::new(Filler::Disabled).await;
+    let folder = mock.dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("Test Series S2 - 25.mkv"), b"").unwrap();
+    let candidates = [
+        Candidate::new("Test Series", vec![ExternalId::AniList(1001)]).with_sequel(2002),
+        Candidate::new("Test Series 2", vec![ExternalId::AniList(2002)]),
+    ];
+
+    mock.library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    let rows = mock.db.local_file().all().await.unwrap();
+    let sequel = mock
+        .db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(2002)])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(rows.first().unwrap().media_id, Some(sequel));
+}
+
+#[tokio::test]
+async fn an_out_of_range_file_without_a_sequel_is_left_unmatched() {
+    let mock = Mock::new(Filler::Disabled).await;
+    let folder = mock.dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("Test Series - 99.mkv"), b"").unwrap();
+    let candidates = [Candidate::new(
+        "Test Series",
+        vec![ExternalId::AniList(1001)],
+    )];
+
+    let summary = mock
+        .library
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    let rows = mock.db.local_file().all().await.unwrap();
+    assert_eq!(rows.first().unwrap().media_id, None);
+    assert_eq!(
+        summary.files_unmatched, 1,
+        "the scan records why it is unmatched"
     );
 }
 

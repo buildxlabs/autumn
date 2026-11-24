@@ -371,7 +371,8 @@ fn build_rows(
             let found = wins.get(&index).copied();
             let fresh = hydrated.get(&index);
             let parsed_kind = || scanner::kind_name(file.release.kind).to_owned();
-            let media_id = if ignored {
+            let unmatched = fresh.is_some_and(|hydrated| hydrated.unmatched);
+            let media_id = if ignored || unmatched {
                 None
             } else {
                 media.get(&index).copied().or_else(|| {
@@ -416,7 +417,7 @@ fn build_rows(
                 episode,
                 kind,
                 media_id,
-                confidence: if ignored {
+                confidence: if ignored || unmatched {
                     None
                 } else if locked {
                     prior.and_then(|row| row.confidence)

@@ -24,7 +24,4 @@ pub enum LibraryError {
     /// Storage failed.
     #[error("library storage failed")]
     Db(#[from] DbError),
-    /// A metadata lookup during hydration failed.
-    #[error("library metadata lookup failed: {0}")]
-    Metadata(#[from] metadata::Error),
 }

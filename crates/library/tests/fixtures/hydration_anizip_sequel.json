@@ -8,6 +8,12 @@
       "seasonNumber": 1,
       "episodeNumber": 5,
       "title": { "en": "Episode 99" }
+    },
+    "125": {
+      "absoluteEpisodeNumber": 125,
+      "seasonNumber": 2,
+      "episodeNumber": 25,
+      "title": { "en": "Episode 125" }
     }
   },
   "episodeCount": 10,

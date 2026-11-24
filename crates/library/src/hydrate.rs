@@ -10,6 +10,7 @@ use db::Db;
 use domain::{ExternalId, MediaId, MediaKind};
 use metadata::{Aging, AniZip, AnimeFillerList, Media};
 use release_parser::EpisodeKind;
+use tracing::warn;
 
 use crate::{Candidate, LibraryError, Match, ScannedFile};
 
@@ -33,6 +34,8 @@ pub(crate) struct HydratedFile {
     pub(crate) filler: bool,
     /// Whether the number lies beyond the matched media and a sequel should be tried.
     pub(crate) sequel_needed: bool,
+    /// Whether no sequel fitted, so the scan should leave the file unmatched.
+    pub(crate) unmatched: bool,
 }
 
 impl HydratedFile {
@@ -89,7 +92,7 @@ pub(crate) async fn hydrate_all(
             .chain(candidate.aliases.iter())
             .cloned()
             .collect::<Vec<_>>();
-        let data = fetch(hydration, id, &titles, &mut cache).await?;
+        let data = fetch(hydration, id, &titles, &mut cache).await;
         for index in indexes {
             let Some(file) = scanned.get(*index) else {
                 continue;
@@ -110,8 +113,7 @@ pub(crate) async fn hydrate_all(
                         .chain(sequel_candidate.aliases.iter())
                         .cloned()
                         .collect::<Vec<_>>();
-                    let sequel_data =
-                        fetch(hydration, sequel_id, &sequel_titles, &mut cache).await?;
+                    let sequel_data = fetch(hydration, sequel_id, &sequel_titles, &mut cache).await;
                     let retry = hydrate_file(file, &sequel_data);
                     if retry.sequel_needed {
                         continue;
@@ -148,11 +150,18 @@ async fn fetch(
     anilist_id: u32,
     titles: &[String],
     cache: &mut HashMap<u32, MediaData>,
-) -> Result<MediaData, LibraryError> {
+) -> MediaData {
     if let Some(data) = cache.get(&anilist_id) {
-        return Ok(data.clone());
+        return data.clone();
     }
-    let anizip = hydration.anizip.media(anilist_id, Aging::Finished).await?;
+    let anizip = hydration
+        .anizip
+        .media(anilist_id, Aging::Finished)
+        .await
+        .unwrap_or_else(|error| {
+            warn!(%error, anilist_id, "anizip lookup failed; keeping parsed numbers");
+            None
+        });
     let filler = hydration
         .filler
         .filler_episodes(titles)
@@ -163,7 +172,7 @@ async fn fetch(
         .collect();
     let data = MediaData { anizip, filler };
     cache.insert(anilist_id, data.clone());
-    Ok(data)
+    data
 }
 
 /// Applies one media's numbering to a parsed file.
@@ -175,7 +184,22 @@ fn hydrate_file(file: &ScannedFile, data: &MediaData) -> HydratedFile {
         kind,
         filler: false,
         sequel_needed: false,
+        unmatched: false,
     };
+    if file.release.kind == EpisodeKind::Special {
+        // A numbered special matches AniZip's `S{n}` entry; an unnumbered one
+        // stays as the parser found it.
+        if let Some(number) = file.release.episode
+            && data
+                .anizip
+                .as_ref()
+                .is_some_and(|media| media.episodes.contains_key(&format!("S{number}")))
+        {
+            result.season = Some(0);
+            result.episode = Some(number);
+        }
+        return result;
+    }
     if file.release.kind != EpisodeKind::Episode {
         return result;
     }
@@ -196,19 +220,22 @@ fn hydrate_file(file: &ScannedFile, data: &MediaData) -> HydratedFile {
             result.season = entry.season_number;
             result.episode = entry.season_episode;
         }
-        let absolute = entry.absolute_number.unwrap_or(number);
-        result.filler = data.filler.contains(&absolute);
+        // Filler lists are absolute-numbered. A local number is not evidence.
+        if let Some(absolute) = entry.absolute_number {
+            result.filler = data.filler.contains(&absolute);
+        }
         return result;
     }
-    if file.release.season.is_none()
-        && data
-            .anizip
-            .as_ref()
-            .and_then(|media| media.episode_count)
-            .is_some_and(|count| number > count)
+    if data
+        .anizip
+        .as_ref()
+        .and_then(|media| media.episode_count)
+        .is_some_and(|count| number > count)
     {
         result.sequel_needed = true;
+        result.unmatched = true;
+    } else if file.release.season.is_none() {
+        result.filler = data.filler.contains(&number);
     }
-    result.filler = data.filler.contains(&number);
     result
 }
