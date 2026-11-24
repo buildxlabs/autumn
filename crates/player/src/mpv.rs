@@ -345,7 +345,7 @@ async fn connect_with_retry(
 
 /// Owns the child and the pump until the player or its IPC connection ends.
 async fn supervise(
-    child: Child,
+    mut child: Child,
     endpoint: Endpoint,
     _log: NamedTempFile,
     retry: Retry,
@@ -365,7 +365,12 @@ async fn supervise(
         }
     };
 
-    supervise_connected(stream, child, endpoint, policy, events, commands).await;
+    let mut child = supervise_connected(stream, child, endpoint, policy, events, commands).await;
+    // Reap without killing: IINA's `iina-cli` can outlive the IPC connection,
+    // and leaving it unreaped would leak a process-table entry per session.
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+    });
 }
 
 /// Drives an already-connected session; tests inject a fake transport here.
@@ -416,6 +421,8 @@ where
 mod tests {
     use std::time::Duration;
 
+    use tokio::time::timeout;
+
     use super::*;
 
     #[cfg(unix)]
@@ -448,6 +455,47 @@ mod tests {
         assert!(server.await.unwrap());
         let _ = child.start_kill();
         let _ = child.wait().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn ipc_close_kills_and_reaps_an_mpv_child() {
+        use futures::StreamExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = crate::Endpoint::at(dir.path().join("mpv.sock").to_string_lossy());
+        let (client_stream, server_stream) = tokio::io::duplex(64 * 1024);
+        let mut fake = crate::testing::FakeMpv::from_stream(server_stream);
+        let (_command_tx, command_rx) = mpsc::unbounded();
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let child = tokio::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+
+        let supervisor = tokio::spawn(supervise_connected(
+            client_stream,
+            child,
+            endpoint,
+            ChildPolicy::KillOnIpcClose,
+            event_tx,
+            command_rx,
+        ));
+        fake.drain_observations().await;
+        drop(fake);
+
+        let event = timeout(Duration::from_secs(2), event_rx.next())
+            .await
+            .expect("the session must end when IPC closes");
+        assert_eq!(event, Some(PlayerEvent::Exited));
+        let mut child = timeout(Duration::from_secs(2), supervisor)
+            .await
+            .expect("the supervisor must finish")
+            .expect("the supervisor task must not panic");
+        assert!(
+            child.wait().await.is_ok_and(|status| !status.success()),
+            "mpv's child must be killed when IPC closes"
+        );
     }
 
     #[test]

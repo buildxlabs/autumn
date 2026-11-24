@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::{
-    Endpoint, LaunchOptions, Result, Session,
+    Endpoint, LaunchOptions, Result, Retry, Session,
     mpv::{self, ChildPolicy},
 };
 
@@ -22,10 +22,16 @@ pub fn launch_iina(
     file: &str,
     options: &LaunchOptions,
 ) -> Result<Session> {
+    // iina-cli returns before the app opens IPC, so the longer budget is
+    // required, not something a caller has to remember to opt into.
+    let options = LaunchOptions {
+        ipc_retry: Retry::iina(),
+        ..options.clone()
+    };
     mpv::launch(
         executable,
         |endpoint| iina_args(endpoint, file),
-        options,
+        &options,
         ChildPolicy::LeaveOnIpcClose,
     )
 }
@@ -75,6 +81,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let endpoint = crate::Endpoint::at(dir.path().join("iina.sock").to_string_lossy());
         let (client_stream, server_stream) = tokio::io::duplex(64 * 1024);
+        let mut fake = crate::testing::FakeMpv::from_stream(server_stream);
         let (_command_tx, command_rx) = mpsc::unbounded();
         let (event_tx, mut event_rx) = mpsc::channel(8);
         let child = tokio::process::Command::new("sleep")
@@ -90,7 +97,10 @@ mod tests {
             event_tx,
             command_rx,
         ));
-        drop(server_stream);
+        // Let the pump finish its observations, then close the transport for
+        // real so the test exercises EOF rather than a failed write.
+        fake.drain_observations().await;
+        drop(fake);
 
         let event = timeout(Duration::from_secs(2), event_rx.next())
             .await

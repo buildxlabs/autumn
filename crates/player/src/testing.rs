@@ -42,6 +42,15 @@ impl FakeMpv {
         )
     }
 
+    /// Wraps an existing server stream, for tests that own the client end.
+    pub(crate) fn from_stream(server_stream: DuplexStream) -> Self {
+        let (read, write) = tokio::io::split(server_stream);
+        Self {
+            reader: BufReader::new(read),
+            writer: write,
+        }
+    }
+
     /// Reads the observation commands the pump sends when it starts.
     pub(crate) async fn drain_observations(&mut self) -> Vec<Value> {
         let mut seen = Vec::with_capacity(OBSERVED.len());
