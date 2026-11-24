@@ -14,6 +14,7 @@ mod catalog;
 mod client;
 mod detail;
 mod error;
+mod filler;
 mod fragments;
 mod list;
 mod model;
@@ -28,6 +29,7 @@ pub use cache::{AIRING_TTL, CATALOG_TTL, Cached, CatalogCache, Load, Lookup, Ref
 pub use catalog::{AiringEpisode, CountryTrends, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
+pub use filler::{AnimeFillerList, FillerLookup};
 pub use list::{
     CustomListNames, ListCollection, ListEntryData, ListEntryInput, ListGroup, ScoreFormat,
 };

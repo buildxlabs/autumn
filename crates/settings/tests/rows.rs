@@ -1,6 +1,6 @@
 //! Settings as one JSON row per tab, the shape `db` stores.
 
-use settings::{AppearanceSettings, Settings};
+use settings::{AppearanceSettings, LibrarySettings, Settings};
 
 fn pinned() -> Settings {
     Settings {
@@ -8,6 +8,7 @@ fn pinned() -> Settings {
             sidebar_click_pin: true,
             ..AppearanceSettings::default()
         },
+        library: LibrarySettings::default(),
     }
 }
 
@@ -26,7 +27,12 @@ fn there_is_one_row_per_tab() {
     let rows = Settings::default().to_rows().unwrap();
 
     let tabs: Vec<&str> = rows.iter().map(|(tab, _)| tab.as_str()).collect();
-    assert_eq!(tabs, ["appearance"]);
+    assert_eq!(tabs, ["appearance", "library"]);
+}
+
+#[test]
+fn the_library_filler_setting_is_on_by_default() {
+    assert!(Settings::default().library.fetch_filler_episodes);
 }
 
 #[test]

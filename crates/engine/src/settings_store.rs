@@ -125,7 +125,7 @@ mod tests {
     };
 
     use db::Db;
-    use settings::{AppearanceSettings, Settings};
+    use settings::{AppearanceSettings, LibrarySettings, Settings};
     use tempfile::TempDir;
 
     use super::load;
@@ -144,6 +144,7 @@ mod tests {
                 sidebar_click_pin: true,
                 ..AppearanceSettings::default()
             },
+            library: LibrarySettings::default(),
         }
     }
 
@@ -168,8 +169,8 @@ mod tests {
         );
         assert_eq!(
             db.settings().rows().await.unwrap().len(),
-            1,
-            "one row per tab"
+            2,
+            "two rows: the appearance and library tabs"
         );
     }
 
