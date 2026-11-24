@@ -53,6 +53,7 @@ ui-components = { path = "crates/ui-components" }
 ui-screens = { path = "crates/ui-screens" }
 ui-state = { path = "crates/ui-state" }
 ui-theme = { path = "crates/ui-theme" }
+winreg = "0.56"
 
 [profile.dev.package."*"]
 opt-level = 2
