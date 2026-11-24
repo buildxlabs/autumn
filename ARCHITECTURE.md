@@ -108,6 +108,7 @@ db            → domain
 auth           → domain, net
 engine         → domain, net, db, metadata, tracker, settings
 metadata      → domain, net
+player        → domain
 tracker       → domain, db
 ui-state      → domain, engine, metadata, tracker, db (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker)
 ui-components → (gpui-kit only)

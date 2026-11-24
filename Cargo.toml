@@ -44,6 +44,7 @@ time = { features = [ "local-offset" ], version = "0.3" }
 tokio = { default-features = false, features = [
   "macros",
   "net",
+  "process",
   "rt",
   "rt-multi-thread",
   "sync",
