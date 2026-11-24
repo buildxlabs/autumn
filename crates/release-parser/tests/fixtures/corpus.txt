@@ -1,0 +1,1998 @@
+# Release names with hand-reviewed expected fields. Format: see tests/corpus.rs.
+# Sources: see SOURCES.md next to this file.
+#
+# Conventions the expectations follow:
+# - title is the series title as written, before the episode marker. A season
+#   marker (S2, Season 2, 2nd Season, Second Season) moves to season and leaves
+#   the title. A parenthesis inside the title stays in it.
+# - Between alternative titles split by " / ", the first one in Latin letters.
+# - episode is the number within its kind: SP01 and NCOP2 give 1 and 2.
+# - resolution is the vertical line count; 4K is 2160.
+# - checksum is the eight-digit CRC32, written in capitals.
+# - For a movie marked `Title: The Movie - Subtitle`, the subtitle is the
+#   episode title.
+
+# ---------------------------------------------------------------------------
+# From reference/seanime tests (GPL-3.0)
+# ---------------------------------------------------------------------------
+
+name: [SubsPlease] 86 - Eighty Six - 20 (1080p).mkv
+title: 86 - Eighty Six
+group: SubsPlease
+episode: 20
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] 86 - Eighty Six - 20v2 (1080p) [30072859].mkv
+title: 86 - Eighty Six
+group: SubsPlease
+episode: 20
+version: 2
+resolution: 1080
+checksum: 30072859
+extension: mkv
+
+name: [SubsPlease] 86 - Eighty Six - 21v2 (1080p) [4B1616A5].mkv
+title: 86 - Eighty Six
+group: SubsPlease
+episode: 21
+version: 2
+resolution: 1080
+checksum: 4B1616A5
+extension: mkv
+
+name: [SubsPlease] 86 - Eighty Six - 23v2 - Never-Ending (1080p) [D94B4894].mkv
+title: 86 - Eighty Six
+group: SubsPlease
+episode: 23
+version: 2
+episode_title: Never-Ending
+resolution: 1080
+checksum: D94B4894
+extension: mkv
+
+name: [SubsPlease] 86 Eighty-Six Part 2 - 01 (1080p).mkv
+title: 86 Eighty-Six Part 2
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: 86 - Eighty Six - 01 - Undertaker.mkv
+title: 86 - Eighty Six
+episode: 1
+episode_title: Undertaker
+extension: mkv
+
+name: [SubsPlease] Bocchi the Rock! - 01 (1080p) [E04F4EFB].mkv
+title: Bocchi the Rock!
+group: SubsPlease
+episode: 1
+resolution: 1080
+checksum: E04F4EFB
+extension: mkv
+
+name: [SubsPlease] Bungou Stray Dogs - 61 (1080p) [F609B947].mkv
+title: Bungou Stray Dogs
+group: SubsPlease
+episode: 61
+resolution: 1080
+checksum: F609B947
+extension: mkv
+
+name: [subsplease] bungou stray dogs - 61 (1080p) [f609b947].mkv
+title: bungou stray dogs
+group: subsplease
+episode: 61
+resolution: 1080
+checksum: F609B947
+extension: mkv
+
+name: [SubsPlease] Bungou Stray Dogs 5th Season - 01 (1080p).mkv
+title: Bungou Stray Dogs
+group: SubsPlease
+season: 5
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Dandadan - 01v2 (1080p).mkv
+title: Dandadan
+group: SubsPlease
+episode: 1
+version: 2
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Jujutsu Kaisen 2nd Season - 01 (1080p) [12345678].mkv
+title: Jujutsu Kaisen
+group: SubsPlease
+season: 2
+episode: 1
+resolution: 1080
+checksum: 12345678
+extension: mkv
+
+name: [SubsPlease] HIGH CARD Season 2 - 01 (1080p) [ABCD1234].mkv
+title: HIGH CARD
+group: SubsPlease
+season: 2
+episode: 1
+resolution: 1080
+checksum: ABCD1234
+extension: mkv
+
+name: [SubsPlease] Kaiju No. 8 - 01 (1080p).mkv
+title: Kaiju No. 8
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Kimi ni Todoke 2nd Season - 01 (1080p).mkv
+title: Kimi ni Todoke
+group: SubsPlease
+season: 2
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Monogatari Series - Off and Monster Season - 02 (1080p) [2B23C6D3].mkv
+title: Monogatari Series - Off and Monster Season
+group: SubsPlease
+episode: 2
+resolution: 1080
+checksum: 2B23C6D3
+extension: mkv
+
+name: [SubsPlease] Mushoku Tensei S2 - 00 (1080p) [9C362DC3].mkv
+title: Mushoku Tensei
+group: SubsPlease
+season: 2
+episode: 0
+resolution: 1080
+checksum: 9C362DC3
+extension: mkv
+
+name: [SubsPlease] Mushoku Tensei S2 - 01 (1080p) [EC64C8B1].mkv
+title: Mushoku Tensei
+group: SubsPlease
+season: 2
+episode: 1
+resolution: 1080
+checksum: EC64C8B1
+extension: mkv
+
+name: [SubsPlease] One Piece - 1000.mkv
+title: One Piece
+group: SubsPlease
+episode: 1000
+extension: mkv
+
+name: [SubsPlease] One Piece - 1100 (1080p).mkv
+title: One Piece
+group: SubsPlease
+episode: 1100
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Oshi no Ko - 12 (1080p).mkv
+title: Oshi no Ko
+group: SubsPlease
+episode: 12
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu - 01 (1080p).mkv
+title: Re Zero kara Hajimeru Isekai Seikatsu
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Shangri-La Frontier S02 - 14 (1080p).mkv
+title: Shangri-La Frontier
+group: SubsPlease
+season: 2
+episode: 14
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Spy x Family - 01 (1080p).mkv
+title: Spy x Family
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Violet Evergarden - 01 (1080p) [A1B2C3D4].mkv
+title: Violet Evergarden
+group: SubsPlease
+episode: 1
+resolution: 1080
+checksum: A1B2C3D4
+extension: mkv
+
+name: [SubsPlease] Sousou no Frieren - 01 (720p).mkv
+title: Sousou no Frieren
+group: SubsPlease
+episode: 1
+resolution: 720
+extension: mkv
+
+name: [SubsPlease] Death Note - 02 (1080p).mkv
+title: Death Note
+group: SubsPlease
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Chainsaw Man - 01 (1080p).mkv
+title: Chainsaw Man
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Boku no Hero Academia - 01 (1080p).mkv
+title: Boku no Hero Academia
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Kimetsu no Yaiba - 01 (1080p).mkv
+title: Kimetsu no Yaiba
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Bleach - 01 (1080p).mkv
+title: Bleach
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Dungeon Meshi - 01 (1080p).mkv
+title: Dungeon Meshi
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [SubsPlease] Bunny Girl Senpai - 01 (1080p).mkv
+title: Bunny Girl Senpai
+group: SubsPlease
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Erai-raws] Danmachi S5 - 01 (1080p).mkv
+title: Danmachi
+group: Erai-raws
+season: 5
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Erai-raws] Flying Witch - 01 [1080p][HEVC][Multiple Subtitle].mkv
+title: Flying Witch
+group: Erai-raws
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Erai-raws] Monogatari Series - Off & Monster Season - 01 [1080p][Multiple Subtitle][64667E46].mkv
+title: Monogatari Series - Off & Monster Season
+group: Erai-raws
+episode: 1
+resolution: 1080
+checksum: 64667E46
+extension: mkv
+
+name: [Erai-raws] Mushoku Tensei II Part 2 - 06 [1080p][HEVC][Multiple Subtitle][7509990E].mkv
+title: Mushoku Tensei II Part 2
+group: Erai-raws
+episode: 6
+resolution: 1080
+checksum: 7509990E
+extension: mkv
+
+name: [Erai-raws] One Piece - 1000 [720p][Multiple Subtitle].mkv
+title: One Piece
+group: Erai-raws
+episode: 1000
+resolution: 720
+extension: mkv
+
+name: [Erai-raws] Zoku Owarimonogatari - 01 [1080p][Multiple Subtitle].mkv
+title: Zoku Owarimonogatari
+group: Erai-raws
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Erai-raws] Kimi wa Houkago Insomnia - 01 [1080p].mkv
+title: Kimi wa Houkago Insomnia
+group: Erai-raws
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [HorribleSubs] Durarara!! x2 Shou - 01 [1080p].mkv
+title: Durarara!! x2 Shou
+group: HorribleSubs
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [HorribleSubs] Fullmetal Alchemist Brotherhood - 01 [1080p].mkv
+title: Fullmetal Alchemist Brotherhood
+group: HorribleSubs
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [HorribleSubs] Kono Subarashii Sekai ni Shukufuku wo! - 02 [1080p].mkv
+title: Kono Subarashii Sekai ni Shukufuku wo!
+group: HorribleSubs
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: [HorribleSubs] Mob Psycho 100 III - 01 [1080p].mkv
+title: Mob Psycho 100 III
+group: HorribleSubs
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [HorribleSubs] One Piece - 1000 [720p].mkv
+title: One Piece
+group: HorribleSubs
+episode: 1000
+resolution: 720
+extension: mkv
+
+name: [HorribleSubs] One Punch Man - 01 [1080p].mkv
+title: One Punch Man
+group: HorribleSubs
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Judas] ACCA 13-ku Kansatsu-ka - Ending.mkv
+title: ACCA 13-ku Kansatsu-ka
+group: Judas
+kind: nced
+extension: mkv
+
+name: [Judas] Baccano! - S01E05.mkv
+title: Baccano!
+group: Judas
+season: 1
+episode: 5
+extension: mkv
+
+name: [Judas] Bungo Stray Dogs - S01E01.mkv
+title: Bungo Stray Dogs
+group: Judas
+season: 1
+episode: 1
+extension: mkv
+
+name: [Judas] Kaiju No. 8 - 01 [1080p][HEVC x265 10bit].mkv
+title: Kaiju No. 8
+group: Judas
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Judas] Kimetsu no Yaiba - S05E01v2.mkv
+title: Kimetsu no Yaiba
+group: Judas
+season: 5
+episode: 1
+version: 2
+extension: mkv
+
+name: [Judas] One Piece - 1000 [1080p][HEVC x265 10bit].mkv
+title: One Piece
+group: Judas
+episode: 1000
+resolution: 1080
+extension: mkv
+
+name: [Judas] One Punch Man - S01OVA01.mkv
+title: One Punch Man
+group: Judas
+season: 1
+episode: 1
+kind: special
+extension: mkv
+
+name: [Commie] Bakemonogatari - 02 [BD 1080p AAC] [1B3D8A29].mkv
+title: Bakemonogatari
+group: Commie
+episode: 2
+resolution: 1080
+checksum: 1B3D8A29
+extension: mkv
+
+name: [Commie] Hanamonogatari - 01 [1080p][33BBD87B].mkv
+title: Hanamonogatari
+group: Commie
+episode: 1
+resolution: 1080
+checksum: 33BBD87B
+extension: mkv
+
+name: [Commie] Kizumonogatari I - Tekketsu-hen [1080p].mkv
+title: Kizumonogatari I - Tekketsu-hen
+group: Commie
+resolution: 1080
+extension: mkv
+
+name: [Commie] Kizumonogatari III - Reiketsu-hen [1080p].mkv
+title: Kizumonogatari III - Reiketsu-hen
+group: Commie
+resolution: 1080
+extension: mkv
+
+name: [Commie] Monogatari Series Second Season - 03 [1080p][33BBD87B].mkv
+title: Monogatari Series
+group: Commie
+season: 2
+episode: 3
+resolution: 1080
+checksum: 33BBD87B
+extension: mkv
+
+name: [Commie] Nekomonogatari (Kuro) - 01 [B085F6CB].mkv
+title: Nekomonogatari (Kuro)
+group: Commie
+episode: 1
+checksum: B085F6CB
+extension: mkv
+
+name: [Commie] Nisemonogatari - 02 [DB005E82].mkv
+title: Nisemonogatari
+group: Commie
+episode: 2
+checksum: DB005E82
+extension: mkv
+
+name: [Commie] Owarimonogatari Second Season - 01 [1080p].mkv
+title: Owarimonogatari
+group: Commie
+season: 2
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Commie] Zoku Owarimonogatari - 03 [1080p].mkv
+title: Zoku Owarimonogatari
+group: Commie
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [Coalgirls]_Bakemonogatari_01_(1920x1080_Blu-ray_FLAC)_[E32CBBD3].mkv
+title: Bakemonogatari
+group: Coalgirls
+episode: 1
+resolution: 1080
+checksum: E32CBBD3
+extension: mkv
+
+name: [Coalgirls]_Hanamonogatari_03_(1920x1080_Blu-Ray_FLAC)_[C1D38A94].mkv
+title: Hanamonogatari
+group: Coalgirls
+episode: 3
+resolution: 1080
+checksum: C1D38A94
+extension: mkv
+
+name: [Coalgirls]_Monogatari_Series_Second_Season_02_(1920x1080_Blu-ray_FLAC).mkv
+title: Monogatari Series
+group: Coalgirls
+season: 2
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: [Coalgirls]_Nekomonogatari_(Kuro)_02_(1920x1080_Blu-ray_FLAC)_[A38F72D0].mkv
+title: Nekomonogatari (Kuro)
+group: Coalgirls
+episode: 2
+resolution: 1080
+checksum: A38F72D0
+extension: mkv
+
+name: [Coalgirls]_Nisemonogatari_03_(1920x1080_Blu-ray_FLAC).mkv
+title: Nisemonogatari
+group: Coalgirls
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [Coalgirls] Kizumonogatari II - Nekketsu-hen (1920x1080 Blu-Ray FLAC).mkv
+title: Kizumonogatari II - Nekketsu-hen
+group: Coalgirls
+resolution: 1080
+extension: mkv
+
+name: [MTBB] Hanamonogatari - 02 (1080p BD) [69C45B90].mkv
+title: Hanamonogatari
+group: MTBB
+episode: 2
+resolution: 1080
+checksum: 69C45B90
+extension: mkv
+
+name: [MTBB] Nekomonogatari: Kuro - 03 (1080p BD) [5C0A0065].mkv
+title: Nekomonogatari: Kuro
+group: MTBB
+episode: 3
+resolution: 1080
+checksum: 5C0A0065
+extension: mkv
+
+name: [MTBB] Owarimonogatari 2nd Season - 02 (1080p BD).mkv
+title: Owarimonogatari
+group: MTBB
+season: 2
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: [MTBB] Zoku Owarimonogatari - 02 (1080p BD).mkv
+title: Zoku Owarimonogatari
+group: MTBB
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: [Edo] Koyomimonogatari - 03 (1080p, AAC).mkv
+title: Koyomimonogatari
+group: Edo
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [Edo] Monogatari Series: Second Season - 01 (1080p, AAC) [54F919E3].mkv
+title: Monogatari Series
+group: Edo
+season: 2
+episode: 1
+resolution: 1080
+checksum: 54F919E3
+extension: mkv
+
+name: [SomeSubs] Owarimonogatari S2 - 03 [1080p BD].mkv
+title: Owarimonogatari
+group: SomeSubs
+season: 2
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [SomeSubs] Diamond no Ace - Act II Second Season - 03 [1080p].mkv
+title: Diamond no Ace - Act II
+group: SomeSubs
+season: 2
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [Kawaiika-Raws] Monogatari Series Off & Monster Season - 03 [WEB 1080p x265 E-AC-3][Dual-Audio].mkv
+title: Monogatari Series Off & Monster Season
+group: Kawaiika-Raws
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: [Nippon-Yasan] Monogatari Series - Off & Monster Season - 01 (1080p).mkv
+title: Monogatari Series - Off & Monster Season
+group: Nippon-Yasan
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [ASW] HIGH CARD - 01 [1080p HEVC x265 10Bit][AAC].mkv
+title: HIGH CARD
+group: ASW
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [ASW] Zom 100 - 01 [1080p HEVC].mkv
+title: Zom 100
+group: ASW
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Anime Time] Akebi-chan no Sailor Fuku - 01 [1080p][HEVC 10bit x265][AAC][Multi Sub].mkv
+title: Akebi-chan no Sailor Fuku
+group: Anime Time
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [EMBER] Dungeon Meshi - 01 (1080p) [Dual Audio].mkv
+title: Dungeon Meshi
+group: EMBER
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [EMBER] One Piece - 1000 [1080p] [Dual Audio] [HEVC].mkv
+title: One Piece
+group: EMBER
+episode: 1000
+resolution: 1080
+extension: mkv
+
+name: [EMBER] Tsue to Tsurugi no Wistoria - 02.mkv
+title: Tsue to Tsurugi no Wistoria
+group: EMBER
+episode: 2
+extension: mkv
+
+name: [French-Fansub] One Piece - 1000 [480p] [French].mkv
+title: One Piece
+group: French-Fansub
+episode: 1000
+resolution: 480
+extension: mkv
+
+name: [GJM] Love Me, Love Me Not (BD 1080p) [841C23CD].mkv
+title: Love Me, Love Me Not
+group: GJM
+resolution: 1080
+checksum: 841C23CD
+extension: mkv
+
+name: [Group] Metallic Rouge - 01v2 [1080p].mkv
+title: Metallic Rouge
+group: Group
+episode: 1
+version: 2
+resolution: 1080
+extension: mkv
+
+name: [Micro] Chainsaw Man - 01 (1080p).mkv
+title: Chainsaw Man
+group: Micro
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Raze] Dandadan - 04 x265 10bit 1080p 143.8561fps.mkv
+title: Dandadan
+group: Raze
+episode: 4
+resolution: 1080
+extension: mkv
+
+name: [Shimai] Gotoubun no Hanayome＊ - 01.mkv
+title: Gotoubun no Hanayome＊
+group: Shimai
+episode: 1
+extension: mkv
+
+name: [Best] Blue Box - 01 (1080p).mkv
+title: Blue Box
+group: Best
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [CoalGirls] Sousou no Frieren - 01 [BDRip 1920x1080 HEVC FLAC].mkv
+title: Sousou no Frieren
+group: CoalGirls
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: [Seanime] Example Show - OVA.mkv
+title: Example Show
+group: Seanime
+kind: special
+extension: mkv
+
+name: [Sub] Title SP01.mkv
+title: Title
+group: Sub
+episode: 1
+kind: special
+extension: mkv
+
+name: Attack on Titan (2013) - E02.mkv
+title: Attack on Titan
+episode: 2
+year: 2013
+extension: mkv
+
+name: Attack on Titan Final_Season_Part_2 - [04] [1080p].mkv
+title: Attack on Titan Final Season Part 2
+episode: 4
+resolution: 1080
+extension: mkv
+
+name: Attack on Titan [1080p] - E01.mkv
+title: Attack on Titan
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Baccano! - 01 [BD 1080p] [5.1 Dual Audio].mkv
+title: Baccano!
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Bakemonogatari - 03 (BDRip 1920x1080 x264 FLAC).mkv
+title: Bakemonogatari
+episode: 3
+resolution: 1080
+extension: mkv
+
+name: Blood Blockade Battlefront - NCED.mkv
+title: Blood Blockade Battlefront
+kind: nced
+extension: mkv
+
+name: Bungou.Stray.Dogs.S02E01.1080p.BluRay.x264-GROUP.mkv
+title: Bungou Stray Dogs
+group: GROUP
+season: 2
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Bunny.Girl.Senpai.E01.mkv
+title: Bunny Girl Senpai
+episode: 1
+extension: mkv
+
+name: Dandadan - 01 (1080p).mkv
+title: Dandadan
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Durarara.S01E02.1080p.BluRay.x264-GROUP.mkv
+title: Durarara
+group: GROUP
+season: 1
+episode: 2
+resolution: 1080
+extension: mkv
+
+name: EP5.mkv
+episode: 5
+extension: mkv
+
+name: EP_12.mkv
+episode: 12
+extension: mkv
+
+name: Ending 01.mkv
+episode: 1
+kind: nced
+extension: mkv
+
+name: Ep1.mkv
+episode: 1
+extension: mkv
+
+name: Episode 01.mkv
+episode: 1
+extension: mkv
+
+name: Episode_03.mkv
+episode: 3
+extension: mkv
+
+name: Evangelion.1.0.You.Are.Not.Alone.2007.1080p.BluRay.x264-GROUP.mkv
+title: Evangelion 1.0 You Are Not Alone
+group: GROUP
+resolution: 1080
+year: 2007
+extension: mkv
+
+name: Evangelion.2.22.You.Can.Not.Advance.2009.1080p.BluRay.x265-GROUP.mkv
+title: Evangelion 2.22 You Can Not Advance
+group: GROUP
+resolution: 1080
+year: 2009
+extension: mkv
+
+name: Evangelion.3.0+1.0.Thrice.Upon.a.Time.2021.1080p.AMZN.WEB-DL.DDP5.1.x264-GROUP.mkv
+title: Evangelion 3.0+1.0 Thrice Upon a Time
+group: GROUP
+resolution: 1080
+year: 2021
+extension: mkv
+
+name: FMAB.S01E01.1080p.BluRay.x264.mkv
+title: FMAB
+season: 1
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Flying Witch (2016) - S01E01 - Stone Seeker.mkv
+title: Flying Witch
+season: 1
+episode: 1
+episode_title: Stone Seeker
+year: 2016
+extension: mkv
+
+name: Flying.Witch.2016.E01.1080p.BluRay.mkv
+title: Flying Witch
+episode: 1
+resolution: 1080
+year: 2016
+extension: mkv
+
+name: Frieren - 01.mkv
+title: Frieren
+episode: 1
+extension: mkv
+
+name: Golden.Kamuy.S03E01.1080p.WEB-DL.x264.mkv
+title: Golden Kamuy
+season: 3
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Insomniacs.After.School.S01E01.1080p.WEB-DL.10bit.x265-GROUP.mkv
+title: Insomniacs After School
+group: GROUP
+season: 1
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Kimi.no.Na.wa.2016.1080p.BluRay.x264.mkv
+title: Kimi no Na wa
+resolution: 1080
+year: 2016
+extension: mkv
+
+name: Kizumonogatari Part 1 Tekketsu [1080p].mkv
+title: Kizumonogatari Part 1 Tekketsu
+resolution: 1080
+extension: mkv
+
+name: KonoSuba.God's.Blessing.On.This.Wonderful.World.S02E01.1080p.BluRay.10-Bit.Dual-Audio.FLAC2.0.x265-YURASUKA.mkv
+title: KonoSuba God's Blessing On This Wonderful World
+group: YURASUKA
+season: 2
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Mob Psycho - S01E05 - Test5.mkv
+title: Mob Psycho
+season: 1
+episode: 5
+episode_title: Test5
+extension: mkv
+
+name: Mob Psycho - S02E05.mkv
+title: Mob Psycho
+season: 2
+episode: 5
+extension: mkv
+
+name: mob psycho 100 - E02.mkv
+title: mob psycho 100
+episode: 2
+extension: mkv
+
+name: Mushoku.Tensei.Jobless.Reincarnation.S02E01.1080p.CR.WEB-DL.x264.mkv
+title: Mushoku Tensei Jobless Reincarnation
+season: 2
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: My.Hero.Academia.S08E07.From.Aizawa.1080p.NF.WEB-DL.AAC2.0.H.264-VARYG.mkv
+title: My Hero Academia
+group: VARYG
+season: 8
+episode: 7
+episode_title: From Aizawa
+resolution: 1080
+extension: mkv
+
+name: NCED 01 (BD 1080p).mkv
+episode: 1
+kind: nced
+resolution: 1080
+extension: mkv
+
+name: NCED 01.mkv
+episode: 1
+kind: nced
+extension: mkv
+
+name: NCOP (BD 1080p).mkv
+kind: ncop
+resolution: 1080
+extension: mkv
+
+name: NC_OP.mkv
+kind: ncop
+extension: mkv
+
+name: Naruto Shippuden - E05.mkv
+title: Naruto Shippuden
+episode: 5
+extension: mkv
+
+name: OP01.mkv
+episode: 1
+kind: ncop
+extension: mkv
+
+name: op01.mkv
+episode: 1
+kind: ncop
+extension: mkv
+
+name: One Piece - E100.mkv
+title: One Piece
+episode: 100
+extension: mkv
+
+name: One Punch Man OVA - 01.mkv
+title: One Punch Man
+episode: 1
+kind: special
+extension: mkv
+
+name: One.Piece.Film.Gold.2016.1080p.BluRay.x264-GROUP.mkv
+title: One Piece Film Gold
+group: GROUP
+resolution: 1080
+year: 2016
+extension: mkv
+
+name: One.Piece.Stampede.2019.1080p.NF.WEB-DL.DDP5.1.H.264-GROUP.mkv
+title: One Piece Stampede
+group: GROUP
+resolution: 1080
+year: 2019
+extension: mkv
+
+name: ReZero - S03E01-Theatrical Malice [4AB8AF98].mkv
+title: ReZero
+season: 3
+episode: 1
+episode_title: Theatrical Malice
+checksum: 4AB8AF98
+extension: mkv
+
+name: Rooster Fighter - 01 A Rooster Among Cranes 1080p WEB-DL.mkv
+title: Rooster Fighter
+episode: 1
+episode_title: A Rooster Among Cranes
+resolution: 1080
+extension: mkv
+
+name: S01E01-'I Love You' and Auto Memory Dolls [F03E1F7A].mkv
+season: 1
+episode: 1
+episode_title: 'I Love You' and Auto Memory Dolls
+checksum: F03E1F7A
+extension: mkv
+
+name: S04E12-Amphisbaena A Song of Despair [080E734C].mkv
+season: 4
+episode: 12
+episode_title: Amphisbaena A Song of Despair
+checksum: 080E734C
+extension: mkv
+
+name: S05E11 - Episode Title.mkv
+season: 5
+episode: 11
+episode_title: Episode Title
+extension: mkv
+
+name: S2E10.mkv
+season: 2
+episode: 10
+extension: mkv
+
+name: Season 2 Episode 5.mkv
+season: 2
+episode: 5
+extension: mkv
+
+name: Seishun.Buta.Yarou.wa.Bunny.Girl.Senpai.no.Yume.wo.Minai.S01E01.1080p.BluRay.x264.mkv
+title: Seishun Buta Yarou wa Bunny Girl Senpai no Yume wo Minai
+season: 1
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Seishun.Buta.Yarou.wa.Yumemiru.Shoujo.no.Yume.wo.Minai.2019.1080p.BluRay.mkv
+title: Seishun Buta Yarou wa Yumemiru Shoujo no Yume wo Minai
+resolution: 1080
+year: 2019
+extension: mkv
+
+name: Spirited.Away.2001.1080p.BluRay.x264.mkv
+title: Spirited Away
+resolution: 1080
+year: 2001
+extension: mkv
+
+name: Steins.Gate.S01E01.1080p.BluRay.x264.mkv
+title: Steins Gate
+season: 1
+episode: 1
+resolution: 1080
+extension: mkv
+
+name: Theres.No.Freaking.Way.Ill.Be.Your.Lover.Unless.S01E13.1080p.AMZN.WEB-DL.JPN.DDP2.0.H.264.MSubs-ToonsHub.mkv
+title: Theres No Freaking Way Ill Be Your Lover Unless
+group: ToonsHub
+season: 1
+episode: 13
+resolution: 1080
+extension: mkv
+
+name: Title - NCOP 01.mkv
+title: Title
+episode: 1
+kind: ncop
+extension: mkv
+
+name: Title - SP01.mkv
+title: Title
+episode: 1
+kind: special
+extension: mkv
+
+name: Title OAD 01.mkv
+title: Title
+episode: 1
+kind: special
+extension: mkv
+
+name: Title OVA 01.mkv
+title: Title
+episode: 1
+kind: special
+extension: mkv
+
+name: Title Movie 1080p.mkv
+title: Title
+kind: movie
+resolution: 1080
+extension: mkv
+
+name: Violet Evergarden - S01E01 - Episode Title.mkv
+title: Violet Evergarden
+season: 1
+episode: 1
+episode_title: Episode Title
+extension: mkv
+
+name: Violet.Evergarden.Eternity.and.the.Auto.Memory.Doll.2019.1080p.BluRay.x264.mkv
+title: Violet Evergarden Eternity and the Auto Memory Doll
+resolution: 1080
+year: 2019
+extension: mkv
+
+name: episode-01.mkv
+episode: 1
+extension: mkv
+
+name: episode_02.mkv
+episode: 2
+extension: mkv
+
+name: ep01.mkv
+episode: 1
+extension: mkv
+
+name: special_01.mkv
+episode: 1
+kind: special
+extension: mkv
+
+name: 鬼滅の刃 - E02.mkv
+title: 鬼滅の刃
+episode: 2
+extension: mkv
+
+name: (アニメ) さらい屋五葉 第01話 「形ばかりの」(CX 1440x1080 x264-aac).mp4
+title: さらい屋五葉
+episode: 1
+episode_title: 形ばかりの
+resolution: 1080
+extension: mp4
+
+name: Show - 01 1080p DSNP WEB-DL AAC2.0 H.264-VARYG.mkv
+title: Show
+group: VARYG
+episode: 1
+resolution: 1080
+extension: mkv
+
+# ---------------------------------------------------------------------------
+# From the Nyaa RSS feed, Anime - English-translated (2026-11-23)
+# ---------------------------------------------------------------------------
+
+name: [Ommex] Doraemon (2005) Episode 943 [ENG SUB][1080p x265 AAC]
+title: Doraemon
+group: Ommex
+episode: 943
+resolution: 1080
+year: 2005
+
+name: [Doomdos] - Magical Girl Raising Project Restart - S01E08 [1080p OV WEB-DL]
+title: Magical Girl Raising Project Restart
+group: Doomdos
+season: 1
+episode: 8
+resolution: 1080
+
+name: [ToonsHub] MAGICAL GIRL RAISING PROJECT restart S01E08 1080p OV WEB-DL AAC2.0 H.264 (Mahou Shoujo Ikusei Keikaku restart, English-Sub)
+title: MAGICAL GIRL RAISING PROJECT restart
+group: ToonsHub
+season: 1
+episode: 8
+resolution: 1080
+
+name: [Feibanyama] Blue Box S02E04 [BILIBILI WebRip 4320p H265 Veryslow EAC3 Dual-Audio Multi-Subs] (Ao no Hako)
+title: Blue Box
+group: Feibanyama
+season: 2
+episode: 4
+resolution: 4320
+
+name: [ToonsHub] BLEACH Thousand-Year Blood War S01E49 1080p HULU WEB-DL DUAL AAC2.0 H.264 (BLEACH: Sennen Kessen-hen, Dual-Audio, Multi-Subs)
+title: BLEACH Thousand-Year Blood War
+group: ToonsHub
+season: 1
+episode: 49
+resolution: 1080
+
+name: [Kekkan] Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu. - S01E08 (WebRip 1080p AV1 Multi-Subs) / どうも、好きな人に惚れ薬を依頼された魔女です。 / Horemajo / 08
+title: Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu.
+group: Kekkan
+season: 1
+episode: 8
+resolution: 1080
+
+name: MAGICAL GIRL RAISING PROJECT restart S01E07 1080p AMZN WEB-DL DDP2.0 H.264-VARYG (Mahou Shoujo Ikusei Keikaku: restart, Multi-Subs)
+title: MAGICAL GIRL RAISING PROJECT restart
+group: VARYG
+season: 1
+episode: 7
+resolution: 1080
+
+name: [Doomdos] - Tensei Goblin dakedo Shitsumon Aru - S01E08 [1080p BILIBILI INTERNATIONAL WEB-DL] [So What's Wrong with Getting Reborn as a Goblin]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Doomdos
+season: 1
+episode: 8
+resolution: 1080
+
+name: [Abystoma] Nu Huo Bu Tian - Nuwa Patches Up the Sky (DVD 478p)
+title: Nu Huo Bu Tian - Nuwa Patches Up the Sky
+group: Abystoma
+resolution: 478
+
+name: [Ironclad] Tensei Goblin dakedo Shitsumon Aru - S01E08 [WEB.1080p.AV1] | So What's Wrong with Getting Reborn as a Goblin? (Multi-Subs) (Weekly)
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Ironclad
+season: 1
+episode: 8
+resolution: 1080
+
+name: [Judas] Tensei Goblin dakedo Shitsumon Aru? (So What's Wrong with Getting Reborn as a Goblin?) - S01E08 [1080p][HEVC x265 10bit][Multi-Subs] (Weekly)
+title: Tensei Goblin dakedo Shitsumon Aru? (So What's Wrong with Getting Reborn as a Goblin?)
+group: Judas
+season: 1
+episode: 8
+resolution: 1080
+
+name: [veribeeg] Nichijou: My Ordinary Life - S00E01 (OVA) (BD Remux 1080p AVC FLAC) [Dual Audio] | Nichijou no 0-wa | Nichijou - My Ordinary Life: Episode 0
+title: Nichijou: My Ordinary Life
+group: veribeeg
+season: 0
+episode: 1
+kind: special
+resolution: 1080
+
+name: [veribeeg] Nichijou: My Ordinary Life (Season 1) (BD Remux 1080p AVC FLAC) [Dual Audio]
+title: Nichijou: My Ordinary Life
+group: veribeeg
+season: 1
+resolution: 1080
+
+name: [Yameii] PSYREN - S01E05 [English Dub] [CR WEB-DL 1080p H264 AAC] [C1CE79C8] (PSYЯEN)
+title: PSYREN
+group: Yameii
+season: 1
+episode: 5
+resolution: 1080
+checksum: C1CE79C8
+
+name: [AnoZu] PSYREN S01E05 1080p CR WEB-DL Dual-Audio DDP 2.0 H.264
+title: PSYREN
+group: AnoZu
+season: 1
+episode: 5
+resolution: 1080
+
+name: [ToonsHub] PSYREN S01E05 1080p CR WEB-DL DUAL AAC2.0 H.264 (PSYЯEN, Dual-Audio, Multi-Subs)
+title: PSYREN
+group: ToonsHub
+season: 1
+episode: 5
+resolution: 1080
+
+name: PSYREN S01E05 Those Gathered 1080p CR WEB-DL DUAL AAC2.0 H.264-VARYG (PSYЯEN, Dual-Audio, Multi-Subs)
+title: PSYREN
+group: VARYG
+season: 1
+episode: 5
+episode_title: Those Gathered
+resolution: 1080
+
+name: [DKB] Tensei Goblin dakedo Shitsumon Aru? - S01E08 [1080p][HEVC x265 10bit][Multi-Subs][weekly]
+title: Tensei Goblin dakedo Shitsumon Aru?
+group: DKB
+season: 1
+episode: 8
+resolution: 1080
+
+name: [Erai-raws] Tensei Goblin dakedo Shitsumon Aru - 08 [1080p CR WEBRip HEVC AAC][MultiSub][FE8CF642]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Erai-raws
+episode: 8
+resolution: 1080
+checksum: FE8CF642
+
+name: [Erai-raws] Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu - 08 [480p CR WEB-DL AVC AAC][MultiSub][5E65C4F7]
+title: Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu
+group: Erai-raws
+episode: 8
+resolution: 480
+checksum: 5E65C4F7
+
+name: Hello I am a Witch and my Crush Wants me to Make a Love Potion S01E08 1080p CR WEB-DL AAC2.0 H.264-VARYG (Doumo, Suki na Hito ni Horegusuri wo Irai Sareta Majo desu., Multi-Subs)
+title: Hello I am a Witch and my Crush Wants me to Make a Love Potion
+group: VARYG
+season: 1
+episode: 8
+resolution: 1080
+
+name: So Whats Wrong with Getting Reborn as a Goblin S01E08 1080p CR WEB-DL AAC2.0 H.264-VARYG (Tensei Goblin dakedo Shitsumon Aru?, Multi-Subs)
+title: So Whats Wrong with Getting Reborn as a Goblin
+group: VARYG
+season: 1
+episode: 8
+resolution: 1080
+
+name: [ToonsHub] Star Detective Precure S01E42 1080p CR WEB-DL AAC2.0 H.264 (Meitantei Precure, Multi-Subs)
+title: Star Detective Precure
+group: ToonsHub
+season: 1
+episode: 42
+resolution: 1080
+
+name: [Unfucked] So What's Wrong with Getting Reborn as a Goblin? - S01E08 (1080p CR WEB-DL AVC AAC 2.0) [Multi-Subs] | Tensei Goblin dakedo Shitsumon Aru?
+title: So What's Wrong with Getting Reborn as a Goblin?
+group: Unfucked
+season: 1
+episode: 8
+resolution: 1080
+
+name: [Doomdos] - Tensei Goblin dakedo Shitsumon Aru - S01E08 [2160p IQ WEB-DL] [So What's Wrong with Getting Reborn as a Goblin_]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Doomdos
+season: 1
+episode: 8
+resolution: 2160
+
+name: [Gecko] So What's Wrong with Getting Reborn as a Goblin - S01E08 (転生ゴブリンだけど質問ある？; Tensei Goblin dakedo Shitsumon Aru?) [BILI.WEB-DL 1080P HEVC, AAC, M-SUB][4AFB4FAF]
+title: So What's Wrong with Getting Reborn as a Goblin
+group: Gecko
+season: 1
+episode: 8
+resolution: 1080
+checksum: 4AFB4FAF
+
+name: [AnoZu] So What's Wrong with Getting Reborn as a Goblin? S01E08 1080p CR WEB-DL AAC 2.0 H.264 | Tensei Goblin dakedo Shitsumon Aru?
+title: So What's Wrong with Getting Reborn as a Goblin?
+group: AnoZu
+season: 1
+episode: 8
+resolution: 1080
+
+name: [SubsPlease] Tensei Goblin dakedo Shitsumon Aru - 08 (1080p) [C7DF4F6B].mkv
+title: Tensei Goblin dakedo Shitsumon Aru
+group: SubsPlease
+episode: 8
+resolution: 1080
+checksum: C7DF4F6B
+extension: mkv
+
+name: [SubsPlease] Tensei Goblin dakedo Shitsumon Aru - 08 (480p) [37FA4138].mkv
+title: Tensei Goblin dakedo Shitsumon Aru
+group: SubsPlease
+episode: 8
+resolution: 480
+checksum: 37FA4138
+extension: mkv
+
+name: [Erai-raws] Tensei Goblin dakedo Shitsumon Aru - 08 [720p CR WEB-DL AVC AAC][MultiSub][C3F0692C]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: Erai-raws
+episode: 8
+resolution: 720
+checksum: C3F0692C
+
+name: [AnoZu] Hello, I Am a Witch and My Crush Wants Me to Make a Love Potion! S01E08 1080p CR WEB-DL AAC 2.0 H.264 | Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu.
+title: Hello, I Am a Witch and My Crush Wants Me to Make a Love Potion!
+group: AnoZu
+season: 1
+episode: 8
+resolution: 1080
+
+name: [SubsPlease] Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu. - 08 (1080p) [DACC1548].mkv
+title: Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu.
+group: SubsPlease
+episode: 8
+resolution: 1080
+checksum: DACC1548
+extension: mkv
+
+name: [SubsPlease] Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu. - 08 (720p) [27BFDA38].mkv
+title: Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu.
+group: SubsPlease
+episode: 8
+resolution: 720
+checksum: 27BFDA38
+extension: mkv
+
+name: [Doomdos] - Keroro Gunsou - S01E08 [2160p IQ WEB-DL] [Keroro]
+title: Keroro Gunsou
+group: Doomdos
+season: 1
+episode: 8
+resolution: 2160
+
+name: [Doomdos] - Seitokai ni mo Ana wa Aru! - S01E08 [2160p IQ WEB-DL] [Even the Student Council Has Its Holes!]
+title: Seitokai ni mo Ana wa Aru!
+group: Doomdos
+season: 1
+episode: 8
+resolution: 2160
+
+name: [Doomdos] - Zeri Feisheng - S01E21 [2160p IQ WEB-DL] [A Good Day to Ascend]
+title: Zeri Feisheng
+group: Doomdos
+season: 1
+episode: 21
+resolution: 2160
+
+name: [Doomdos] - Tensei shitara Ken deshita - S02E08 [2160p IQ WEB-DL] [Reincarnated as a Sword]
+title: Tensei shitara Ken deshita
+group: Doomdos
+season: 2
+episode: 8
+resolution: 2160
+
+name: [Doomdos] - Tantei wa Mou, Shindeiru. - S01E12 [2160p IQ WEB-DL] [The Detective Is Already Dead]
+title: Tantei wa Mou, Shindeiru.
+group: Doomdos
+season: 1
+episode: 12
+resolution: 2160
+
+name: [Doomdos] - Da Zhuzai - S01E100 [2160p IQ WEB-DL] [The Great Ruler]
+title: Da Zhuzai
+group: Doomdos
+season: 1
+episode: 100
+resolution: 2160
+
+name: [Doomdos] - Nige Jouzu no Wakagimi 2nd Season - S02E12 [2160p IQ WEB-DL] [The Elusive Samurai Season 2]
+title: Nige Jouzu no Wakagimi
+group: Doomdos
+season: 2
+episode: 12
+resolution: 2160
+
+name: [Doomdos] - Ling Wu Dalu - S01E235 [2160p IQ WEB-DL] [Lingwu Continent]
+title: Ling Wu Dalu
+group: Doomdos
+season: 1
+episode: 235
+resolution: 2160
+
+name: [FSP] Battle Through The Heavens - Battle of Two Gods [4K]
+title: Battle Through The Heavens - Battle of Two Gods
+group: FSP
+resolution: 2160
+
+name: [Doomdos] - Shin Tennis no Oujisama U-17 World Cup - Kesshou Member Ketteisen - S02E08 [2160p IQ WEB-DL] [The Prince of Tennis II_ U-17 World Cup - Final Member Selection Match]
+title: Shin Tennis no Oujisama U-17 World Cup - Kesshou Member Ketteisen
+group: Doomdos
+season: 2
+episode: 8
+resolution: 2160
+
+name: [Doomdos] - Tensei Kizoku, Kantei Skill de Nariagaru - S03E09 [2160p IQ WEB-DL] [As a Reincarnated Aristocrat, I'll Use My Appraisal Skill to Rise in the World]
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: Doomdos
+season: 3
+episode: 9
+resolution: 2160
+
+name: [Doomdos] - Black Clover - S02E08 [2160p IQ WEB-DL]
+title: Black Clover
+group: Doomdos
+season: 2
+episode: 8
+resolution: 2160
+
+# ---------------------------------------------------------------------------
+# From the Nyaa RSS feed, Anime - Non-English-translated (2026-11-23)
+# ---------------------------------------------------------------------------
+
+name: [ANi]  魔法少女育成計畫 restart - 08 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: 魔法少女育成計畫 restart
+group: ANi
+episode: 8
+resolution: 1080
+
+name: [AS-NKWT] Kyoufu Collector - 07 [1080p].mkv
+title: Kyoufu Collector
+group: AS-NKWT
+episode: 7
+resolution: 1080
+extension: mkv
+
+name: [Kopajasubs] Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu. - 08 [1080p][E6F22FB2].mkv
+title: Doumo, Suki na Hito ni Horegusuri wo Irai sareta Majo desu.
+group: Kopajasubs
+episode: 8
+resolution: 1080
+checksum: E6F22FB2
+extension: mkv
+
+name: [FênixFansub] Kanojo no Tomodachi (My Girlfriend's Friend) - 08 [PT-BR][UNC]
+title: Kanojo no Tomodachi (My Girlfriend's Friend)
+group: FênixFansub
+episode: 8
+
+name: [WF] Dark Summoner to Dekiteiru - 08 [1080p AMZN WEB-DL DDP2.0 H.264][UNCENSORED][PT-BR] (I'm Dating a Dark Summoner)
+title: Dark Summoner to Dekiteiru
+group: WF
+episode: 8
+resolution: 1080
+
+name: [Doomdos] - Mushoku Tensei Isekai Ittara Honki Dasu - S03E12 [Dub Indo] [1080p BILIBILI INTERNATIONAL WEB-DL] [Mushoku Tensei: Jobless Reincarnation]
+title: Mushoku Tensei Isekai Ittara Honki Dasu
+group: Doomdos
+season: 3
+episode: 12
+resolution: 1080
+
+name: [LoliHouse] 魔法姊妹露露特莉莉 / Magical Sisters LuluttoLilly - 20 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: Magical Sisters LuluttoLilly
+group: LoliHouse
+episode: 20
+resolution: 1080
+
+name: [LoliHouse] 战车椅子-TANK CHAIR- - 08 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: 战车椅子-TANK CHAIR-
+group: LoliHouse
+episode: 8
+resolution: 1080
+
+name: [LoliHouse] 装备我最强 / 装备仔 / Tempal: Item no Chikara / Overgeared - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: Tempal: Item no Chikara
+group: LoliHouse
+episode: 9
+resolution: 1080
+
+name: [Sosuke] Galaxy Fraulein Yuna [DVD 480p]
+title: Galaxy Fraulein Yuna
+group: Sosuke
+resolution: 480
+
+name: So Whats Wrong with Getting Reborn as a Goblin S01E08 SUBFRENCH 1080p CR WEB-DL AAC2.0 H.264-Tsundere-Raws (VOSTFR, Tensei Goblin dakedo Shitsumon Aru, Tengobu)
+title: So Whats Wrong with Getting Reborn as a Goblin
+group: Tsundere-Raws
+season: 1
+episode: 8
+resolution: 1080
+
+name: [LoliHouse] 杀手旅店 / HOTEL INHUMANS - 21 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: HOTEL INHUMANS
+group: LoliHouse
+episode: 21
+resolution: 1080
+
+name: [ANi] Tensei Goblin dakedo Shitsumon Aru /  轉生哥布林有問題嗎？ - 08 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: Tensei Goblin dakedo Shitsumon Aru
+group: ANi
+episode: 8
+resolution: 1080
+
+name: [ANi] Horemajo /  你好，身為魔女的我，被心上人委託製作迷情藥 - 08 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: Horemajo
+group: ANi
+episode: 8
+resolution: 1080
+
+name: [绿茶字幕组] 赛博朋克：边缘行者 2 / Cyberpunk - Edgerunners 2 [05][WebRip][1080p][简繁日内封]
+title: Cyberpunk - Edgerunners 2
+group: 绿茶字幕组
+episode: 5
+resolution: 1080
+
+name: [❀拨雪寻春❀] 青之箱 第二季 / アオのハコ Season 2 / Ao no Hako (2026) - 04 [WebRip][HEVC-10bit 1080p][简繁日内封]
+title: Ao no Hako
+group: ❀拨雪寻春❀
+season: 2
+episode: 4
+resolution: 1080
+year: 2026
+
+name: [ANi] Ao Ashi S02 /  青之蘆葦 第二季 - 08 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: Ao Ashi
+group: ANi
+season: 2
+episode: 8
+resolution: 1080
+
+name: Star Detective Precure S01E42 SUBFRENCH 1080p CR WEB-DL AAC2.0 H.264-Tsundere-Raws (VOSTFR, Meitantei Precure, TanPuri)
+title: Star Detective Precure
+group: Tsundere-Raws
+season: 1
+episode: 42
+resolution: 1080
+
+name: [Kirinashi] BanG Dream! Itʼs MyGO!!!!! - 05 (BD 1080p HEVC Opus) [C11F9980].mkv
+title: BanG Dream! Itʼs MyGO!!!!!
+group: Kirinashi
+episode: 5
+resolution: 1080
+checksum: C11F9980
+extension: mkv
+
+name: [SFSub] 冷淡的佐藤同学只对我撒娇 / Shiotaiou no Satou-san ga Ore ni dake Amai - 07 [WebRip][1080P][AVC][AAC][简日内嵌][MP4]
+title: Shiotaiou no Satou-san ga Ore ni dake Amai
+group: SFSub
+episode: 7
+resolution: 1080
+
+name: [Naruto-Kun.Hu] Dragon Ball Super - Beerus - 07 [1080p].mkv
+title: Dragon Ball Super - Beerus
+group: Naruto-Kun.Hu
+episode: 7
+resolution: 1080
+extension: mkv
+
+name: [Naruto-Kun.Hu] Black Clover S2 - 08 [1080p].mkv
+title: Black Clover
+group: Naruto-Kun.Hu
+season: 2
+episode: 8
+resolution: 1080
+extension: mkv
+
+name: Dragon Ball Super Beerus S01E07 SUBFRENCH 720p ADN WEB-DL AAC2.0 x264-Tsundere-Raws (VOSTFR, Multi Subs)
+title: Dragon Ball Super Beerus
+group: Tsundere-Raws
+season: 1
+episode: 7
+resolution: 720
+
+name: [奶²&LoliHouse] 苍蓝传承 威尔什&榭达 / Aoki Denshou Welsh & Shedar - 08 [WebRip 1080p HEVC-10bit AAC][简日内封字幕]
+title: Aoki Denshou Welsh & Shedar
+group: 奶²&LoliHouse
+episode: 8
+resolution: 1080
+
+name: [MemeAgare] Magical★Explorer - 09 [5F1BF2EB].mkv
+title: Magical★Explorer
+group: MemeAgare
+episode: 9
+checksum: 5F1BF2EB
+extension: mkv
+
+name: Tank.Chair.S01E08.MULTi.1080p.WEBRiP.x265-KAF
+title: Tank Chair
+group: KAF
+season: 1
+episode: 8
+resolution: 1080
+
+name: Tank.Chair.S01E08.VOSTFR.1080p.WEBRiP.x265-KAF
+title: Tank Chair
+group: KAF
+season: 1
+episode: 8
+resolution: 1080
+
+name: [LoliHouse] 和没有信徒的女神大人一起攻略异世界 / Shinja Zero no Megami-sama to Hajimeru Isekai Kouryaku - 07 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: Shinja Zero no Megami-sama to Hajimeru Isekai Kouryaku
+group: LoliHouse
+episode: 7
+resolution: 1080
+
+name: Overgeared.S01E09.VOSTFR.1080p.WEBRiP.x265-KAF
+title: Overgeared
+group: KAF
+season: 1
+episode: 9
+resolution: 1080
+
+name: [亿次研同好会&云光字幕组] FX战士久留美 FX Senshi Kurumi-chan [06][1080P][HEVC-10bit][简繁日内封]
+title: FX战士久留美 FX Senshi Kurumi-chan
+group: 亿次研同好会&云光字幕组
+episode: 6
+resolution: 1080
+
+name: HOTEL INHUMANS S02E08 SUBFRENCH 1080p CR WEB-DL AAC2.0 x264-Tsundere-Raws (VOSTFR, Hotel Inhumans Season 2, Hotel Inhumans 2nd Season)
+title: HOTEL INHUMANS
+group: Tsundere-Raws
+season: 2
+episode: 8
+resolution: 1080
+
+name: [ANi] Hotel Inhumans /  殺手旅店 - 21 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: Hotel Inhumans
+group: ANi
+episode: 21
+resolution: 1080
+
+name: TANK CHAIR S01E08 MULTi 1080p AMZN WEB-DL DDP2.0 AV1-Tsundere-Raws (VF, FRENCH, SUBFRENCH, VOSTFR, Sensha Isu)
+title: TANK CHAIR
+group: Tsundere-Raws
+season: 1
+episode: 8
+resolution: 1080
+
+name: [ANi] Kanata Kara /  來自遠方 - 08 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]
+title: Kanata Kara
+group: ANi
+episode: 8
+resolution: 1080
+
+name: My Girlfriends Friend S01E08 UNCENSORED SUBFRENCH 1080p ADN WEB-DL AAC2.0 x264-Tsundere-Raws (VOSTFR, Multi Subs, Kanojo no Tomodachi)
+title: My Girlfriends Friend
+group: Tsundere-Raws
+season: 1
+episode: 8
+resolution: 1080
+
+# ---------------------------------------------------------------------------
+# From the Nyaa RSS feed, Anime - Raw (2026-11-23)
+# ---------------------------------------------------------------------------
+
+name: [Gecko] Yuusanchi! from Yuuhachi - S01E15 (ゆうさんち！from 遊ハち; Yuusanchi! from Yuu-hachi) [TVER.WEB-DL 1080P AVC, AAC][78C7401E]
+title: Yuusanchi! from Yuuhachi
+group: Gecko
+season: 1
+episode: 15
+resolution: 1080
+checksum: 78C7401E
+
+name: [AsukaRaws] Tensei Goblin dakedo Shitsumon Aru - 08 (WEB-DL 1280x720 x264 AAC)
+title: Tensei Goblin dakedo Shitsumon Aru
+group: AsukaRaws
+episode: 8
+resolution: 720
+
+name: [LoliHouse] 与暗黑召唤师秘密恋爱中(无修版) / Dark Summoner to Dekiteiru (UNCENSORED) - 08 [WebRip 1080p HEVC-10bit AAC][无字幕]
+title: Dark Summoner to Dekiteiru
+group: LoliHouse
+episode: 8
+resolution: 1080
+
+name: [NanakoRaws] Yozakura-san Chi no Daisakusen S2 - 19 (CBC TV 1080p HEVC AAC)
+title: Yozakura-san Chi no Daisakusen
+group: NanakoRaws
+season: 2
+episode: 19
+resolution: 1080
+
+name: [NanakoRaws] Tetsuryou! - 07 (AT-X TV 1080p HEVC AAC)
+title: Tetsuryou!
+group: NanakoRaws
+episode: 7
+resolution: 1080
+
+name: [NanakoRaws] Tensei Kizoku, Kantei Skill de Nariagaru S3 - 33 (CBC TV 1080p HEVC AAC)
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: NanakoRaws
+season: 3
+episode: 33
+resolution: 1080
+
+name: [NanakoRaws] Shin Tennis no Ouji-sama S4 - 08 (AT-X TV 1080p HEVC AAC)
+title: Shin Tennis no Ouji-sama
+group: NanakoRaws
+season: 4
+episode: 8
+resolution: 1080
+
+name: [NanakoRaws] Onegai AiPri - 34 (TVA TV 1080p HEVC AAC)
+title: Onegai AiPri
+group: NanakoRaws
+episode: 34
+resolution: 1080
+
+name: [NanakoRaws] Meitantei Precure! - 42 (NBN TV 1080p HEVC AAC)
+title: Meitantei Precure!
+group: NanakoRaws
+episode: 42
+resolution: 1080
+
+name: [NanakoRaws] Keroro Gunsou☆ - 08 (TVA TV 1080p HEVC AAC)
+title: Keroro Gunsou☆
+group: NanakoRaws
+episode: 8
+resolution: 1080
+
+name: [NanakoRaws] Kashita Maryoku wa "Revo Barai" de Kyousei Choushuu - 08 (NBN TV 1080p HEVC AAC)
+title: Kashita Maryoku wa "Revo Barai" de Kyousei Choushuu
+group: NanakoRaws
+episode: 8
+resolution: 1080
+
+name: [NanakoRaws] Doraemon (2005) - 943 (NBN TV 1080p HEVC AAC)
+title: Doraemon
+group: NanakoRaws
+episode: 943
+resolution: 1080
+year: 2005
+
+name: [NanakoRaws] Black Clover S2 - 178 (TVA TV 1080p HEVC AAC)
+title: Black Clover
+group: NanakoRaws
+season: 2
+episode: 178
+resolution: 1080
+
+name: [NanakoRaws] #Zombie Sagashitemasu - 07 (NBN TV 1080p HEVC AAC)
+title: #Zombie Sagashitemasu
+group: NanakoRaws
+episode: 7
+resolution: 1080
+
+name: [ToonsHub] Pandorobo S01E08 1080p AMZN WEB-DL DDP2.0 H.264 (Japanese Sub)
+title: Pandorobo
+group: ToonsHub
+season: 1
+episode: 8
+resolution: 1080
+
+name: [JibaRAWS] Yu-Gi-Oh! Duel Monsters GX 20th Remaster - 084 (TVer WEB-DL 1920x1080).(Yugioh)
+title: Yu-Gi-Oh! Duel Monsters GX 20th Remaster
+group: JibaRAWS
+episode: 84
+resolution: 1080
+
+name: [AsukaRaws] Dark Summoner to Dekiteiru - 08 Uncensored (WEB-DL 1280x720 x264 AAC)
+title: Dark Summoner to Dekiteiru
+group: AsukaRaws
+episode: 8
+resolution: 720
+
+name: [LoliHouse] 名侦探光之美少女♪ / Star Detective Precure! - 42 [WebRip 1080p HEVC-10bit AAC][无字幕](检索用：Q娃)
+title: Star Detective Precure!
+group: LoliHouse
+episode: 42
+resolution: 1080
+
+name: [AsukaRaws] Tensei Kizoku, Kantei Skill de Nariagaru S3 - 09 (33) (WEB-DL 1280x720 x264 AAC)
+title: Tensei Kizoku, Kantei Skill de Nariagaru
+group: AsukaRaws
+season: 3
+episode: 9
+resolution: 720
+
+name: [Doomdos] - Mushen Ji - S01E110 [4K BILIBILI COM WEB-DL] [Tales of Herding Gods]
+title: Mushen Ji
+group: Doomdos
+season: 1
+episode: 110
+resolution: 2160
+
+name: [AsukaRaws] Ao no Hako S2 - 07 (32) (WEB-DL 1280x720 x264 AAC)
+title: Ao no Hako
+group: AsukaRaws
+season: 2
+episode: 7
+resolution: 720
+
+name: [Gecko] Tanuki and Kitsune (2026) - S01E08 (タヌキとキツネ; Tanuki to Kitsune (TV)) [YTB.WEB-DL 1080P AVC, Opus][AE5CC05F]
+title: Tanuki and Kitsune
+group: Gecko
+season: 1
+episode: 8
+resolution: 1080
+year: 2026
+checksum: AE5CC05F
+
+name: 名探偵プリキュア！ 第42話 輝きのスターキラリングブローチ！ (TVer 1080p) <Star Detective Precure!>
+title: 名探偵プリキュア！
+episode: 42
+episode_title: 輝きのスターキラリングブローチ！
+resolution: 1080
+
+name: [ToonsHub] Koupen-chan S01E85 1080p AMZN WEB-DL DDP2.0 H.264
+title: Koupen-chan
+group: ToonsHub
+season: 1
+episode: 85
+resolution: 1080
+
+name: [Gecko] Koupen-chan - S01E85 (コウペンちゃん; Koupen Chan) [ABEMA.WEB-DL 1080P AVC, AAC][B7C7C41A]
+title: Koupen-chan
+group: Gecko
+season: 1
+episode: 85
+resolution: 1080
+checksum: B7C7C41A
+
+name: [ToonsHub] Shou 3 Ashibe QQ Goma-chan S01E33 1080p AMZN WEB-DL DDP2.0 H.264
+title: Shou 3 Ashibe QQ Goma-chan
+group: ToonsHub
+season: 1
+episode: 33
+resolution: 1080
+
+name: [Doomdos] - Fei Zhi Baike - S01E178 [1080p BILIBILI COM WEB-DL]
+title: Fei Zhi Baike
+group: Doomdos
+season: 1
+episode: 178
+resolution: 1080
+
+name: [Doomdos] - Taigu Shen Zun - S01E36 [1080p IQIYI WEB-DL] [Primeval Overlord]
+title: Taigu Shen Zun
+group: Doomdos
+season: 1
+episode: 36
+resolution: 1080
+
+# ---------------------------------------------------------------------------
+# From Nyaa RSS searches for kind words (q=Gekijouban, NCOP, PV, ONA, OVA,
+# Menu), all categories (2026-11-24)
+# ---------------------------------------------------------------------------
+
+name: [LoliHouse] 剧场版 暗杀教室 我们的时光 / Gekijouban Ansatsu Kyoushitsu: Minna no Jikan [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: Ansatsu Kyoushitsu: Minna no Jikan
+group: LoliHouse
+kind: movie
+resolution: 1080
+
+name: [FS] Gekijouban Mahouka Koukou no Rettousei - Hoshi wo Yobu Shoujo (2017) [BD 1920x1080 x264 AAC][Sub_Esp][MP4]
+title: Mahouka Koukou no Rettousei - Hoshi wo Yobu Shoujo
+group: FS
+kind: movie
+resolution: 1080
+year: 2017
+
+name: [ReinForce] Gekijouban Hibike! Euphonium ~Saishuu Gakushou Hibike! Euphonium~ (BDRip 1920x1080 x264 FLAC)
+title: Hibike! Euphonium ~Saishuu Gakushou Hibike! Euphonium~
+group: ReinForce
+kind: movie
+resolution: 1080
+
+name: [Shiniori-Raws] Gekijouban Kimetsu no Yaiba Mugenjou-hen Akaza Sairai Part 1 (BD 1920x1080 x265 10bit FLAC)
+title: Kimetsu no Yaiba Mugenjou-hen Akaza Sairai Part 1
+group: Shiniori-Raws
+kind: movie
+resolution: 1080
+
+name: [Judas] Gekijouban Tensei Shitara Slime Datta Ken Soukai no Namida Hen (That Time I Got Reincarnated as a Slime the Movie Tears of the Azure Sea) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Movie)
+title: Tensei Shitara Slime Datta Ken Soukai no Namida Hen
+group: Judas
+kind: movie
+resolution: 1080
+
+name: [Judas] Gekijouban Kimetsu no Yaiba Mugen-jou Hen (Demon Slayer Infinity Castle) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Movie)
+title: Kimetsu no Yaiba Mugen-jou Hen
+group: Judas
+kind: movie
+resolution: 1080
+
+name: Idol Densetsu Eriko NCOP BD
+title: Idol Densetsu Eriko
+kind: ncop
+
+name: Captain Tsubasa NCOP DVDRIP
+title: Captain Tsubasa
+kind: ncop
+
+name: [ak-Submarines] Girls und Panzer - das Finale 5 PV [WEB 1080p][0E82A4B5]
+title: Girls und Panzer - das Finale 5
+group: ak-Submarines
+kind: extra
+resolution: 1080
+checksum: 0E82A4B5
+
+name: [Serenae] Meitantei Precure! - 24 Next Ep PV (1080p).mkv
+title: Meitantei Precure!
+group: Serenae
+episode: 24
+episode_title: Next Ep
+kind: extra
+resolution: 1080
+extension: mkv
+
+name: [Doomdos] - 호랑이 들어와요 2 - S02 PV [Korean Dub] [1080p LFTLNET WEB-DL]
+title: 호랑이 들어와요 2
+group: Doomdos
+season: 2
+kind: extra
+resolution: 1080
+
+name: [Erai-raws] The Ribbon Hero - ONA [1080p NF WEBRip HEVC EAC3][MultiSub][DF480D33]
+title: The Ribbon Hero
+group: Erai-raws
+kind: special
+resolution: 1080
+checksum: DF480D33
+
+name: [Erai-raws] Lupin III vs Cat's Eye - ONA [1080p AMZN WEBRip HEVC EAC3][MultiSub][1E1AAB6E]
+title: Lupin III vs Cat's Eye
+group: Erai-raws
+kind: special
+resolution: 1080
+checksum: 1E1AAB6E
+
+name: [shincaps] Onaji Semi no Someya-san ga Sexy Joyuu Datta Hanashi. - 08 (BS11 1920x1080 MPEG2 AAC).ts
+title: Onaji Semi no Someya-san ga Sexy Joyuu Datta Hanashi.
+group: shincaps
+episode: 8
+resolution: 1080
+extension: ts
+
+name: Makyuu Senjou (1991) - OVA (VHS | English Hardsubs) | Dark Warrior / 魔宮戦場
+title: Makyuu Senjou
+kind: special
+year: 1991
+
+name: [FS] Bokutachi wa Benkyou ga Dekinai - OVA [1280x720 x264 AAC][Sub_Esp][MP4]
+title: Bokutachi wa Benkyou ga Dekinai
+group: FS
+kind: special
+resolution: 720
+
+name: Hametsu no Mars (2005) - OVA [R2JP DVD-Remux ENG] [09D57CE1].mkv
+title: Hametsu no Mars
+kind: special
+year: 2005
+checksum: 09D57CE1
+extension: mkv
+
+name: [D3] Today's Menu for the Emiya Family (BD 1080p x264 FLAC) (Emiya-san Chi no Kyou no Gohan)
+title: Today's Menu for the Emiya Family
+group: D3
+resolution: 1080
