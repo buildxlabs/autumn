@@ -13,6 +13,8 @@ workspace = true
 domain.workspace     = true
 futures.workspace    = true
 rand.workspace       = true
+reqwest.workspace    = true
+rustls.workspace     = true
 serde.workspace      = true
 serde_json.workspace = true
 tempfile.workspace   = true
@@ -24,4 +26,5 @@ tracing.workspace    = true
 winreg.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
 tracing-subscriber.workspace = true
