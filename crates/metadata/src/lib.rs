@@ -7,6 +7,7 @@
 //! disk first, refreshing stale ones. See ARCHITECTURE §2. This is a back-end
 //! crate: no GPUI.
 
+mod anizip;
 mod cache;
 mod catalog;
 mod client;
@@ -17,6 +18,7 @@ mod model;
 mod search;
 mod viewer;
 
+pub use anizip::{ANIZIP_ENDPOINT, Aging, AniZip, Episode, Mappings, Media};
 pub use cache::{AIRING_TTL, CATALOG_TTL, Cached, CatalogCache, Load, Lookup, Refresh};
 pub use catalog::{AiringEpisode, CountryTrends, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
