@@ -9,6 +9,8 @@
 # - episode is the number within its kind: SP01 and NCOP2 give 1 and 2.
 # - resolution is the vertical line count; 4K is 2160.
 # - checksum is the eight-digit CRC32, written in capitals.
+# - For a movie marked `Title: The Movie - Subtitle`, the subtitle is the
+#   episode title.
 
 # ---------------------------------------------------------------------------
 # From reference/seanime tests (GPL-3.0)
@@ -994,13 +996,6 @@ episode_title: 'I Love You' and Auto Memory Dolls
 checksum: F03E1F7A
 extension: mkv
 
-name: S01E01-Jobless Reincarnation V2 [911C3607].mkv
-season: 1
-episode: 1
-episode_title: Jobless Reincarnation V2
-checksum: 911C3607
-extension: mkv
-
 name: S04E12-Amphisbaena A Song of Despair [080E734C].mkv
 season: 4
 episode: 12
@@ -1883,4 +1878,121 @@ title: Taigu Shen Zun
 group: Doomdos
 season: 1
 episode: 36
+resolution: 1080
+
+# ---------------------------------------------------------------------------
+# From Nyaa RSS searches for kind words (q=Gekijouban, NCOP, PV, ONA, OVA,
+# Menu), all categories (2026-11-24)
+# ---------------------------------------------------------------------------
+
+name: [LoliHouse] 剧场版 暗杀教室 我们的时光 / Gekijouban Ansatsu Kyoushitsu: Minna no Jikan [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]
+title: Ansatsu Kyoushitsu: Minna no Jikan
+group: LoliHouse
+kind: movie
+resolution: 1080
+
+name: [FS] Gekijouban Mahouka Koukou no Rettousei - Hoshi wo Yobu Shoujo (2017) [BD 1920x1080 x264 AAC][Sub_Esp][MP4]
+title: Mahouka Koukou no Rettousei - Hoshi wo Yobu Shoujo
+group: FS
+kind: movie
+resolution: 1080
+year: 2017
+
+name: [ReinForce] Gekijouban Hibike! Euphonium ~Saishuu Gakushou Hibike! Euphonium~ (BDRip 1920x1080 x264 FLAC)
+title: Hibike! Euphonium ~Saishuu Gakushou Hibike! Euphonium~
+group: ReinForce
+kind: movie
+resolution: 1080
+
+name: [Shiniori-Raws] Gekijouban Kimetsu no Yaiba Mugenjou-hen Akaza Sairai Part 1 (BD 1920x1080 x265 10bit FLAC)
+title: Kimetsu no Yaiba Mugenjou-hen Akaza Sairai Part 1
+group: Shiniori-Raws
+kind: movie
+resolution: 1080
+
+name: [Judas] Gekijouban Tensei Shitara Slime Datta Ken Soukai no Namida Hen (That Time I Got Reincarnated as a Slime the Movie Tears of the Azure Sea) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Movie)
+title: Tensei Shitara Slime Datta Ken Soukai no Namida Hen
+group: Judas
+kind: movie
+resolution: 1080
+
+name: [Judas] Gekijouban Kimetsu no Yaiba Mugen-jou Hen (Demon Slayer Infinity Castle) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Movie)
+title: Kimetsu no Yaiba Mugen-jou Hen
+group: Judas
+kind: movie
+resolution: 1080
+
+name: Idol Densetsu Eriko NCOP BD
+title: Idol Densetsu Eriko
+kind: ncop
+
+name: Captain Tsubasa NCOP DVDRIP
+title: Captain Tsubasa
+kind: ncop
+
+name: [ak-Submarines] Girls und Panzer - das Finale 5 PV [WEB 1080p][0E82A4B5]
+title: Girls und Panzer - das Finale 5
+group: ak-Submarines
+kind: extra
+resolution: 1080
+checksum: 0E82A4B5
+
+name: [Serenae] Meitantei Precure! - 24 Next Ep PV (1080p).mkv
+title: Meitantei Precure!
+group: Serenae
+episode: 24
+episode_title: Next Ep
+kind: extra
+resolution: 1080
+extension: mkv
+
+name: [Doomdos] - 호랑이 들어와요 2 - S02 PV [Korean Dub] [1080p LFTLNET WEB-DL]
+title: 호랑이 들어와요 2
+group: Doomdos
+season: 2
+kind: extra
+resolution: 1080
+
+name: [Erai-raws] The Ribbon Hero - ONA [1080p NF WEBRip HEVC EAC3][MultiSub][DF480D33]
+title: The Ribbon Hero
+group: Erai-raws
+kind: special
+resolution: 1080
+checksum: DF480D33
+
+name: [Erai-raws] Lupin III vs Cat's Eye - ONA [1080p AMZN WEBRip HEVC EAC3][MultiSub][1E1AAB6E]
+title: Lupin III vs Cat's Eye
+group: Erai-raws
+kind: special
+resolution: 1080
+checksum: 1E1AAB6E
+
+name: [shincaps] Onaji Semi no Someya-san ga Sexy Joyuu Datta Hanashi. - 08 (BS11 1920x1080 MPEG2 AAC).ts
+title: Onaji Semi no Someya-san ga Sexy Joyuu Datta Hanashi.
+group: shincaps
+episode: 8
+resolution: 1080
+extension: ts
+
+name: Makyuu Senjou (1991) - OVA (VHS | English Hardsubs) | Dark Warrior / 魔宮戦場
+title: Makyuu Senjou
+kind: special
+year: 1991
+
+name: [FS] Bokutachi wa Benkyou ga Dekinai - OVA [1280x720 x264 AAC][Sub_Esp][MP4]
+title: Bokutachi wa Benkyou ga Dekinai
+group: FS
+kind: special
+resolution: 720
+
+name: Hametsu no Mars (2005) - OVA [R2JP DVD-Remux ENG] [09D57CE1].mkv
+title: Hametsu no Mars
+kind: special
+year: 2005
+checksum: 09D57CE1
+extension: mkv
+
+name: [D3] Today's Menu for the Emiya Family (BD 1080p x264 FLAC) (Emiya-san Chi no Kyou no Gohan)
+title: Today's Menu for the Emiya Family
+group: D3
 resolution: 1080

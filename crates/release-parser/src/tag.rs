@@ -4,7 +4,7 @@ use crate::EpisodeKind;
 
 /// Video containers a release file can end in.
 const EXTENSIONS: &[&str] = &[
-    "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "ogm", "rmvb", "webm", "wmv",
+    "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "ogm", "rmvb", "ts", "webm", "wmv",
 ];
 
 /// Source, codec, bit depth, language and edition tags, lowercase.
@@ -85,7 +85,6 @@ const KINDS: &[(&str, EpisodeKind)] = &[
     ("oad", EpisodeKind::Special),
     ("ona", EpisodeKind::Special),
     ("movie", EpisodeKind::Movie),
-    ("gekijouban", EpisodeKind::Movie),
     ("preview", EpisodeKind::Extra),
     ("menu", EpisodeKind::Extra),
     ("pv", EpisodeKind::Extra),
@@ -173,6 +172,27 @@ pub(crate) fn is_tech(word: &str) -> bool {
     let lower = word.to_ascii_lowercase();
     let audio = lower.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
     resolution(&lower).is_some() || TECH.contains(&lower.as_str()) || AUDIO.contains(&audio)
+}
+
+/// Tags that are also ordinary words (`DD Hokuto no Ken`, `Magnum Opus`). They
+/// count only after the episode marker, never inside the title.
+const AMBIGUOUS_TAGS: &[&str] = &[
+    "adn", "bd", "cr", "dd", "dual", "dub", "multi", "nf", "opus", "web",
+];
+
+/// A technical tag that can end the title: [`is_tech`] minus the tags that are
+/// also ordinary words.
+pub(crate) fn ends_title(word: &str) -> bool {
+    is_tech(word) && !AMBIGUOUS_TAGS.contains(&word.to_ascii_lowercase().as_str())
+}
+
+/// A kind word that is also an ordinary English word (`Happy Ending`), so it
+/// needs more context than an acronym such as `OVA` to mark the kind.
+pub(crate) fn is_dictionary_kind(word: &str) -> bool {
+    const WORDS: [&str; 7] = [
+        "ending", "menu", "movie", "opening", "preview", "special", "specials",
+    ];
+    WORDS.contains(&word.to_ascii_lowercase().as_str())
 }
 
 /// `S2`, `S02` or `Season2`.
