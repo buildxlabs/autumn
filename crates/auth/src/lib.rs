@@ -205,6 +205,17 @@ impl AniListAuth {
             expiring: expiry.expiring(now),
         })
     }
+
+    /// Reads the stored token for the composition root to build an
+    /// authenticated platform. The token is never logged, stored in settings
+    /// or written to the database (ADR 0002).
+    ///
+    /// # Errors
+    ///
+    /// Returns the keychain error when the credential cannot be read.
+    pub async fn token(&self) -> Result<Option<String>, KeychainError> {
+        get_token(&self.keychain).await
+    }
 }
 
 async fn get_token(keychain: &Arc<dyn Keychain>) -> Result<Option<String>, KeychainError> {

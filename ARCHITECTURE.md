@@ -109,10 +109,10 @@ auth           → domain, net
 engine         → domain, net, db, metadata, tracker, settings
 metadata      → domain, net
 tracker       → domain, db
-ui-state      → domain, engine, metadata
+ui-state      → domain, engine, metadata, tracker, db (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker)
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain, futures, time (ui-theme as a dev-dependency only)
-autumn        → engine, settings, db, domain, metadata, net, auth, ui-state, ui-screens, ui-theme
+autumn        → engine, settings, db, domain, metadata, net, auth, tracker, ui-state, ui-screens, ui-theme (the composition root builds the active platform)
 ```
 
 Screens never depend on `engine`: they reach its services only through the

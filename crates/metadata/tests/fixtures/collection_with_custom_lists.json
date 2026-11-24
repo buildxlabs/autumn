@@ -1,0 +1,101 @@
+{
+  "data": {
+    "MediaListCollection": {
+      "hasNextChunk": false,
+      "lists": [
+        {
+          "name": "Watching",
+          "isCustomList": false,
+          "entries": [
+            {
+              "id": 9001,
+              "mediaId": 154587,
+              "status": "CURRENT",
+              "score": 85,
+              "progress": 12,
+              "progressVolumes": 0,
+              "repeat": 1,
+              "priority": 2,
+              "private": false,
+              "notes": "liked it",
+              "hiddenFromStatusLists": false,
+              "startedAt": {
+                "year": 2023,
+                "month": 10,
+                "day": 5
+              },
+              "completedAt": {
+                "year": null,
+                "month": null,
+                "day": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "Favourites",
+          "isCustomList": true,
+          "entries": [
+            {
+              "id": 9001,
+              "mediaId": 154587,
+              "status": "CURRENT",
+              "score": 85,
+              "progress": 12,
+              "progressVolumes": 0,
+              "repeat": 1,
+              "priority": 2,
+              "private": false,
+              "notes": "liked it",
+              "hiddenFromStatusLists": false,
+              "startedAt": {
+                "year": 2023,
+                "month": 10,
+                "day": 5
+              },
+              "completedAt": {
+                "year": null,
+                "month": null,
+                "day": null
+              }
+            },
+            {
+              "id": 9002,
+              "mediaId": 52991,
+              "status": "COMPLETED",
+              "score": 100,
+              "progress": 24,
+              "progressVolumes": 0,
+              "repeat": 0,
+              "priority": 0,
+              "private": true,
+              "notes": "",
+              "hiddenFromStatusLists": true,
+              "startedAt": {
+                "year": 2022,
+                "month": 1,
+                "day": 1
+              },
+              "completedAt": {
+                "year": 2022,
+                "month": 3,
+                "day": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Viewer": {
+      "mediaListOptions": {
+        "scoreFormat": "POINT_10_DECIMAL",
+        "animeList": {
+          "customLists": ["Favourites"]
+        },
+        "mangaList": {
+          "customLists": []
+        }
+      }
+    }
+  }
+}

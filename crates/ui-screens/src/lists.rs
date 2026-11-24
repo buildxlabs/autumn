@@ -19,7 +19,7 @@ use metadata::CatalogCache;
 use ui_components::{MediaCardView, PosterGrid};
 use ui_state::{ListCard, ListSort, ListTab, ListsSession, QuickEdit, STATUS_ORDER, bridge};
 
-use crate::lists_source::LocalListSource;
+use crate::lists_source::PlatformListSource;
 
 const SORTS: [ListSort; 4] = [
     ListSort::Recent,
@@ -42,15 +42,25 @@ struct Editing {
     status: ListStatus,
 }
 
+/// The last save that failed, kept so the error can offer a Retry action.
+#[derive(Debug, Clone, Copy)]
+struct PendingEdit {
+    media: MediaId,
+    edit: QuickEdit,
+}
+
 /// The My Lists view.
 pub(crate) struct ListsScreen {
-    session: ListsSession<LocalListSource>,
+    gateway: ui_state::PlatformGateway,
+    generation: u64,
+    session: ListsSession<PlatformListSource>,
     grid: Entity<PosterGrid>,
     search: Entity<InputState>,
     progress: Entity<InputState>,
     score: Entity<InputState>,
     _search_subscription: Subscription,
     editing: Option<Editing>,
+    failed: Option<PendingEdit>,
     visible_media: Vec<MediaId>,
     error: Option<String>,
     task: Option<Task<()>>,
@@ -108,6 +118,7 @@ fn card_view(card: &ListCard) -> MediaCardView {
 impl ListsScreen {
     /// Creates the screen over the active platform's Local source.
     pub(crate) fn new(
+        gateway: ui_state::PlatformGateway,
         db: Db,
         catalog: CatalogCache,
         window: &mut Window,
@@ -130,13 +141,16 @@ impl ListsScreen {
                 },
             );
             Self {
-                session: ListsSession::new(LocalListSource::new(db, catalog)),
+                generation: gateway.generation(),
+                session: ListsSession::new(PlatformListSource::new(gateway.clone(), db, catalog)),
+                gateway,
                 grid: PosterGrid::new(Vec::new(), cx),
                 search,
                 progress,
                 score,
                 _search_subscription: subscription,
                 editing: None,
+                failed: None,
                 visible_media: Vec::new(),
                 error: None,
                 task: None,
@@ -158,6 +172,11 @@ impl ListsScreen {
 
     /// Selects the tab named by the route.
     pub(crate) fn set_tab(&mut self, tab: ListTab, cx: &mut Context<'_, Self>) {
+        let generation = self.gateway.generation();
+        if generation != self.generation {
+            self.generation = generation;
+            self.reload(cx);
+        }
         if self.session.tab() != &tab {
             self.session.set_tab(tab);
             self.sync_grid(cx);
@@ -176,7 +195,7 @@ impl ListsScreen {
     /// the user changed while the request was in flight.
     fn adopt_session(
         &mut self,
-        mut loaded: ListsSession<LocalListSource>,
+        mut loaded: ListsSession<PlatformListSource>,
         cx: &mut Context<'_, Self>,
     ) {
         let tab = self.session.tab().clone();
@@ -187,6 +206,7 @@ impl ListsScreen {
         loaded.set_sort(sort);
         self.session = loaded;
         self.error = None;
+        self.failed = None;
         self.sync_grid(cx);
     }
 
@@ -244,15 +264,15 @@ impl ListsScreen {
                             let screen = screen.clone();
                             move |_: &ClickEvent, _, cx| {
                                 screen.update(cx, |screen, cx| {
-                                    let next = screen
-                                        .editing
-                                        .as_ref()
-                                        .and_then(|editing| {
-                                            STATUS_ORDER
-                                                .iter()
-                                                .position(|&status| status == editing.status)
-                                        })
-                                        .map_or(0, |at| (at + 1) % STATUS_ORDER.len());
+                                    let at = screen.editing.as_ref().and_then(|editing| {
+                                        STATUS_ORDER.iter().position(|&s| s == editing.status)
+                                    });
+                                    let Some(at) = at else {
+                                        screen.error = Some("Unknown list status.".to_owned());
+                                        cx.notify();
+                                        return;
+                                    };
+                                    let next = (at + 1) % STATUS_ORDER.len();
                                     if let (Some(editing), Some(status)) =
                                         (screen.editing.as_mut(), STATUS_ORDER.get(next))
                                     {
@@ -307,11 +327,25 @@ impl ListsScreen {
         let edit = QuickEdit::new().status(editing.status);
         let edit = progress.map_or(edit, |progress| edit.progress(progress));
         let edit = score.map_or(edit, |score| edit.score(score));
+        self.submit_edit(editing.media, edit, cx);
+        window.close_dialog(cx);
+    }
+
+    fn retry_edit(&mut self, cx: &mut Context<'_, Self>) {
+        let Some(pending) = self.failed.take() else {
+            return;
+        };
+        self.submit_edit(pending.media, pending.edit, cx);
+    }
+
+    fn submit_edit(&mut self, media: MediaId, edit: QuickEdit, cx: &mut Context<'_, Self>) {
+        let pending = PendingEdit { media, edit };
         let mut session = self.session.clone();
+        self.error = None;
         self.task = Some(cx.spawn(async move |screen, cx| {
             let task = cx.update(|cx| {
                 bridge::run(cx, async move {
-                    session.quick_edit(editing.media, &edit).await?;
+                    session.quick_edit(media, &edit).await?;
                     Ok::<_, ui_state::ListSourceError>(session)
                 })
             });
@@ -319,19 +353,24 @@ impl ListsScreen {
             let _ = screen.update(cx, |screen, cx| {
                 match result {
                     Ok(Ok(session)) => screen.adopt_session(session, cx),
-                    Ok(Err(error)) => screen.error = Some(error.to_string()),
+                    Ok(Err(error)) => {
+                        if error.is_retryable() {
+                            screen.failed = Some(pending);
+                        }
+                        screen.error = Some(error.to_string());
+                    }
                     Err(error) => screen.error = Some(error.to_string()),
                 }
                 cx.notify();
             });
         }));
-        window.close_dialog(cx);
     }
 }
 
 impl Render for ListsScreen {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let can_retry = self.failed.is_some();
         let tabs = self.session.tabs();
         let selected = tabs
             .iter()
@@ -396,11 +435,22 @@ impl Render for ListsScreen {
                     .child(sort_button),
             )
             .children(self.error.as_ref().map(|error| {
-                div()
+                let mut row = div()
                     .px_8()
                     .pt_2()
+                    .flex()
+                    .gap_3()
+                    .items_center()
                     .text_color(colors.danger)
-                    .child(error.clone())
+                    .child(error.clone());
+                if can_retry {
+                    row = row.child(Button::new("lists-retry").label("Retry").on_click(
+                        cx.listener(|screen: &mut Self, _, _, cx| {
+                            screen.retry_edit(cx);
+                        }),
+                    ));
+                }
+                row
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
             .test_support()
@@ -409,6 +459,11 @@ impl Render for ListsScreen {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::indexing_slicing,
+        reason = "test fixtures are indexed by fixed JSON keys"
+    )]
+
     use std::time::SystemTime;
 
     use domain::{AdvancedScores, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaKind, Score};
@@ -416,6 +471,8 @@ mod tests {
         AppContext, Bounds, TestAppContext, WindowBounds, WindowOptions, base::Root, point, px,
         size, test::TestWindowExt,
     };
+
+    use ui_state::QuickEdit;
 
     use super::ListsScreen;
 
@@ -475,7 +532,13 @@ mod tests {
                 ..WindowOptions::default()
             };
             gpui_kit::open_window(options, cx, |window, cx| {
-                ListsScreen::new(db, catalog, window, cx)
+                ListsScreen::new(
+                    ui_state::PlatformGateway::local(db.clone()),
+                    db,
+                    catalog,
+                    window,
+                    cx,
+                )
             })
             .expect("open window")
         });
@@ -511,5 +574,192 @@ mod tests {
             (screen.session.cards().len(), screen.error.clone())
         });
         assert_eq!(cards, 1, "the local entry loaded: {error:?}");
+    }
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one test drives a real failing save and its retry end to end"
+    )]
+    fn a_failed_save_offers_retry_and_retry_clears_the_error(cx: &mut TestAppContext) {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        };
+
+        use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+        use serde_json::{Value, json};
+        use tokio::net::TcpListener;
+        use ui_state::AniListHandle;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(1)
+            .build()
+            .expect("runtime");
+        let db = runtime
+            .block_on(db::Db::open(&dir.path().join("autumn.db")))
+            .expect("db");
+        let fixture: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!(
+                "{}/../metadata/tests/fixtures/collection_with_custom_lists.json",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .expect("fixture"),
+        )
+        .expect("valid JSON");
+
+        let fail_saves = Arc::new(AtomicBool::new(true));
+        let saves = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route(
+                "/",
+                post(
+                    move |State((fail, saves)): State<(Arc<AtomicBool>, Arc<AtomicUsize>)>,
+                          Json(request): Json<Value>| {
+                        let query = request["query"].as_str().unwrap_or_default().to_owned();
+                        let collection = fixture.clone();
+                        let fail = Arc::clone(&fail);
+                        let saves = Arc::clone(&saves);
+                        async move {
+                            if query.contains("MediaListCollection(") {
+                                return (StatusCode::OK, Json(collection));
+                            }
+                            if query.contains("SaveMediaListEntry(") {
+                                saves.fetch_add(1, Ordering::SeqCst);
+                                if fail.load(Ordering::SeqCst) {
+                                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({})));
+                                }
+                                // AniList answers with the stored entry.
+                                let sent = &request["variables"];
+                                return (
+                                    StatusCode::OK,
+                                    Json(json!({"data": {"SaveMediaListEntry": {
+                                        "id": 9001, "mediaId": 154_587,
+                                        "status": sent["status"], "score": sent["scoreRaw"],
+                                        "progress": sent["progress"],
+                                        "progressVolumes": sent["progressVolumes"],
+                                        "repeat": sent["repeat"], "priority": sent["priority"],
+                                        "private": sent["private"], "notes": sent["notes"],
+                                        "hiddenFromStatusLists": sent["hidden"],
+                                        "startedAt": null, "completedAt": null,
+                                        "customLists": null
+                                    }}})),
+                                );
+                            }
+                            (StatusCode::OK, Json(json!({"data": {}})))
+                        }
+                    },
+                ),
+            )
+            .with_state((Arc::clone(&fail_saves), Arc::clone(&saves)));
+        let listener = runtime
+            .block_on(TcpListener::bind("127.0.0.1:0"))
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        runtime.spawn(async move { axum::serve(listener, app).await.expect("serve") });
+
+        let http = net::Client::builder()
+            .max_retries(0)
+            .build()
+            .expect("client");
+        let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
+        let catalog = metadata::CatalogCache::new(
+            anilist.clone(),
+            net::PosterCache::new(dir.path()).expect("poster cache"),
+        );
+        let gateway = ui_state::PlatformGateway::local(db.clone());
+        gateway.connect_anilist(AniListHandle::new(
+            db.clone(),
+            anilist,
+            "test-token".to_owned(),
+            "TestUser".to_owned(),
+        ));
+
+        cx.executor().allow_parking();
+        let (window, screen) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            ui_theme::init(cx);
+            ui_state::bridge::init(cx, runtime.handle().clone());
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(0.), px(0.)),
+                    size: size(px(1000.), px(700.)),
+                })),
+                ..WindowOptions::default()
+            };
+            gpui_kit::open_window(options, cx, |window, cx| {
+                ListsScreen::new(gateway, db, catalog, window, cx)
+            })
+            .expect("open window")
+        });
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cx.run_until_parked();
+        }
+        let media = cx.update(|cx| {
+            screen
+                .read(cx)
+                .session
+                .cards()
+                .first()
+                .expect("AniList card loaded")
+                .entry
+                .media
+        });
+
+        // A real save against the failing endpoint, not hand-set screen state.
+        cx.update(|cx| {
+            screen.update(cx, |screen, cx| {
+                screen.submit_edit(media, QuickEdit::new().progress(9), cx);
+            });
+        });
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cx.run_until_parked();
+        }
+        let (error, failed) = cx.update(|cx| {
+            let screen = screen.read(cx);
+            (screen.error.clone(), screen.failed)
+        });
+        assert!(error.is_some(), "the failed save is shown: {failed:?}");
+        assert!(failed.is_some(), "a retryable failure is remembered");
+
+        let window = window.downcast::<Root>().expect("root window");
+        let shows_retry = cx
+            .update_window(window.into(), |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find("lists-retry").is_some()
+            })
+            .expect("window is open");
+        assert!(shows_retry, "a retryable failure offers a Retry button");
+
+        fail_saves.store(false, Ordering::SeqCst);
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            window.click("lists-retry", cx);
+        })
+        .expect("window is open");
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cx.run_until_parked();
+        }
+        let result = cx.update(|cx| {
+            let screen = screen.read(cx);
+            (
+                screen.error.clone(),
+                screen.failed,
+                screen
+                    .session
+                    .cards()
+                    .first()
+                    .map(|card| card.entry.progress),
+            )
+        });
+        assert!(result.0.is_none(), "the retry succeeded: {:?}", result.0);
+        assert!(result.1.is_none(), "no pending edit remains after a retry");
+        assert_eq!(result.2, Some(9), "the retried edit was stored");
+        assert_eq!(saves.load(Ordering::SeqCst), 2, "one save per attempt");
     }
 }

@@ -192,11 +192,8 @@ impl AppShell {
     /// Storage requests.
     #[expect(
         clippy::too_many_arguments,
-        reason = "the shell receives its engine-side collaborators once, at construction"
-    )]
-    #[expect(
         clippy::too_many_lines,
-        reason = "the shell builds every store and subscription at construction"
+        reason = "the shell receives its engine-side collaborators and builds every store and subscription at construction"
     )]
     pub fn new(
         prefs: RailPrefs,
@@ -235,7 +232,15 @@ impl AppShell {
             cx.notify();
         })
         .detach();
-        cx.observe(&account, |_, _, cx| cx.notify()).detach();
+        cx.observe(&account, |shell, _, cx| {
+            // A platform switch is published as an account change. Refresh the
+            // open list so its entries come from the new active platform.
+            if let (Route::Lists { status }, Some(lists)) = (shell.route(), shell.lists.as_ref()) {
+                lists.update(cx, |lists, cx| lists.set_tab(status, cx));
+            }
+            cx.notify();
+        })
+        .detach();
         let account_events = cx.subscribe_in(
             &account,
             window,
@@ -340,6 +345,7 @@ impl AppShell {
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
+        gateway: ui_state::PlatformGateway,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -358,9 +364,9 @@ impl AppShell {
             cx,
         );
         shell.palette.update(cx, |palette, _| {
-            palette.attach_sources(db.clone(), anilist.clone());
+            palette.attach_sources(db.clone(), anilist.clone(), gateway.clone());
         });
-        let lists = ListsScreen::new(db, catalog, window, cx);
+        let lists = ListsScreen::new(gateway, db, catalog, window, cx);
         let events = cx.subscribe(&lists, |shell, _, event: &ListsEvent, cx| {
             let ListsEvent::SelectTab(status) = event;
             shell.navigate(
@@ -1120,7 +1126,7 @@ mod tests {
     use ui_state::home_store::HomeStore;
     use ui_state::test_support::pending_services;
     use ui_state::{
-        Route, SearchFilters, SettingsTab,
+        PlatformGateway, Route, SearchFilters, SettingsTab,
         account::AccountStore,
         actions::OpenCommandPalette,
         bridge::BridgeError,
@@ -2431,9 +2437,10 @@ mod tests {
                             }),
                             entry_store,
                             home_store,
-                            db,
+                            db.clone(),
                             anilist,
                             catalog,
+                            PlatformGateway::new(db),
                             window,
                             cx,
                         )
