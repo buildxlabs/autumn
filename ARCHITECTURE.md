@@ -108,6 +108,7 @@ db            → domain
 auth           → domain, net
 engine         → domain, net, db, metadata, tracker, settings
 metadata      → domain, net
+player        → domain
 tracker       → domain, db
 ui-state      → domain, engine, metadata
 ui-components → (gpui-kit only)

@@ -1,0 +1,21 @@
+[package]
+name                   = "player"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[lints]
+workspace = true
+
+[dependencies]
+domain.workspace     = true
+futures.workspace    = true
+rand.workspace       = true
+serde.workspace      = true
+serde_json.workspace = true
+tempfile.workspace   = true
+thiserror.workspace  = true
+tokio                = { features = [ "io-util" ], workspace = true }
+tracing.workspace    = true
