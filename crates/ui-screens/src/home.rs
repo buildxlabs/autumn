@@ -248,7 +248,7 @@ fn hero_data(item: &HomeEntry) -> HeroBannerData {
 fn entry_title(item: &HomeEntry) -> String {
     item.media
         .as_ref()
-        .map_or_else(|| format!("Media #{}", item.entry.media.get()), title_of)
+        .map_or_else(|| "Untitled".to_owned(), title_of)
 }
 
 fn empty(message: &'static str) -> gpui_kit::AnyElement {

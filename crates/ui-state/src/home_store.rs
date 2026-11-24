@@ -187,6 +187,11 @@ impl HomeStore {
         self.load_catalog(cx);
     }
 
+    /// Reloads the list sections, as after a list entry was saved.
+    pub fn reload_lists(&mut self, cx: &mut Context<'_, Self>) {
+        self.load_platform(cx);
+    }
+
     /// Reloads the sections that share `section`'s source, showing their
     /// loaders first.
     pub fn retry(&mut self, section: HomeSection, cx: &mut Context<'_, Self>) {
@@ -270,7 +275,17 @@ impl HomeStore {
                     return;
                 }
             };
-            update(&store, cx, |store| store.apply_catalog(&load.cached));
+            update(&store, cx, |store| {
+                // Offline sections stay offline while the refresh that may
+                // fail again is pending, so the banner doesn't flicker.
+                let offline = matches!(
+                    store.state(HomeSection::DiscoverHeader),
+                    SectionState::Offline(..)
+                );
+                if !(offline && load.refresh.is_some()) {
+                    store.apply_catalog(&load.cached);
+                }
+            });
             let Some(refresh) = load.refresh else {
                 return;
             };
@@ -421,13 +436,15 @@ mod tests {
         Refreshed(HomeLoad),
         /// The refresh can't reach AniList: the cached value, marked offline.
         Offline,
+        /// The refresh never resolves, like a request still timing out.
+        Pending,
     }
 
     /// A fake engine service: canned Home sections, with switchable failures.
     #[derive(Default)]
     struct FakeServices {
         /// When `home` serves a stale value, the refresh it serves.
-        refresh: Option<RefreshMode>,
+        refresh: std::sync::Mutex<Option<RefreshMode>>,
         /// The entries `collection` serves.
         collection: Vec<ListedEntry>,
         /// Whether `collection` fails.
@@ -482,7 +499,11 @@ mod tests {
         fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
             self.home_calls.fetch_add(1, Ordering::SeqCst);
             let fails = self.home_fails.load(Ordering::SeqCst);
-            let refresh = self.refresh.clone();
+            let refresh = self
+                .refresh
+                .lock()
+                .expect("the fake's refresh lock")
+                .clone();
             Box::pin(async move {
                 if fails {
                     return Err(failure());
@@ -502,6 +523,7 @@ mod tests {
                             offline: true,
                         })
                     }),
+                    RefreshMode::Pending => Refresh::new(std::future::pending()),
                 });
                 Ok(Load {
                     cached: Cached {
@@ -677,10 +699,10 @@ mod tests {
         let runtime = runtime();
         let _guard = runtime.enter();
         let services = Arc::new(FakeServices {
-            refresh: Some(RefreshMode::Refreshed(HomeLoad {
+            refresh: std::sync::Mutex::new(Some(RefreshMode::Refreshed(HomeLoad {
                 trending: vec![summary(999)],
                 ..home_load()
-            })),
+            }))),
             ..FakeServices::default()
         });
         let store = open_store(cx, &runtime, services).await;
@@ -697,10 +719,10 @@ mod tests {
         let runtime = runtime();
         let _guard = runtime.enter();
         let services = Arc::new(FakeServices {
-            refresh: Some(RefreshMode::Offline),
+            refresh: std::sync::Mutex::new(Some(RefreshMode::Offline)),
             ..FakeServices::default()
         });
-        let store = open_store(cx, &runtime, services).await;
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
 
         assert_eq!(
             state_of(cx, &store, HomeSection::DiscoverHeader),
@@ -709,6 +731,31 @@ mod tests {
                 UNIX_EPOCH,
             ),
             "the cached value shows under the offline state"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn returning_to_home_offline_keeps_the_banner_while_the_refresh_runs(
+        cx: &mut TestAppContext,
+    ) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let services = Arc::new(FakeServices {
+            refresh: std::sync::Mutex::new(Some(RefreshMode::Offline)),
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
+        *services.refresh.lock().expect("the fake's refresh lock") = Some(RefreshMode::Pending);
+
+        cx.update(|cx| store.update(cx, HomeStore::open));
+        settle(cx).await;
+
+        assert!(
+            matches!(
+                state_of(cx, &store, HomeSection::DiscoverHeader),
+                SectionState::Offline(..)
+            ),
+            "the offline banner stays while the new refresh is pending"
         );
     }
 }

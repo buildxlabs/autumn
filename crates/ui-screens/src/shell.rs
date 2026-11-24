@@ -242,6 +242,14 @@ impl AppShell {
         let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
         let home_carousels = HomeCarousels::new(cx);
         let home_events = observe_home(&home_store, &home_carousels, cx);
+        // A list save can land after the user is back on Home: reload the
+        // list sections when the Entry store changes while Home is shown.
+        cx.observe(&entry_store, |shell, _, cx| {
+            if shell.route() == Route::Home {
+                shell.home_store.update(cx, HomeStore::reload_lists);
+            }
+        })
+        .detach();
         // Home is the first route: load it now, as `show` does on return.
         home_store.update(cx, HomeStore::open);
         let user = account.read(cx).name().map(str::to_owned);
