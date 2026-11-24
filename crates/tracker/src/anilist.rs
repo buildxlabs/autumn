@@ -19,7 +19,7 @@ use db::Db;
 use domain::{
     AdvancedScores, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score,
 };
-use metadata::{AniList, ListEntryData, ListEntryInput};
+use metadata::{AniList, CustomListNames, ListEntryData, ListEntryInput};
 
 use crate::{Collection, Platform, PlatformError};
 
@@ -46,6 +46,8 @@ pub struct AniListPlatform {
     token: String,
     user_name: String,
     entries: EntryCache,
+    /// Every configured custom-list name, so empty lists are not lost.
+    custom_names: Arc<Mutex<CustomListNames>>,
     truncated: Arc<AtomicBool>,
 }
 
@@ -70,6 +72,7 @@ impl Clone for AniListPlatform {
             token: self.token.clone(),
             user_name: self.user_name.clone(),
             entries: Arc::clone(&self.entries),
+            custom_names: Arc::clone(&self.custom_names),
             truncated: Arc::clone(&self.truncated),
         }
     }
@@ -86,6 +89,7 @@ impl AniListPlatform {
             token,
             user_name,
             entries: Arc::new(Mutex::new(HashMap::new())),
+            custom_names: Arc::new(Mutex::new(CustomListNames::default())),
             truncated: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -102,6 +106,24 @@ impl AniListPlatform {
     #[must_use]
     pub fn collection_truncated(&self) -> bool {
         self.truncated.load(Ordering::SeqCst)
+    }
+
+    /// Every custom-list name configured for `kind`, including lists with no
+    /// entries. Needed by callers that replace the whole name set (#67).
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when AniList cannot be read.
+    pub async fn custom_list_names(&self, kind: MediaKind) -> Result<Vec<String>, PlatformError> {
+        self.collection(kind).await?;
+        Ok(self.custom_names.lock().map_or_else(
+            |_| Vec::new(),
+            |names| match kind {
+                MediaKind::Anime => names.anime.clone(),
+                MediaKind::Manga => names.manga.clone(),
+                _ => Vec::new(),
+            },
+        ))
     }
 
     async fn anilist_id(&self, media: MediaId) -> Result<u32, PlatformError> {
@@ -161,7 +183,16 @@ impl Platform for AniListPlatform {
         // the UI instead of pretending the list is complete.
         self.truncated
             .fetch_or(data.has_next_chunk, Ordering::SeqCst);
-        let mut merged: Vec<(MediaId, i32, ListEntry)> = Vec::new();
+        if let Ok(mut names) = self.custom_names.lock() {
+            *names = data.custom_lists.clone();
+        }
+        let custom_names: Vec<String> = match kind {
+            MediaKind::Anime => data.custom_lists.anime.clone(),
+            MediaKind::Manga => data.custom_lists.manga.clone(),
+            _ => Vec::new(),
+        };
+        let mut merged: HashMap<MediaId, (i32, ListEntry)> = HashMap::new();
+        let mut order: Vec<MediaId> = Vec::new();
         for group in &data.lists {
             for entry in &group.entries {
                 let minted = self
@@ -169,10 +200,7 @@ impl Platform for AniListPlatform {
                     .media()
                     .find_or_mint(kind, &[ExternalId::AniList(entry.media_id)])
                     .await?;
-                if let Some((_, _, existing)) = merged
-                    .iter_mut()
-                    .find(|(media, _, _)| *media == minted.media)
-                {
+                if let Some((_, existing)) = merged.get_mut(&minted.media) {
                     for name in &entry.custom_lists {
                         if !existing.custom_lists.contains(name) {
                             existing.custom_lists.push(name.clone());
@@ -180,16 +208,25 @@ impl Platform for AniListPlatform {
                     }
                     continue;
                 }
-                merged.push((minted.media, entry.id, Self::to_entry(entry, minted.media)));
+                merged.insert(
+                    minted.media,
+                    (entry.id, Self::to_entry(entry, minted.media)),
+                );
+                order.push(minted.media);
             }
         }
-        let entries: Vec<ListEntry> = merged.iter().map(|(_, _, entry)| entry.clone()).collect();
+        let entries: Vec<ListEntry> = order
+            .iter()
+            .filter_map(|media| merged.get(media).map(|(_, entry)| entry.clone()))
+            .collect();
         if let Ok(mut cache) = self.entries.lock() {
-            for (media, id, entry) in merged {
-                cache.insert(media, CachedEntry { id, entry });
+            for media in order {
+                if let Some((id, entry)) = merged.remove(&media) {
+                    cache.insert(media, CachedEntry { id, entry });
+                }
             }
         }
-        Ok(Collection::group(&entries))
+        Ok(Collection::group(&entries, &custom_names))
     }
 
     async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, PlatformError> {
@@ -228,7 +265,16 @@ impl Platform for AniListPlatform {
         media: MediaId,
         progress: u32,
     ) -> Result<ListEntry, PlatformError> {
-        let cached = self.cached_entry(media);
+        let mut cached = self.cached_entry(media);
+        if cached.is_none() {
+            // Cold start: an entry already on AniList must keep its status.
+            // Look it up the same way delete does before deciding it is new.
+            self.collection(MediaKind::Anime).await?;
+            if self.cached_entry(media).is_none() {
+                self.collection(MediaKind::Manga).await?;
+            }
+            cached = self.cached_entry(media);
+        }
         let input = ListEntryInput {
             id: self.entry_id(media),
             media_id: Some(self.anilist_id(media).await?),

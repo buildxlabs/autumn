@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashSet,
+    fmt,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -11,33 +12,102 @@ use std::{
 
 use db::Db;
 use domain::{AniListAccountState, AppEvent, ListEntry, MediaId, MediaKind};
+use metadata::AniList;
 
 use crate::events::Sender;
-use tracker::{ActiveKind, ActivePlatform, AniListPlatform, Local, Platform, PlatformError};
+use tracker::{ActivePlatform, AniListPlatform, Local, Platform, PlatformError};
+
+/// Which platform reads and writes list entries right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ActiveKind {
+    /// The account-free local platform.
+    Local,
+    /// The connected AniList account.
+    AniList,
+}
+
+impl From<tracker::ActiveKind> for ActiveKind {
+    fn from(kind: tracker::ActiveKind) -> Self {
+        match kind {
+            tracker::ActiveKind::Local => Self::Local,
+            tracker::ActiveKind::AniList => Self::AniList,
+        }
+    }
+}
+
+/// The kind of a gateway failure, for callers deciding whether to retry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum GatewayErrorKind {
+    /// The platform state is poisoned by a panic on another thread.
+    Unavailable,
+    /// AniList rejected the token; the account is now read-only.
+    Unauthorized,
+    /// A write was attempted while AniList is read-only.
+    ReadOnly,
+    /// Any other platform failure.
+    Other,
+}
 
 /// Why a platform request through the gateway failed.
 #[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum GatewayError {
-    /// The platform state is poisoned by a panic on another thread.
-    #[error("the active platform is unavailable")]
-    Unavailable,
-    /// The active platform failed the operation.
-    #[error(transparent)]
-    Platform(#[from] PlatformError),
-    /// AniList rejected the token; the account is now read-only.
-    #[error("AniList rejected the token; lists are read-only")]
-    Unauthorized,
-    /// A write was attempted while AniList is read-only.
-    #[error("AniList is read-only until you log in again")]
-    ReadOnly,
+#[error("{message}")]
+pub struct GatewayError {
+    message: String,
+    kind: GatewayErrorKind,
 }
 
 impl GatewayError {
+    fn new(kind: GatewayErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            kind,
+        }
+    }
+
+    /// The kind of failure, without exposing a platform crate's errors.
+    #[must_use]
+    pub fn kind(&self) -> GatewayErrorKind {
+        self.kind
+    }
+
+    /// A message safe to show in the UI.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     /// Whether the UI should offer a Retry action for this failure.
     #[must_use]
     pub fn is_retryable(&self) -> bool {
-        !matches!(self, Self::Unauthorized | Self::ReadOnly)
+        !matches!(
+            self.kind,
+            GatewayErrorKind::Unauthorized | GatewayErrorKind::ReadOnly
+        )
+    }
+}
+
+/// An opaque handle to the connected AniList account. The tracker crate
+/// builds the concrete platform; callers never name it.
+pub struct AniListHandle {
+    inner: AniListPlatform,
+}
+
+impl fmt::Debug for AniListHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AniListHandle").finish_non_exhaustive()
+    }
+}
+
+impl AniListHandle {
+    /// Uses `client` and `token` for every AniList request and keeps the media
+    /// cross-references in `db`.
+    #[must_use]
+    pub fn new(db: Db, client: AniList, token: String, user_name: String) -> Self {
+        Self {
+            inner: AniListPlatform::new(db, client, token, user_name),
+        }
     }
 }
 
@@ -54,30 +124,31 @@ pub struct PlatformGateway {
 }
 
 impl PlatformGateway {
-    /// Starts with `local` active and no AniList account connected.
+    /// Starts with the account-free Local platform over `db` active.
     #[must_use]
-    pub fn new(local: Local) -> Self {
-        Self {
-            active: Arc::new(Mutex::new(ActivePlatform::new(local))),
-            generation: Arc::new(AtomicU64::new(0)),
-            read_only: Arc::new(AtomicBool::new(false)),
-            events: None,
-        }
+    pub fn new(db: Db) -> Self {
+        Self::from_local(Local::new(db), None)
     }
 
     /// A gateway that publishes a rejected token as an expired account.
     #[must_use]
-    pub fn with_events(local: Local, events: Sender) -> Self {
+    pub fn with_events(db: Db, events: Sender) -> Self {
+        Self::from_local(Local::new(db), Some(events))
+    }
+
+    fn from_local(local: Local, events: Option<Sender>) -> Self {
         Self {
-            events: Some(events),
-            ..Self::new(local)
+            active: Arc::new(Mutex::new(ActivePlatform::new(local))),
+            generation: Arc::new(AtomicU64::new(0)),
+            read_only: Arc::new(AtomicBool::new(false)),
+            events,
         }
     }
 
     /// A gateway over the account-free Local platform backed by `db`.
     #[must_use]
     pub fn local(db: Db) -> Self {
-        Self::new(Local::new(db))
+        Self::new(db)
     }
 
     /// Whether AniList is read-only after a rejected token.
@@ -86,14 +157,26 @@ impl PlatformGateway {
         self.read_only.load(Ordering::SeqCst)
     }
 
-    fn writable_platform(&self) -> Result<ActivePlatform, GatewayError> {
-        if self.is_read_only() {
-            return Err(GatewayError::ReadOnly);
-        }
+    fn platform(&self) -> Result<ActivePlatform, GatewayError> {
         self.active
             .lock()
-            .map_err(|_| GatewayError::Unavailable)
+            .map_err(|_| {
+                GatewayError::new(
+                    GatewayErrorKind::Unavailable,
+                    "the active platform is unavailable",
+                )
+            })
             .map(|active| active.clone())
+    }
+
+    fn writable_platform(&self) -> Result<ActivePlatform, GatewayError> {
+        if self.is_read_only() {
+            return Err(GatewayError::new(
+                GatewayErrorKind::ReadOnly,
+                "AniList is read-only until you log in again",
+            ));
+        }
+        self.platform()
     }
 
     fn classify<T>(&self, result: Result<T, PlatformError>) -> Result<T, GatewayError> {
@@ -101,10 +184,22 @@ impl PlatformGateway {
             Ok(value) => Ok(value),
             Err(PlatformError::Unauthorized) => {
                 self.expire();
-                Err(GatewayError::Unauthorized)
+                Err(GatewayError::new(
+                    GatewayErrorKind::Unauthorized,
+                    "AniList rejected the token; lists are read-only",
+                ))
             }
-            Err(error) => Err(GatewayError::Platform(error)),
+            Err(error) => Err(GatewayError::new(
+                GatewayErrorKind::Other,
+                error.to_string(),
+            )),
         }
+    }
+
+    /// Marks AniList read-only at startup for a restored expired account,
+    /// without emitting a second account event.
+    pub fn mark_read_only(&self) {
+        self.read_only.store(true, Ordering::SeqCst);
     }
 
     fn expire(&self) {
@@ -129,14 +224,14 @@ impl PlatformGateway {
     pub fn active(&self) -> ActiveKind {
         self.active
             .lock()
-            .map_or(ActiveKind::Local, |active| active.active())
+            .map_or(ActiveKind::Local, |active| active.active().into())
     }
 
     /// Connects AniList and makes it active; Local entries stay dormant.
-    pub fn connect_anilist(&self, anilist: AniListPlatform) {
+    pub fn connect_anilist(&self, handle: AniListHandle) {
         self.read_only.store(false, Ordering::SeqCst);
         if let Ok(mut active) = self.active.lock() {
-            active.connect(anilist);
+            active.connect(handle.inner);
             self.generation.fetch_add(1, Ordering::SeqCst);
         }
     }
@@ -158,11 +253,7 @@ impl PlatformGateway {
     ///
     /// Returns a gateway error when the platform cannot be read.
     pub async fn entries(&self, kind: MediaKind) -> Result<Vec<ListEntry>, GatewayError> {
-        let platform = self
-            .active
-            .lock()
-            .map_err(|_| GatewayError::Unavailable)?
-            .clone();
+        let platform = self.platform()?;
         let collection = self.classify(platform.collection(kind).await)?;
         let mut seen = HashSet::new();
         let mut entries = Vec::new();
@@ -218,9 +309,9 @@ mod tests {
         AdvancedScores, AniListAccountState, AppEvent, ExternalId, FuzzyDate, ListEntry,
         ListStatus, MediaId, MediaKind, Score,
     };
-    use tracker::{ActiveKind, Local, Platform};
+    use tracker::{Local, Platform};
 
-    use super::{GatewayError, PlatformGateway};
+    use super::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, PlatformGateway};
 
     fn entry(media: MediaId, progress: u32) -> ListEntry {
         ListEntry {
@@ -260,7 +351,7 @@ mod tests {
             .await
             .expect("save");
 
-        let gateway = PlatformGateway::new(local);
+        let gateway = PlatformGateway::new(db.clone());
         assert_eq!(gateway.active(), ActiveKind::Local);
         let entries = gateway
             .entries(MediaKind::Anime)
@@ -274,7 +365,7 @@ mod tests {
 
         let http = net::Client::builder().max_retries(0).build().expect("http");
         let anilist = metadata::AniList::with_endpoint(http, "http://127.0.0.1:1/");
-        gateway.connect_anilist(tracker::AniListPlatform::new(
+        gateway.connect_anilist(AniListHandle::new(
             db.clone(),
             anilist,
             "test-token".to_owned(),
@@ -311,12 +402,12 @@ mod tests {
         let db = db::Db::open(&dir.path().join("autumn.db"))
             .await
             .expect("db");
-        let gateway = PlatformGateway::with_events(Local::new(db), sender);
+        let gateway = PlatformGateway::with_events(db, sender);
 
         let result: Result<(), tracker::PlatformError> = Err(tracker::PlatformError::Unauthorized);
         let classified = gateway.classify(result);
 
-        assert!(matches!(classified, Err(GatewayError::Unauthorized)));
+        assert!(matches!(classified, Err(error) if error.kind() == GatewayErrorKind::Unauthorized));
         assert!(gateway.is_read_only(), "writes are refused from now on");
         assert!(
             matches!(
@@ -347,7 +438,7 @@ mod tests {
             .save_entry(&entry(minted.media, 9))
             .await
             .expect_err("read-only rejects the write");
-        assert!(matches!(error, GatewayError::ReadOnly));
+        assert_eq!(error.kind(), GatewayErrorKind::ReadOnly);
         assert!(!error.is_retryable(), "a read-only account offers no Retry");
 
         gateway.sign_out();
@@ -360,8 +451,10 @@ mod tests {
 
     #[test]
     fn only_transient_gateway_errors_are_retryable() {
-        assert!(GatewayError::Unavailable.is_retryable());
-        assert!(!GatewayError::Unauthorized.is_retryable());
-        assert!(!GatewayError::ReadOnly.is_retryable());
+        let kind = |kind| GatewayError::new(kind, "test error");
+        assert!(kind(GatewayErrorKind::Unavailable).is_retryable());
+        assert!(kind(GatewayErrorKind::Other).is_retryable());
+        assert!(!kind(GatewayErrorKind::Unauthorized).is_retryable());
+        assert!(!kind(GatewayErrorKind::ReadOnly).is_retryable());
     }
 }

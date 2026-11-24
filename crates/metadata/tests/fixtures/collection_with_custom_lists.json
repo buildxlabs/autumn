@@ -19,8 +19,16 @@
               "private": false,
               "notes": "liked it",
               "hiddenFromStatusLists": false,
-              "startedAt": { "year": 2023, "month": 10, "day": 5 },
-              "completedAt": { "year": null, "month": null, "day": null }
+              "startedAt": {
+                "year": 2023,
+                "month": 10,
+                "day": 5
+              },
+              "completedAt": {
+                "year": null,
+                "month": null,
+                "day": null
+              }
             }
           ]
         },
@@ -40,8 +48,16 @@
               "private": false,
               "notes": "liked it",
               "hiddenFromStatusLists": false,
-              "startedAt": { "year": 2023, "month": 10, "day": 5 },
-              "completedAt": { "year": null, "month": null, "day": null }
+              "startedAt": {
+                "year": 2023,
+                "month": 10,
+                "day": 5
+              },
+              "completedAt": {
+                "year": null,
+                "month": null,
+                "day": null
+              }
             },
             {
               "id": 9002,
@@ -55,8 +71,16 @@
               "private": true,
               "notes": "",
               "hiddenFromStatusLists": true,
-              "startedAt": { "year": 2022, "month": 1, "day": 1 },
-              "completedAt": { "year": 2022, "month": 3, "day": 20 }
+              "startedAt": {
+                "year": 2022,
+                "month": 1,
+                "day": 1
+              },
+              "completedAt": {
+                "year": 2022,
+                "month": 3,
+                "day": 20
+              }
             }
           ]
         }
@@ -64,7 +88,13 @@
     },
     "Viewer": {
       "mediaListOptions": {
-        "scoreFormat": "POINT_10_DECIMAL"
+        "scoreFormat": "POINT_10_DECIMAL",
+        "animeList": {
+          "customLists": ["Favourites"]
+        },
+        "mangaList": {
+          "customLists": []
+        }
       }
     }
   }

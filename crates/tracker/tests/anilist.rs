@@ -22,32 +22,48 @@ use tokio::net::TcpListener;
 use tracker::{ActiveKind, ActivePlatform, AniListPlatform, ListName, Local, Platform};
 
 /// Recorded requests plus the flag that makes the next request a 401.
-type MockState = (Arc<Mutex<Vec<Value>>>, Arc<AtomicBool>);
+type MockState = (
+    Arc<Mutex<Vec<Value>>>,
+    Arc<AtomicBool>,
+    Arc<Mutex<Value>>,
+    Arc<AtomicBool>,
+);
 
 struct Mock {
     client: metadata::AniList,
     requests: Arc<Mutex<Vec<Value>>>,
     reject_token: Arc<AtomicBool>,
+    bare_401: Arc<AtomicBool>,
 }
 
 impl Mock {
     async fn serve() -> Self {
+        Self::serve_with(fixture()).await
+    }
+
+    async fn serve_with(body: Value) -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let body = Arc::new(Mutex::new(body));
         let reject_token = Arc::new(AtomicBool::new(false));
+        let bare_401 = Arc::new(AtomicBool::new(false));
         let app = Router::new()
             .route(
                 "/",
                 post(
-                    move |State((seen, reject_token)): State<MockState>,
+                    move |State((seen, reject_token, collection_body, bare_401)): State<MockState>,
                           Json(request): Json<Value>| {
                         let query = request["query"].as_str().unwrap_or_default().to_owned();
                         let reject = reject_token.load(Ordering::SeqCst);
+                        let bare = bare_401.load(Ordering::SeqCst);
                         async move {
                             seen.lock().unwrap().push(request);
+                            if bare {
+                                return (StatusCode::UNAUTHORIZED, Json(json!({})));
+                            }
                             let body = if reject {
                                 json!({"errors": [{"message": "Unauthorized.", "status": 401}], "data": null})
                             } else if query.contains("MediaListCollection(") {
-                                fixture()
+                                collection_body.lock().unwrap().clone()
                             } else if query.contains("SaveMediaListEntry(") {
                                 json!({"data": {"SaveMediaListEntry": {"id": 9001}}})
                             } else if query.contains("DeleteMediaListEntry(") {
@@ -60,7 +76,12 @@ impl Mock {
                     },
                 ),
             )
-            .with_state((Arc::clone(&requests), Arc::clone(&reject_token)));
+            .with_state((
+                Arc::clone(&requests),
+                Arc::clone(&reject_token),
+                Arc::clone(&body),
+                Arc::clone(&bare_401),
+            ));
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -73,11 +94,16 @@ impl Mock {
             client: metadata::AniList::with_endpoint(http, format!("http://{address}/")),
             requests,
             reject_token,
+            bare_401,
         }
     }
 
     fn reject_token(&self) {
         self.reject_token.store(true, Ordering::SeqCst);
+    }
+
+    fn reject_http_401(&self) {
+        self.bare_401.store(true, Ordering::SeqCst);
     }
 
     fn request(&self, at: usize) -> Value {
@@ -92,6 +118,14 @@ impl Mock {
 fn fixture() -> Value {
     let path = format!(
         "{}/../metadata/tests/fixtures/collection_with_custom_lists.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn fixture_with_empty_custom_list() -> Value {
+    let path = format!(
+        "{}/../metadata/tests/fixtures/collection_with_empty_custom_list.json",
         env!("CARGO_MANIFEST_DIR")
     );
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
@@ -222,6 +256,72 @@ async fn deleting_on_a_cold_cache_looks_up_the_entry_id() {
 }
 
 #[tokio::test]
+async fn a_bare_http_401_is_also_classified_as_unauthorized() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(154_587)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+    mock.reject_http_401();
+
+    let error = anilist
+        .save_entry(&entry(minted.media, ListStatus::Current, 3))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, tracker::PlatformError::Unauthorized),
+        "a bare HTTP 401 reaches the UI as Unauthorized: {error:?}"
+    );
+}
+
+#[tokio::test]
+async fn update_progress_on_a_cold_cache_keeps_an_existing_completed_status() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let minted = db
+        .media()
+        .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(52_991)])
+        .await
+        .unwrap();
+    let mock = Mock::serve().await;
+    let anilist = platform(db, &mock);
+
+    // No collection() first: the entry must be looked up from AniList.
+    let updated = anilist.update_progress(minted.media, 40).await.unwrap();
+
+    let save = mock
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|request| {
+            request["query"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("SaveMediaListEntry(")
+        })
+        .expect("a save was sent")
+        .clone();
+    let variables = save["variables"].clone();
+    assert!(
+        variables
+            .get("status")
+            .is_none_or(serde_json::Value::is_null),
+        "an existing COMPLETED entry is not overwritten: {variables}"
+    );
+    assert_eq!(variables["id"], 9002, "the looked-up list-entry id is used");
+    assert_eq!(variables["progress"], 40);
+    assert_eq!(updated.status, ListStatus::Completed, "status survives");
+    assert_eq!(updated.progress, 40);
+    assert_eq!(updated.media, minted.media);
+}
+
+#[tokio::test]
 async fn a_401_on_a_write_is_classified_as_unauthorized_not_a_generic_remote_error() {
     let dir = tempfile::tempdir().unwrap();
     let db = db_at(&dir.path().join("autumn.db")).await;
@@ -242,6 +342,31 @@ async fn a_401_on_a_write_is_classified_as_unauthorized_not_a_generic_remote_err
     assert!(
         matches!(error, tracker::PlatformError::Unauthorized),
         "a 401 reaches the UI as Unauthorized: {error:?}"
+    );
+}
+
+#[tokio::test]
+async fn empty_custom_lists_keep_their_names_for_a_true_union() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = db_at(&dir.path().join("autumn.db")).await;
+    let mock = Mock::serve_with(fixture_with_empty_custom_list()).await;
+    let anilist = platform(db, &mock);
+
+    let collection = anilist.collection(MediaKind::Anime).await.unwrap();
+    let empty = collection
+        .lists
+        .iter()
+        .find(|list| list.name == ListName::Custom("Empty Shelf".to_owned()))
+        .expect("an empty custom list is still reported");
+    assert!(empty.entries.is_empty(), "and it has no entries");
+
+    assert_eq!(
+        anilist.custom_list_names(MediaKind::Anime).await.unwrap(),
+        vec!["Favourites".to_owned(), "Empty Shelf".to_owned()]
+    );
+    assert_eq!(
+        anilist.custom_list_names(MediaKind::Manga).await.unwrap(),
+        vec!["Read Later".to_owned()]
     );
 }
 

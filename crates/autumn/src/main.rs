@@ -18,13 +18,12 @@ use gpui_kit::{
     WindowDecorations, WindowOptions, assets::AllAssets, component::TitleBar, point, px, size,
 };
 use metadata::{AniList, CatalogCache};
-use tracker::{AniListPlatform, Local};
 use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
-use ui_state::PlatformGateway;
 use ui_state::account::{AccountCommand, AccountStore};
 use ui_state::fetch_status::FetchStatus;
+use ui_state::{AniListHandle, PlatformGateway};
 
 /// Initial width of the main window in logical pixels; the user can resize it.
 const WINDOW_WIDTH: f32 = 1280.;
@@ -69,20 +68,27 @@ fn main() -> ExitCode {
     // no network requests while the Local platform is active.
     let catalog = CatalogCache::new(anilist.clone(), started.poster_cache.clone());
     let (engine_events, ui_events) = ui_state::events::channel();
-    let gateway =
-        PlatformGateway::with_events(Local::new(started.db.clone()), engine_events.clone());
+    let gateway = PlatformGateway::with_events(started.db.clone(), engine_events.clone());
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
     // Restore before the pump starts, so the first account event is seen.
     let restored = handle.block_on(session.restore(SystemTime::now()));
     if !matches!(restored, AniListAccountState::LoggedOut) {
         let name = account::name(&restored);
-        if let Ok(Some(token)) = handle.block_on(session.token()) {
-            gateway.connect_anilist(AniListPlatform::new(
+        match handle.block_on(session.token()) {
+            Ok(Some(token)) => gateway.connect_anilist(AniListHandle::new(
                 started.db.clone(),
                 anilist.clone(),
                 token,
                 name,
-            ));
+            )),
+            Ok(None) => gateway.sign_out(),
+            Err(error) => {
+                // Surface a keychain failure instead of silently using Local.
+                let _ = engine_events.send(AppEvent::AccountError(error.to_string()));
+            }
+        }
+        if matches!(restored, AniListAccountState::Expired { .. }) {
+            gateway.mark_read_only();
         }
     }
     let _ = engine_events.send(AppEvent::AccountChanged(restored));
@@ -269,7 +275,6 @@ mod tests {
     use db::Db;
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
-    use tracker::Local;
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::PlatformGateway;
     use ui_state::{account::AccountStore, bridge::BridgeError};
@@ -309,7 +314,7 @@ mod tests {
                 db.clone(),
                 anilist,
                 catalog,
-                PlatformGateway::new(Local::new(db)),
+                PlatformGateway::new(db),
                 cx,
             )
             .expect("the test platform opens windows");

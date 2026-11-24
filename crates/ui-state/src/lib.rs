@@ -19,7 +19,7 @@ pub use badges::RailBadges;
 pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,
 };
-pub use platform::{GatewayError, PlatformGateway};
+pub use platform::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, PlatformGateway};
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
 pub use scroll::{ContentLoaded, ScrollRestore};

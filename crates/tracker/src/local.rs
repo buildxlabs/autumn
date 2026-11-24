@@ -20,7 +20,7 @@ impl Local {
 impl Platform for Local {
     async fn collection(&self, kind: MediaKind) -> Result<Collection, PlatformError> {
         let entries = self.db.local_list().entries(kind).await?;
-        Ok(Collection::group(&entries))
+        Ok(Collection::group(&entries, &[]))
     }
 
     async fn save_entry(&self, entry: &ListEntry) -> Result<ListEntry, PlatformError> {

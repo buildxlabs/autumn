@@ -22,7 +22,9 @@ pub use cache::{AIRING_TTL, CATALOG_TTL, Cached, CatalogCache, Load, Lookup, Ref
 pub use catalog::{AiringEpisode, CountryTrends, HomeLoad};
 pub use client::{ANILIST_ENDPOINT, AniList};
 pub use error::Error;
-pub use list::{ListCollection, ListEntryData, ListEntryInput, ListGroup, ScoreFormat};
+pub use list::{
+    CustomListNames, ListCollection, ListEntryData, ListEntryInput, ListGroup, ScoreFormat,
+};
 pub use model::{
     Character, CharacterRole, MediaDetail, MediaFormat, MediaRelation, MediaSeason, MediaStatus,
     MediaSummary, MediaTitle, Relation, VoiceActor,
