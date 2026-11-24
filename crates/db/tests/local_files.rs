@@ -52,7 +52,7 @@ async fn anidb_and_kitsu_ids_are_cross_references() {
         .find_or_mint(MediaKind::Anime, &ids)
         .await
         .unwrap();
-    assert!(minted.conflicts.is_empty());
+    assert_eq!(minted.conflicts.len(), 0);
 
     let found = db
         .media()

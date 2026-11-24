@@ -24,6 +24,7 @@ futures = "0.3"
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
 keyring = { features = [ "v1" ], version = "4" }
+library = { path = "crates/library" }
 metadata = { path = "crates/metadata" }
 mkv = { path = "crates/mkv" }
 net = { path = "crates/net" }
@@ -38,6 +39,7 @@ serde_json = "1.0"
 settings = { path = "crates/settings" }
 sha2 = "0.10"
 sqlx = { default-features = false, version = "0.9" }
+strsim = "0.11"
 tempfile = "3.27"
 thiserror = "2"
 time = { features = [ "local-offset" ], version = "0.3" }
