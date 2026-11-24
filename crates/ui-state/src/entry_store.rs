@@ -91,7 +91,11 @@ pub struct EntryStore {
     /// The media identity: found on open, minted on the first save.
     media: Option<MediaId>,
     open_task: Option<Task<()>>,
+    /// The stale-detail refresh; replacing it cancels the older request.
+    refresh_task: Option<Task<()>>,
     save_task: Option<Task<()>>,
+    /// A save failure, shown inline so the detail stays on screen.
+    save_error: Option<String>,
 }
 
 impl std::fmt::Debug for EntryStore {
@@ -112,7 +116,9 @@ impl EntryStore {
             state: EntryState::Loading,
             media: None,
             open_task: None,
+            refresh_task: None,
             save_task: None,
+            save_error: None,
         }
     }
 
@@ -120,6 +126,20 @@ impl EntryStore {
     #[must_use]
     pub fn state(&self) -> &EntryState {
         &self.state
+    }
+
+    /// The last save failure, to show without replacing the detail.
+    #[must_use]
+    pub fn save_error(&self) -> Option<&str> {
+        self.save_error.as_deref()
+    }
+
+    /// The AniList id of the Entry currently shown, if one is open.
+    fn current_id(&self) -> Option<u32> {
+        match &self.state {
+            EntryState::Ready { detail, .. } => Some(detail.summary.anilist_id),
+            _ => None,
+        }
     }
 
     /// The editor draft, while the Entry is open.
@@ -147,15 +167,20 @@ impl EntryStore {
         // loads. Replacing the task already cancels the older fetch.
         self.state = EntryState::Loading;
         self.media = None;
+        self.save_error = None;
+        // A refresh for the previous Entry must not write into this one.
+        self.refresh_task = None;
         let services = Arc::clone(&self.services);
         self.open_task = Some(cx.spawn(async move |store, cx| {
-            let detail = match call(cx, services.detail(anilist_id)).await {
-                Ok(load) => load.cached.value,
+            let load = match call(cx, services.detail(anilist_id)).await {
+                Ok(load) => load,
                 Err(message) => {
                     fail(&store, cx, message);
                     return;
                 }
             };
+            let metadata::Load { cached, refresh } = load;
+            let detail = cached.value;
             let kind = detail.summary.kind.unwrap_or(MediaKind::Anime);
             let ids = detail.summary.external_ids();
             // The media identity, without minting: a media not yet in the
@@ -180,13 +205,31 @@ impl EntryStore {
             let draft = entry
                 .as_ref()
                 .map_or_else(EntryDraft::default, EntryDraft::from_entry);
-            let _ = store.update(cx, |store, cx| {
+            let _ = store.update(cx, move |store, cx| {
                 store.media = media;
                 store.state = EntryState::Ready {
                     detail,
                     entry,
                     draft,
                 };
+                // A stale detail comes with a refresh that must be awaited;
+                // dropping it would cancel it. Apply its value only while
+                // this Entry is still the one on screen.
+                if let Some(refresh) = refresh {
+                    store.refresh_task = Some(cx.spawn(async move |store, cx| {
+                        let refreshed = cx.update(|cx| bridge::run(cx, refresh)).await;
+                        if let Ok(Ok(cached)) = refreshed {
+                            let _ = store.update(cx, |store, cx| {
+                                if store.current_id() == Some(anilist_id) {
+                                    if let EntryState::Ready { detail, .. } = &mut store.state {
+                                        *detail = cached.value;
+                                    }
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    }));
+                }
                 cx.notify();
             });
         }));
@@ -207,8 +250,10 @@ impl EntryStore {
         };
         let services = Arc::clone(&self.services);
         let media = self.media;
+        let anilist_id = detail.summary.anilist_id;
         let kind = detail.summary.kind.unwrap_or(MediaKind::Anime);
         let ids = detail.summary.external_ids();
+        self.save_error = None;
         self.save_task = Some(cx.spawn(async move |store, cx| {
             // The first user fact mints the media identity.
             let media = match media {
@@ -216,7 +261,7 @@ impl EntryStore {
                 None => match call(cx, services.mint(kind, &ids)).await {
                     Ok(media) => media,
                     Err(message) => {
-                        fail(&store, cx, message);
+                        save_failed(&store, cx, anilist_id, message);
                         return;
                     }
                 },
@@ -234,7 +279,14 @@ impl EntryStore {
             match call(cx, services.save_entry(&list)).await {
                 Ok(saved) => {
                     let _ = store.update(cx, |store, cx| {
+                        // The user may have opened another Entry while the
+                        // save was in flight. Never write this one's detail
+                        // over the new route.
+                        if store.current_id() != Some(anilist_id) {
+                            return;
+                        }
                         store.media = Some(media);
+                        store.save_error = None;
                         store.state = EntryState::Ready {
                             detail,
                             entry: Some(saved),
@@ -243,7 +295,7 @@ impl EntryStore {
                         cx.notify();
                     });
                 }
-                Err(message) => fail(&store, cx, message),
+                Err(message) => save_failed(&store, cx, anilist_id, message),
             }
         }));
         cx.notify();
@@ -300,6 +352,22 @@ fn fail(store: &WeakEntity<EntryStore>, cx: &mut gpui_kit::AsyncApp, message: St
     });
 }
 
+/// Records a save failure inline, keeping the detail on screen. A save for
+/// an Entry the user has since left has nothing to attach the error to.
+fn save_failed(
+    store: &WeakEntity<EntryStore>,
+    cx: &mut gpui_kit::AsyncApp,
+    anilist_id: u32,
+    message: String,
+) {
+    let _ = store.update(cx, |store, cx| {
+        if store.current_id() == Some(anilist_id) {
+            store.save_error = Some(message);
+            cx.notify();
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     #![expect(
@@ -320,12 +388,13 @@ mod tests {
     use domain::{ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score};
     use engine::{BoxFuture, EngineError, EngineServices};
     use gpui_kit::{AppContext, TestAppContext};
-    use metadata::{Cached, Load, MediaDetail, MediaSummary, MediaTitle};
+    use metadata::{Cached, Load, MediaDetail, MediaSummary, MediaTitle, Refresh};
     use tokio::runtime::{Builder, Runtime};
 
     use super::{EntryState, EntryStore};
 
     const ANILIST_ID: u32 = 35_689;
+    const OTHER_ID: u32 = 42_001;
     const MINTED_MEDIA: MediaId = MediaId::new(42);
 
     /// A fake engine service: canned Entry detail, and records of the Local
@@ -340,22 +409,49 @@ mod tests {
         saved: Arc<Mutex<Vec<ListEntry>>>,
         /// Every id set `mint` was called with.
         minted: Arc<Mutex<MintedIds>>,
+        /// When set, `detail` serves a stale value with this fresh title.
+        refreshed_title: Arc<Mutex<Option<String>>>,
+        /// How long a save takes, so a newer open can race it.
+        save_delay: Duration,
+        /// How long a stale detail takes to refresh.
+        refresh_delay: Duration,
     }
 
     /// One `mint` call the fake recorded: `(kind, ids)`.
     type MintedIds = Vec<(MediaKind, Vec<ExternalId>)>;
 
     impl EngineServices for FakeServices {
-        fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
-            let value = detail();
+        fn detail(&self, anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+            let refreshed = self
+                .refreshed_title
+                .lock()
+                .expect("the fake's refresh lock")
+                .clone();
+            let refresh_delay = self.refresh_delay;
             Box::pin(async move {
+                let mut value = detail_for(anilist_id);
+                let refresh = refreshed.map(|title| {
+                    Refresh::new(async move {
+                        tokio::time::sleep(refresh_delay).await;
+                        let mut fresh = detail_for(anilist_id);
+                        fresh.description = Some(title);
+                        Ok(Cached {
+                            value: fresh,
+                            updated_at: SystemTime::now(),
+                            offline: false,
+                        })
+                    })
+                });
+                if refresh.is_some() {
+                    value.description = Some("stale".to_owned());
+                }
                 Ok(Load {
                     cached: Cached {
                         value,
                         updated_at: SystemTime::now(),
                         offline: false,
                     },
-                    refresh: None,
+                    refresh,
                 })
             })
         }
@@ -377,11 +473,17 @@ mod tests {
         fn save_entry(&self, entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
             let entry = entry.clone();
             let saved = Arc::clone(&self.saved);
+            let media = Arc::clone(&self.media);
+            let local = Arc::clone(&self.entry);
+            let delay = self.save_delay;
             Box::pin(async move {
+                tokio::time::sleep(delay).await;
                 saved
                     .lock()
                     .expect("the fake's saved lock")
                     .push(entry.clone());
+                *media.lock().expect("the fake's media lock") = Some(entry.media);
+                *local.lock().expect("the fake's entry lock") = Some(entry.clone());
                 Ok(entry)
             })
         }
@@ -419,14 +521,14 @@ mod tests {
     }
 
     /// The Entry page's detail, as the engine serves it.
-    fn detail() -> MediaDetail {
+    fn detail_for(anilist_id: u32) -> MediaDetail {
         MediaDetail {
             summary: MediaSummary {
-                anilist_id: ANILIST_ID,
+                anilist_id,
                 mal_id: Some(27_613),
                 kind: Some(MediaKind::Anime),
                 title: MediaTitle {
-                    romaji: Some("Frieren".to_owned()),
+                    romaji: Some(format!("Media {anilist_id}")),
                     ..MediaTitle::default()
                 },
                 poster: None,
@@ -608,13 +710,15 @@ mod tests {
         store.update(cx, EntryStore::save);
         tokio::time::sleep(Duration::from_millis(50)).await;
         cx.run_until_parked();
-        // As the Local platform now knows the media, a reopen sees it.
-        *services.media.lock().expect("the fake's media lock") = Some(MINTED_MEDIA);
-        *services.entry.lock().expect("the fake's entry lock") = Some(ListEntry {
-            status: ListStatus::Current,
-            progress: 3,
-            ..local_entry()
-        });
+        // The fake's Local platform now knows the media, so a reopen sees it
+        // without the test writing the fake's state by hand.
+        assert!(
+            services
+                .media
+                .lock()
+                .expect("the fake's media lock")
+                .is_some()
+        );
 
         // The app restarts: a new store over the same Local platform.
         let reopened = cx.new(|_| EntryStore::new(services.clone()));
@@ -629,6 +733,100 @@ mod tests {
                     Some(ListStatus::Current)
                 );
                 assert_eq!(entry.as_ref().map(|entry| entry.progress), Some(3));
+            }
+            #[expect(
+                clippy::panic,
+                reason = "the assertion prints the Entry's actual state"
+            )]
+            state => panic!("the Entry should be ready: {state:?}"),
+        }
+    }
+
+    #[gpui_kit::test]
+    async fn a_save_finishing_after_a_new_entry_opens_leaves_the_new_detail_alone(
+        cx: &mut TestAppContext,
+    ) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = Arc::new(FakeServices {
+            save_delay: Duration::from_millis(150),
+            ..FakeServices::default()
+        });
+        let store = cx.new(|_| EntryStore::new(services.clone()));
+        cx.update(|cx| store.update(cx, |store, cx| store.open(ANILIST_ID, cx)));
+        cx.run_until_parked();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+        cx.update(|cx| {
+            store.update(cx, |store, _| {
+                store
+                    .draft_mut()
+                    .expect("the first Entry is ready")
+                    .progress = 3;
+            });
+            store.update(cx, EntryStore::save);
+            // Opening another Entry must not cancel the save, only its writes.
+            store.update(cx, |store, cx| store.open(OTHER_ID, cx));
+        });
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        cx.run_until_parked();
+
+        assert_eq!(
+            services.saved.lock().expect("the fake's saved lock").len(),
+            1
+        );
+        match store.read_with(cx, |store, _| store.state().clone()) {
+            EntryState::Ready { detail, entry, .. } => {
+                assert_eq!(detail.summary.anilist_id, OTHER_ID);
+                assert!(
+                    detail.summary.title.romaji.as_deref() == Some("Media 42001"),
+                    "the second Entry's detail is still on screen"
+                );
+                assert!(entry.is_none(), "the first Entry's list entry did not leak");
+            }
+            #[expect(
+                clippy::panic,
+                reason = "the assertion prints the Entry's actual state"
+            )]
+            state => panic!("the second Entry should be ready: {state:?}"),
+        }
+    }
+
+    #[gpui_kit::test]
+    async fn a_stale_detail_is_replaced_by_its_refresh(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = Arc::new(FakeServices {
+            refreshed_title: Arc::new(Mutex::new(Some("Fresh".to_owned()))),
+            refresh_delay: Duration::from_millis(150),
+            ..FakeServices::default()
+        });
+        let store = cx.new(|_| EntryStore::new(services));
+        cx.update(|cx| store.update(cx, |store, cx| store.open(ANILIST_ID, cx)));
+        cx.run_until_parked();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        match store.read_with(cx, |store, _| store.state().clone()) {
+            EntryState::Ready { detail, .. } => {
+                assert_eq!(detail.description.as_deref(), Some("stale"));
+            }
+            #[expect(
+                clippy::panic,
+                reason = "the assertion prints the Entry's actual state"
+            )]
+            state => panic!("the Entry should be ready: {state:?}"),
+        }
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        cx.run_until_parked();
+        match store.read_with(cx, |store, _| store.state().clone()) {
+            EntryState::Ready { detail, .. } => {
+                assert_eq!(detail.description.as_deref(), Some("Fresh"));
             }
             #[expect(
                 clippy::panic,
