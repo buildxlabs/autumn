@@ -5,7 +5,10 @@ use std::{path::PathBuf, process::Stdio, sync::OnceLock};
 use domain::MediaId;
 use futures::{SinkExt, StreamExt, channel::mpsc};
 use tempfile::NamedTempFile;
-use tokio::process::{Child, Command};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    process::{Child, Command},
+};
 use tracing::{debug, warn};
 
 use crate::{
@@ -40,6 +43,23 @@ impl LaunchOptions {
             media: None,
         }
     }
+
+    /// Options for IINA, whose embedded mpv takes longer to open IPC.
+    pub fn iina(cache_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            ipc_retry: Retry::iina(),
+            ..Self::new(cache_dir)
+        }
+    }
+}
+
+/// What the supervisor does with the child when IPC closes first.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ChildPolicy {
+    /// mpv: IPC closing means the session is over, so reap the child.
+    KillOnIpcClose,
+    /// IINA: closing the window leaves the app running; just end the session.
+    LeaveOnIpcClose,
 }
 
 /// A running, supervised player session.
@@ -194,10 +214,25 @@ impl Session {
 /// # Errors
 ///
 /// Returns an error if the endpoint, log or process cannot be created.
-pub async fn launch_mpv(
+pub fn launch_mpv(
     executable: impl AsRef<std::path::Path>,
     file: &str,
     options: &LaunchOptions,
+) -> Result<Session> {
+    launch(
+        executable,
+        |endpoint| mpv_args(endpoint, file),
+        options,
+        ChildPolicy::KillOnIpcClose,
+    )
+}
+
+/// Shared launch path for players that speak mpv's JSON IPC.
+pub(crate) fn launch(
+    executable: impl AsRef<std::path::Path>,
+    args: impl FnOnce(&Endpoint) -> Vec<String>,
+    options: &LaunchOptions,
+    policy: ChildPolicy,
 ) -> Result<Session> {
     SWEPT.get_or_init(|| {
         if let Err(error) = sweep_stale(&options.cache_dir) {
@@ -219,7 +254,7 @@ pub async fn launch_mpv(
 
     let mut command = Command::new(executable);
     command
-        .args(mpv_args(&endpoint, file))
+        .args(args(&endpoint))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(stderr));
@@ -238,6 +273,7 @@ pub async fn launch_mpv(
         endpoint.clone(),
         log,
         options.ipc_retry,
+        policy,
         event_tx,
         command_rx,
     ));
@@ -313,6 +349,7 @@ async fn supervise(
     endpoint: Endpoint,
     _log: NamedTempFile,
     retry: Retry,
+    policy: ChildPolicy,
     mut events: mpsc::Sender<PlayerEvent>,
     commands: mpsc::UnboundedReceiver<Request>,
 ) {
@@ -320,6 +357,7 @@ async fn supervise(
         Ok(stream) => stream,
         Err(error) => {
             warn!("{error}");
+            let mut child = child;
             let _ = child.kill().await;
             let _ = endpoint.remove();
             let _ = events.send(PlayerEvent::Exited).await;
@@ -327,6 +365,26 @@ async fn supervise(
         }
     };
 
+    let mut child = supervise_connected(stream, child, endpoint, policy, events, commands).await;
+    // Reap without killing: IINA's `iina-cli` can outlive the IPC connection,
+    // and leaving it unreaped would leak a process-table entry per session.
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+    });
+}
+
+/// Drives an already-connected session; tests inject a fake transport here.
+pub(crate) async fn supervise_connected<S>(
+    stream: S,
+    mut child: Child,
+    endpoint: Endpoint,
+    policy: ChildPolicy,
+    mut events: mpsc::Sender<PlayerEvent>,
+    commands: mpsc::UnboundedReceiver<Request>,
+) -> Child
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let mut pump = tokio::spawn(run_ipc(stream, commands, events.clone()));
     let mut wait = Box::pin(child.wait());
 
@@ -348,17 +406,22 @@ async fn supervise(
 
     pump.abort();
     drop(wait);
-    if child.try_wait().ok().flatten().is_none() {
-        let _ = child.kill().await;
+    if matches!(policy, ChildPolicy::KillOnIpcClose) {
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = child.kill().await;
+        }
+        let _ = child.wait().await;
     }
-    let _ = child.wait().await;
     let _ = endpoint.remove();
     let _ = events.send(PlayerEvent::Exited).await;
+    child
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
+    use tokio::time::timeout;
 
     use super::*;
 
@@ -392,6 +455,47 @@ mod tests {
         assert!(server.await.unwrap());
         let _ = child.start_kill();
         let _ = child.wait().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn ipc_close_kills_and_reaps_an_mpv_child() {
+        use futures::StreamExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = crate::Endpoint::at(dir.path().join("mpv.sock").to_string_lossy());
+        let (client_stream, server_stream) = tokio::io::duplex(64 * 1024);
+        let mut fake = crate::testing::FakeMpv::from_stream(server_stream);
+        let (_command_tx, command_rx) = mpsc::unbounded();
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let child = tokio::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+
+        let supervisor = tokio::spawn(supervise_connected(
+            client_stream,
+            child,
+            endpoint,
+            ChildPolicy::KillOnIpcClose,
+            event_tx,
+            command_rx,
+        ));
+        fake.drain_observations().await;
+        drop(fake);
+
+        let event = timeout(Duration::from_secs(2), event_rx.next())
+            .await
+            .expect("the session must end when IPC closes");
+        assert_eq!(event, Some(PlayerEvent::Exited));
+        let mut child = timeout(Duration::from_secs(2), supervisor)
+            .await
+            .expect("the supervisor must finish")
+            .expect("the supervisor task must not panic");
+        assert!(
+            child.wait().await.is_ok_and(|status| !status.success()),
+            "mpv's child must be killed when IPC closes"
+        );
     }
 
     #[test]
