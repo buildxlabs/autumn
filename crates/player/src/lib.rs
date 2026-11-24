@@ -10,6 +10,7 @@
 
 mod endpoint;
 mod event;
+mod http;
 mod ipc;
 mod mpv;
 #[cfg(test)]
@@ -17,6 +18,7 @@ mod testing;
 
 pub use endpoint::{Endpoint, Retry, fresh_endpoint, sweep_stale};
 pub use event::{Chapter, PlayerEvent};
+pub use http::{DEFAULT_MPCHC_PORT, launch_mpchc, launch_vlc};
 pub use ipc::Client;
 pub use mpv::{LaunchOptions, Session, launch_mpv};
 
@@ -92,6 +94,17 @@ pub enum Error {
     /// The supervisor or the command channel went away.
     #[error("player session is closed")]
     Closed,
+
+    /// A loopback HTTP request to a player failed.
+    #[error("player HTTP request failed: {message}")]
+    Http {
+        /// What the request library reported.
+        message: String,
+    },
+
+    /// The web interface is not enabled in the player's options.
+    #[error("MPC-HC web interface is not enabled; enable it in MPC-HC options")]
+    WebInterfaceDisabled,
 }
 
 /// The result type used throughout the crate.

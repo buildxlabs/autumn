@@ -19,6 +19,15 @@ const EVENT_QUEUE: usize = 64;
 /// The ipc folder is swept once, before the first session creates a socket.
 static SWEPT: OnceLock<()> = OnceLock::new();
 
+/// Sweeps stale sockets once, before the first session creates one.
+pub(crate) fn sweep_ipc_once(cache_dir: &std::path::Path) {
+    SWEPT.get_or_init(|| {
+        if let Err(error) = sweep_stale(cache_dir) {
+            warn!("{error}");
+        }
+    });
+}
+
 /// How to launch one player session.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -56,6 +65,21 @@ pub struct Session {
 }
 
 impl Session {
+    /// Assembles a session from its command channel and event stream.
+    pub(crate) fn new(
+        client: Client,
+        events: mpsc::Receiver<PlayerEvent>,
+        endpoint: Endpoint,
+        media: Option<MediaId>,
+    ) -> Self {
+        Self {
+            client,
+            events,
+            endpoint,
+            media,
+        }
+    }
+
     /// The endpoint this launch listens on.
     #[must_use]
     pub fn endpoint(&self) -> &Endpoint {
@@ -197,11 +221,7 @@ pub async fn launch_mpv(
     file: &str,
     options: &LaunchOptions,
 ) -> Result<Session> {
-    SWEPT.get_or_init(|| {
-        if let Err(error) = sweep_stale(&options.cache_dir) {
-            warn!("{error}");
-        }
-    });
+    sweep_ipc_once(&options.cache_dir);
 
     let executable = executable.as_ref();
     let endpoint = fresh_endpoint(&options.cache_dir)?;
@@ -240,12 +260,12 @@ pub async fn launch_mpv(
         command_rx,
     ));
 
-    Ok(Session {
-        client: Client::new(command_tx),
-        events: event_rx,
+    Ok(Session::new(
+        Client::new(command_tx),
+        event_rx,
         endpoint,
-        media: options.media,
-    })
+        options.media,
+    ))
 }
 
 /// The exact arguments mpv is launched with, kept pure for testing.
@@ -259,13 +279,13 @@ fn mpv_args(endpoint: &Endpoint, file: &str) -> Vec<String> {
 }
 
 #[cfg(unix)]
-fn detach(command: &mut Command) {
+pub(crate) fn detach(command: &mut Command) {
     use std::os::unix::process::CommandExt;
     command.as_std_mut().process_group(0);
 }
 
 #[cfg(windows)]
-fn detach(command: &mut Command) {
+pub(crate) fn detach(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const DETACHED_PROCESS: u32 = 0x0000_0008;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
