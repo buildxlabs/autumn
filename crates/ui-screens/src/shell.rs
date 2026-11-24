@@ -193,11 +193,7 @@ impl AppShell {
     #[expect(
         clippy::too_many_arguments,
         clippy::too_many_lines,
-        reason = "the shell receives its engine-side collaborators and wires their observers once, at construction"
-    )]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the shell builds every store and subscription at construction"
+        reason = "the shell receives its engine-side collaborators and builds every store and subscription at construction"
     )]
     pub fn new(
         prefs: RailPrefs,
@@ -1130,7 +1126,7 @@ mod tests {
     use ui_state::home_store::HomeStore;
     use ui_state::test_support::pending_services;
     use ui_state::{
-        Route, SearchFilters, SettingsTab,
+        PlatformGateway, Route, SearchFilters, SettingsTab,
         account::AccountStore,
         actions::OpenCommandPalette,
         bridge::BridgeError,
@@ -2441,9 +2437,10 @@ mod tests {
                             }),
                             entry_store,
                             home_store,
-                            db,
+                            db.clone(),
                             anilist,
                             catalog,
+                            PlatformGateway::new(db),
                             window,
                             cx,
                         )
