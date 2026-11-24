@@ -14,7 +14,7 @@ anyhow.workspace             = true
 auth.workspace               = true
 db                           = { path = "../db" }
 domain.workspace             = true
-engine                       = { path = "../engine" }
+engine.workspace             = true
 gpui-kit.workspace           = true
 metadata.workspace           = true
 net.workspace                = true

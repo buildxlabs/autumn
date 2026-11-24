@@ -244,15 +244,16 @@ impl EntryStore {
             detail,
             entry,
             draft,
-        } = self.state.clone()
+        } = &self.state
         else {
             return;
         };
-        let services = Arc::clone(&self.services);
-        let media = self.media;
         let anilist_id = detail.summary.anilist_id;
         let kind = detail.summary.kind.unwrap_or(MediaKind::Anime);
         let ids = detail.summary.external_ids();
+        let (entry, draft) = (entry.clone(), draft.clone());
+        let services = Arc::clone(&self.services);
+        let media = self.media;
         self.save_error = None;
         self.save_task = Some(cx.spawn(async move |store, cx| {
             // The first user fact mints the media identity.
@@ -287,11 +288,11 @@ impl EntryStore {
                         }
                         store.media = Some(media);
                         store.save_error = None;
-                        store.state = EntryState::Ready {
-                            detail,
-                            entry: Some(saved),
-                            draft,
-                        };
+                        // Only the list entry changes: a detail refresh
+                        // or further edits may have landed during the save.
+                        if let EntryState::Ready { entry, .. } = &mut store.state {
+                            *entry = Some(saved);
+                        }
                         cx.notify();
                     });
                 }
@@ -791,6 +792,51 @@ mod tests {
                 reason = "the assertion prints the Entry's actual state"
             )]
             state => panic!("the second Entry should be ready: {state:?}"),
+        }
+    }
+
+    #[gpui_kit::test]
+    async fn edits_made_while_a_save_is_in_flight_are_kept(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = Arc::new(FakeServices {
+            save_delay: Duration::from_millis(150),
+            ..FakeServices::default()
+        });
+        let store = cx.new(|_| EntryStore::new(services.clone()));
+        cx.update(|cx| store.update(cx, |store, cx| store.open(ANILIST_ID, cx)));
+        cx.run_until_parked();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+        cx.update(|cx| {
+            store.update(cx, |store, _| {
+                store.draft_mut().expect("the Entry is ready").progress = 3;
+            });
+            store.update(cx, EntryStore::save);
+            // The user keeps editing while the save is in flight.
+            store.update(cx, |store, _| {
+                store.draft_mut().expect("the Entry is ready").progress = 4;
+            });
+        });
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        cx.run_until_parked();
+
+        match store.read_with(cx, |store, _| store.state().clone()) {
+            EntryState::Ready { entry, draft, .. } => {
+                assert_eq!(
+                    entry.map(|entry| entry.progress),
+                    Some(3),
+                    "the save landed"
+                );
+                assert_eq!(draft.progress, 4, "the newer edit survived the save");
+            }
+            #[expect(
+                clippy::panic,
+                reason = "the assertion prints the Entry's actual state"
+            )]
+            state => panic!("the Entry should be ready: {state:?}"),
         }
     }
 

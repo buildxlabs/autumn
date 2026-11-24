@@ -14,11 +14,11 @@ db.workspace        = true
 domain.workspace    = true
 metadata.workspace  = true
 net.workspace       = true
-settings            = { path = "../settings" }
+settings.workspace  = true
 thiserror.workspace = true
 tokio               = { workspace = true }
 tracing.workspace   = true
-tracker             = { path = "../tracker" }
+tracker.workspace   = true
 
 [dev-dependencies]
 tempfile.workspace           = true

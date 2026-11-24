@@ -14,7 +14,7 @@ test-util = [  ]
 
 [dependencies]
 domain.workspace    = true
-engine              = { path = "../engine" }
+engine.workspace    = true
 flume.workspace     = true
 gpui-kit.workspace  = true
 metadata.workspace  = true
