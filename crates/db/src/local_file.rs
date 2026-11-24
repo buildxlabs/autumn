@@ -105,7 +105,18 @@ impl<'a> LocalFileRepo<'a> {
             .collect();
         let wanted: HashSet<&str> = paths.iter().map(String::as_str).collect();
         for path in existing {
+            // An override stays listed even when a scan does not see the file,
+            // so a scan of a different folder set cannot discard the user's
+            // lock or ignore decision.
             if !wanted.contains(path.as_str()) {
+                let overridden: i64 =
+                    sqlx::query_scalar("SELECT locked OR ignored FROM local_file WHERE path = ?")
+                        .bind(&path)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                if overridden != 0 {
+                    continue;
+                }
                 sqlx::query("DELETE FROM local_file WHERE path = ?")
                     .bind(path)
                     .execute(&mut *tx)
@@ -210,7 +221,7 @@ impl<'a> LocalFileRepo<'a> {
     ) -> Result<u64, DbError> {
         Ok(sqlx::query(
             "UPDATE local_file SET media_id = ?, episode = COALESCE(?, episode),
-                    confidence = 1.0, locked = 1 WHERE path = ?",
+                    confidence = 1.0, locked = 1, ignored = 0 WHERE path = ?",
         )
         .bind(media.get())
         .bind(episode.map(i64::from))

@@ -101,7 +101,7 @@ impl Library {
             .map(|file| (file.path.to_string_lossy().into_owned(), file))
             .collect();
         let eligible = eligible_files(&scanned, &existing);
-        let (wins, media, _matched) = self
+        let (wins, media) = self
             .match_groups(&scanned, &eligible, candidates, &mut progress, matched)
             .await?;
         let rows = build_rows(&scanned, &existing, &wins, &media);
@@ -129,79 +129,96 @@ impl Library {
         self.db.scan_summary().latest().await.map_err(Into::into)
     }
 
-    /// Fixes one file's media so re-scans leave it alone.
+    /// All stored scan summaries, newest first.
+    ///
+    /// # Errors
+    ///
+    /// [`LibraryError::Db`] when the summaries cannot be read.
+    pub async fn summaries(&self) -> Result<Vec<ScanSummary>, LibraryError> {
+        self.db.scan_summary().all().await.map_err(Into::into)
+    }
+
+    /// Fixes one file's media so re-scans leave it alone. Returns the number
+    /// of rows changed, so a path that is not stored can be detected.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the row cannot be updated.
-    pub async fn lock_file(&self, path: &Path) -> Result<(), LibraryError> {
-        self.db.local_file().set_locked(path, FileFlag::Set).await?;
-        Ok(())
+    pub async fn lock_file(&self, path: &Path) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db.local_file().set_locked(path, FileFlag::Set).await?,
+        ))
     }
 
-    /// Lets the matcher handle one file again.
+    /// Lets the matcher handle one file again. Returns the rows changed.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the row cannot be updated.
-    pub async fn unlock_file(&self, path: &Path) -> Result<(), LibraryError> {
-        self.db
-            .local_file()
-            .set_locked(path, FileFlag::Clear)
-            .await?;
-        Ok(())
+    pub async fn unlock_file(&self, path: &Path) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db
+                .local_file()
+                .set_locked(path, FileFlag::Clear)
+                .await?,
+        ))
     }
 
-    /// Locks every file currently matched to `media`.
+    /// Locks every file currently matched to `media`. Returns the rows changed.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the rows cannot be updated.
-    pub async fn lock_media(&self, media: MediaId) -> Result<(), LibraryError> {
-        self.db
-            .local_file()
-            .set_media_locked(media, FileFlag::Set)
-            .await?;
-        Ok(())
+    pub async fn lock_media(&self, media: MediaId) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db
+                .local_file()
+                .set_media_locked(media, FileFlag::Set)
+                .await?,
+        ))
     }
 
-    /// Unlocks every file currently matched to `media`.
+    /// Unlocks every file currently matched to `media`. Returns the rows changed.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the rows cannot be updated.
-    pub async fn unlock_media(&self, media: MediaId) -> Result<(), LibraryError> {
-        self.db
-            .local_file()
-            .set_media_locked(media, FileFlag::Clear)
-            .await?;
-        Ok(())
+    pub async fn unlock_media(&self, media: MediaId) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db
+                .local_file()
+                .set_media_locked(media, FileFlag::Clear)
+                .await?,
+        ))
     }
 
-    /// Leaves `path` listed but out of matching and episode lists.
+    /// Leaves `path` listed but out of matching and episode lists. Returns the
+    /// rows changed.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the row cannot be updated.
-    pub async fn ignore_file(&self, path: &Path) -> Result<(), LibraryError> {
-        self.db
-            .local_file()
-            .set_ignored(path, FileFlag::Set)
-            .await?;
-        Ok(())
+    pub async fn ignore_file(&self, path: &Path) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db
+                .local_file()
+                .set_ignored(path, FileFlag::Set)
+                .await?,
+        ))
     }
 
-    /// Lets a scan match `path` again.
+    /// Lets a scan match `path` again. Returns the rows changed.
     ///
     /// # Errors
     ///
     /// [`LibraryError::Db`] when the row cannot be updated.
-    pub async fn unignore_file(&self, path: &Path) -> Result<(), LibraryError> {
-        self.db
-            .local_file()
-            .set_ignored(path, FileFlag::Clear)
-            .await?;
-        Ok(())
+    pub async fn unignore_file(&self, path: &Path) -> Result<usize, LibraryError> {
+        Ok(changed(
+            self.db
+                .local_file()
+                .set_ignored(path, FileFlag::Clear)
+                .await?,
+        ))
     }
 
     /// Assigns files to the AniList media `anilist_id`, minting it if new, and
@@ -242,7 +259,7 @@ impl Library {
         candidates: &[Candidate],
         progress: &mut P,
         mut matched: usize,
-    ) -> Result<(HashMap<usize, Match>, HashMap<usize, MediaId>, usize), LibraryError> {
+    ) -> Result<(HashMap<usize, Match>, HashMap<usize, MediaId>), LibraryError> {
         let mut groups: HashMap<String, Vec<usize>> = HashMap::new();
         for (index, file) in scanned.iter().enumerate() {
             if eligible.get(index).copied().unwrap_or(false) {
@@ -288,8 +305,13 @@ impl Library {
                 });
             }
         }
-        Ok((wins, media, matched))
+        Ok((wins, media))
     }
+}
+
+/// A row count from SQLite, saturated at the platform's maximum.
+fn changed(rows: u64) -> usize {
+    usize::try_from(rows).unwrap_or(usize::MAX)
 }
 
 /// Files the matcher may touch: neither overridden by the user nor untitled.
@@ -420,6 +442,8 @@ fn summarize(
             reason,
         });
     }
+    let mut by_media: Vec<MediaMatchSummary> = by_media.into_values().collect();
+    by_media.sort_by_key(|entry| entry.media.get());
     ScanSummary {
         started_at,
         duration,
@@ -430,7 +454,7 @@ fn summarize(
         locked,
         ignored,
         shelved: 0,
-        by_media: by_media.into_values().collect(),
+        by_media,
         unmatched,
     }
 }

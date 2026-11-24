@@ -205,6 +205,28 @@ impl<'a> ScanSummaryRepo<'a> {
         else {
             return Ok(None);
         };
+        self.decode(row).await.map(Some)
+    }
+
+    /// Every stored summary, newest first. The Scan Summaries screen reads
+    /// these in order without having to know the storage ids.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when a query fails, or [`DbError::InvalidRow`] when a
+    /// stored value does not fit its type.
+    pub async fn all(&self) -> Result<Vec<ScanSummary>, DbError> {
+        let rows: Vec<SummaryRow> = sqlx::query_as("SELECT * FROM scan_summary ORDER BY id DESC")
+            .fetch_all(self.pool)
+            .await?;
+        let mut summaries = Vec::with_capacity(rows.len());
+        for row in rows {
+            summaries.push(self.decode(row).await?);
+        }
+        Ok(summaries)
+    }
+
+    async fn decode(&self, row: SummaryRow) -> Result<ScanSummary, DbError> {
         let media: Vec<MediaRow> = sqlx::query_as(
             "SELECT media_id, matched_files, lowest_confidence
              FROM scan_summary_media WHERE summary_id = ? ORDER BY media_id",
@@ -219,7 +241,7 @@ impl<'a> ScanSummaryRepo<'a> {
         .bind(row.id)
         .fetch_all(self.pool)
         .await?;
-        Ok(Some(ScanSummary {
+        Ok(ScanSummary {
             started_at: UNIX_EPOCH
                 .checked_add(Duration::from_secs(
                     u64::try_from(row.started_at).map_err(|_| DbError::InvalidRow("started_at"))?,
@@ -256,7 +278,7 @@ impl<'a> ScanSummaryRepo<'a> {
                     })
                 })
                 .collect::<Result<_, DbError>>()?,
-        }))
+        })
     }
 
     /// How many summaries are stored.

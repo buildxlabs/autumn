@@ -6,6 +6,153 @@ use domain::{ExternalId, MediaKind};
 use library::{Library, UnmatchedReason};
 use support::{candidate, database, release};
 
+#[tokio::test]
+async fn locking_a_media_locks_all_its_files_and_keeps_their_episodes() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    let first = release(&folder, "Series Alpha", 1);
+    let second = release(&folder, "Series Alpha", 2);
+    let library = Library::new(db.clone());
+    library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Alpha", 1001)],
+            |_| {},
+        )
+        .await
+        .unwrap();
+    let media = db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(1001)])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(library.lock_media(media).await.unwrap(), 2);
+
+    // The alias would move both files to the other media if they were unlocked.
+    library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Bravo", 2002).with_alias("Series Alpha")],
+            |_| {},
+        )
+        .await
+        .unwrap();
+    let rows = db.local_file().all().await.unwrap();
+    for path in [first, second] {
+        let row = rows.iter().find(|row| row.path == path).unwrap();
+        assert_eq!(row.media_id, Some(media));
+        assert!(row.locked);
+        let expected = if path.file_name().unwrap().to_string_lossy().contains("- 01") {
+            1
+        } else {
+            2
+        };
+        assert_eq!(row.episode, Some(expected), "the episode number is kept");
+    }
+    assert_eq!(library.unlock_media(media).await.unwrap(), 2);
+    let rows = db.local_file().all().await.unwrap();
+    assert!(rows.iter().all(|row| !row.locked));
+}
+
+#[tokio::test]
+async fn a_manual_match_unignores_the_file() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    let path = release(&folder, "Series Alpha", 1);
+    let library = Library::new(db.clone());
+    library
+        .scan(slice::from_ref(&folder), &[], |_| {})
+        .await
+        .unwrap();
+    assert_eq!(library.ignore_file(&path).await.unwrap(), 1);
+
+    assert_eq!(
+        library
+            .manual_match(slice::from_ref(&path), 42, None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    let rows = db.local_file().all().await.unwrap();
+    let row = rows.iter().find(|row| row.path == path).unwrap();
+    assert!(
+        row.media_id.is_some(),
+        "the assignment survives the next scan"
+    );
+    assert!(!row.ignored);
+    assert!(row.locked);
+}
+
+#[tokio::test]
+async fn an_override_survives_a_scan_of_a_different_folder() {
+    let (dir, db) = database().await;
+    let first = dir.path().join("first");
+    let second = dir.path().join("second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let locked = release(&first, "Series Alpha", 1);
+    let ignored = release(&first, "Series Bravo", 1);
+    release(&second, "Series Charlie", 1);
+    let candidates = [
+        candidate("Series Alpha", 1001),
+        candidate("Series Bravo", 1002),
+        candidate("Series Charlie", 1003),
+    ];
+    let library = Library::new(db.clone());
+    library
+        .scan(slice::from_ref(&first), &candidates, |_| {})
+        .await
+        .unwrap();
+    library.lock_file(&locked).await.unwrap();
+    library.ignore_file(&ignored).await.unwrap();
+
+    library.scan(&[second], &candidates, |_| {}).await.unwrap();
+
+    let rows = db.local_file().all().await.unwrap();
+    assert!(rows.iter().any(|row| row.path == locked && row.locked));
+    assert!(rows.iter().any(|row| row.path == ignored && row.ignored));
+}
+
+#[tokio::test]
+async fn a_below_threshold_file_keeps_its_best_score_and_candidate() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    release(&folder, "Completely Different Show", 1);
+    let library = Library::new(db.clone());
+    let live = library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Bravo", 1002)],
+            |_| {},
+        )
+        .await
+        .unwrap();
+    let reason = live.unmatched.first().map(|file| &file.reason);
+    assert!(
+        matches!(reason, Some(UnmatchedReason::BelowThreshold { .. })),
+        "the file should be below the threshold"
+    );
+    if let Some(UnmatchedReason::BelowThreshold {
+        best_score,
+        best_candidate,
+    }) = reason
+    {
+        assert_eq!(best_candidate, "Series Bravo");
+        assert!(*best_score > 0.0 && *best_score <= 0.5);
+    }
+
+    let stored = library.latest_summary().await.unwrap().unwrap();
+    assert_eq!(
+        stored.unmatched, live.unmatched,
+        "the reason survives storage"
+    );
+}
+
 /// Test helpers, in `cfg(test)` so the workspace's test-only lint
 /// allowances apply.
 #[cfg(test)]
@@ -254,17 +401,19 @@ async fn a_no_candidate_file_reports_that_reason() {
 #[tokio::test]
 async fn the_twenty_first_summary_evicts_the_oldest() {
     let (dir, db) = database().await;
-    let folder = dir.path().join("shows");
-    fs::create_dir_all(&folder).unwrap();
-    release(&folder, "Series Alpha", 1);
     let library = Library::new(db.clone());
     let candidates = [candidate("Series Alpha", 1001)];
+    let mut folders = Vec::new();
 
-    for _ in 0..21 {
+    for index in 0..21 {
+        let folder = dir.path().join(format!("shows-{index}"));
+        fs::create_dir_all(&folder).unwrap();
+        release(&folder, "Series Alpha", 1);
         library
             .scan(slice::from_ref(&folder), &candidates, |_| {})
             .await
             .unwrap();
+        folders.push(folder);
     }
 
     assert_eq!(
@@ -272,8 +421,16 @@ async fn the_twenty_first_summary_evicts_the_oldest() {
         20,
         "only the last twenty summaries are kept"
     );
+    let summaries = library.summaries().await.unwrap();
+    assert_eq!(summaries.len(), 20);
+    assert_eq!(
+        summaries.first().map(|summary| &summary.folders),
+        Some(&vec![folders.last().unwrap().clone()])
+    );
     assert!(
-        library.latest_summary().await.unwrap().is_some(),
-        "the newest summary is still there"
+        summaries
+            .iter()
+            .all(|summary| summary.folders != vec![folders.first().unwrap().clone()]),
+        "the oldest summary was evicted"
     );
 }
