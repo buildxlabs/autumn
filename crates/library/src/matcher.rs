@@ -24,6 +24,8 @@ pub struct Candidate {
     pub aliases: Vec<String>,
     /// Every external id known for the media.
     pub external_ids: Vec<ExternalId>,
+    /// AniList ids of the media's sequels, for out-of-range files.
+    sequels: Vec<u32>,
 }
 
 impl Candidate {
@@ -33,6 +35,7 @@ impl Candidate {
             title: title.into(),
             aliases: Vec::new(),
             external_ids,
+            sequels: Vec::new(),
         }
     }
 
@@ -41,6 +44,19 @@ impl Candidate {
     pub fn with_alias(mut self, alias: impl Into<String>) -> Self {
         self.aliases.push(alias.into());
         self
+    }
+
+    /// Names a sequel by its AniList id, for files beyond this media's run.
+    #[must_use]
+    pub fn with_sequel(mut self, anilist_id: u32) -> Self {
+        self.sequels.push(anilist_id);
+        self
+    }
+
+    /// The AniList ids of this media's sequels.
+    #[must_use]
+    pub fn sequels(&self) -> &[u32] {
+        &self.sequels
     }
 }
 

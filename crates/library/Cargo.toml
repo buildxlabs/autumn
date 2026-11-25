@@ -12,10 +12,14 @@ workspace = true
 [dependencies]
 db.workspace             = true
 domain.workspace         = true
+metadata.workspace       = true
 release-parser.workspace = true
 strsim.workspace         = true
 thiserror.workspace      = true
+tracing.workspace        = true
 
 [dev-dependencies]
+axum.workspace     = true
+net.workspace      = true
 tempfile.workspace = true
 tokio              = { features = [ "macros", "rt", "rt-multi-thread" ], workspace = true }

@@ -1,0 +1,23 @@
+{
+  "titles": {
+    "en": "Test Series 2"
+  },
+  "episodes": {
+    "99": {
+      "absoluteEpisodeNumber": 99,
+      "seasonNumber": 1,
+      "episodeNumber": 5,
+      "title": { "en": "Episode 99" }
+    },
+    "125": {
+      "absoluteEpisodeNumber": 125,
+      "seasonNumber": 2,
+      "episodeNumber": 25,
+      "title": { "en": "Episode 125" }
+    }
+  },
+  "episodeCount": 10,
+  "mappings": {
+    "anilist_id": 2002
+  }
+}
