@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -230,6 +230,7 @@ pub struct LibraryServices {
     media_info: Arc<Mutex<Vec<LibraryMediaInfo>>>,
     files: Arc<Mutex<Vec<LocalFile>>>,
     commands: Arc<Mutex<Vec<LibraryCommand>>>,
+    failing: Arc<AtomicBool>,
 }
 
 impl LibraryServices {
@@ -243,6 +244,7 @@ impl LibraryServices {
             media_info: Arc::new(Mutex::new(Vec::new())),
             files: Arc::new(Mutex::new(files)),
             commands: Arc::new(Mutex::new(Vec::new())),
+            failing: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -273,7 +275,23 @@ impl LibraryServices {
         self.scans.load(Ordering::SeqCst)
     }
 
-    /// The match and ignore commands received, oldest first.
+    /// Makes the log load and the match and ignore commands fail from now on.
+    pub fn fail_calls(&self) {
+        self.failing.store(true, Ordering::SeqCst);
+    }
+
+    /// The result of a call, failed after [`Self::fail_calls`].
+    fn outcome<T>(failing: &AtomicBool, value: T) -> Result<T, EngineError> {
+        if failing.load(Ordering::SeqCst) {
+            Err(EngineError::ActivePlatform(
+                "the fake engine failed".to_owned(),
+            ))
+        } else {
+            Ok(value)
+        }
+    }
+
+    /// The match and ignore commands that reached the engine, oldest first.
     #[must_use]
     pub fn commands(&self) -> Vec<LibraryCommand> {
         self.commands
@@ -379,7 +397,8 @@ impl EngineServices for LibraryServices {
             .summaries
             .lock()
             .map_or_else(|_| Vec::new(), |summaries| summaries.clone());
-        Box::pin(async move { Ok(summaries) })
+        let failing = Arc::clone(&self.failing);
+        Box::pin(async move { Self::outcome(&failing, summaries) })
     }
 
     fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
@@ -396,23 +415,30 @@ impl EngineServices for LibraryServices {
         anilist_id: u32,
         episode: Option<u32>,
     ) -> BoxFuture<Result<usize, EngineError>> {
-        if let Ok(mut commands) = self.commands.lock()
-            && let Some(path) = paths.first()
-        {
-            commands.push(LibraryCommand::Match {
-                path: path.clone(),
-                anilist_id,
-                episode,
-            });
-        }
-        Box::pin(async { Ok(1) })
+        // Recorded when the future runs, so a dropped command never counts.
+        let (commands, failing) = (Arc::clone(&self.commands), Arc::clone(&self.failing));
+        let path = paths.first().cloned();
+        Box::pin(async move {
+            if let (Ok(mut commands), Some(path)) = (commands.lock(), path) {
+                commands.push(LibraryCommand::Match {
+                    path,
+                    anilist_id,
+                    episode,
+                });
+            }
+            Self::outcome(&failing, 1)
+        })
     }
 
     fn ignore_file(&self, path: &std::path::Path) -> BoxFuture<Result<usize, EngineError>> {
-        if let Ok(mut commands) = self.commands.lock() {
-            commands.push(LibraryCommand::Ignore(path.to_path_buf()));
-        }
-        Box::pin(async { Ok(1) })
+        let (commands, failing) = (Arc::clone(&self.commands), Arc::clone(&self.failing));
+        let path = path.to_path_buf();
+        Box::pin(async move {
+            if let Ok(mut commands) = commands.lock() {
+                commands.push(LibraryCommand::Ignore(path));
+            }
+            Self::outcome(&failing, 1)
+        })
     }
 }
 

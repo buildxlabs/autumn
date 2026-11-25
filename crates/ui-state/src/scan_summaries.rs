@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 use db::ScanSummary;
 use domain::AppEvent;
-use engine::{EngineServices, LibraryMediaInfo};
+use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo};
 use gpui_kit::{Context, Task};
 
 use crate::entry_store::call;
@@ -18,9 +18,9 @@ pub struct ScanSummariesStore {
     selected: Option<SystemTime>,
     media: Vec<LibraryMediaInfo>,
     load_task: Option<Task<()>>,
-    command_task: Option<Task<()>>,
     error: Option<String>,
-    /// Edits shown immediately, until the next scan rewrites the summary.
+    /// Edits shown from the click on, until a successful scan rewrites the
+    /// summary. A failed command rolls its edit back.
     pending: HashMap<PathBuf, PendingEdit>,
 }
 
@@ -32,6 +32,15 @@ pub enum PendingEdit {
     Matched(u32),
     /// The file was marked ignored.
     Ignored,
+}
+
+/// What a reload does with the optimistic edits once the log lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingAfterLoad {
+    /// The log may not show the edits yet.
+    Keep,
+    /// A successful scan wrote them into the new summary.
+    Replace,
 }
 
 impl std::fmt::Debug for ScanSummariesStore {
@@ -54,7 +63,6 @@ impl ScanSummariesStore {
             selected: None,
             media: Vec::new(),
             load_task: None,
-            command_task: None,
             error: None,
             pending: HashMap::new(),
         }
@@ -119,7 +127,7 @@ impl ScanSummariesStore {
 
     /// Loads the summaries and media on first open.
     pub fn open(&mut self, cx: &mut Context<'_, Self>) {
-        self.reload(cx);
+        self.reload(PendingAfterLoad::Keep, cx);
     }
 
     /// Applies a scan event from the foreground pump.
@@ -128,10 +136,13 @@ impl ScanSummariesStore {
             event,
             AppEvent::LibraryScanFinished { .. } | AppEvent::LibraryChanged
         ) {
-            if matches!(event, AppEvent::LibraryScanFinished { .. }) {
-                self.pending.clear();
-            }
-            self.reload(cx);
+            // Only a scan that succeeded wrote a summary with the edits in it.
+            let pending = if matches!(event, AppEvent::LibraryScanFinished { error: None, .. }) {
+                PendingAfterLoad::Replace
+            } else {
+                PendingAfterLoad::Keep
+            };
+            self.reload(pending, cx);
         }
     }
 
@@ -143,58 +154,76 @@ impl ScanSummariesStore {
         episode: Option<u32>,
         cx: &mut Context<'_, Self>,
     ) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            let result = call(
-                cx,
-                services.manual_match(std::slice::from_ref(&path), anilist_id, episode),
-            )
-            .await;
-            let _ = store.update(cx, |store, cx| match result {
-                Ok(_) => {
-                    store.pending.insert(path, PendingEdit::Matched(anilist_id));
-                    store.error = None;
-                    store.reload(cx);
-                }
-                Err(error) => {
-                    store.error = Some(error);
-                    cx.notify();
-                }
-            });
-        }));
+        let command = self
+            .services
+            .manual_match(std::slice::from_ref(&path), anilist_id, episode);
+        self.run_command(path, PendingEdit::Matched(anilist_id), command, cx);
     }
 
     /// Ignores one unmatched file and reloads the log.
     pub fn ignore(&mut self, path: PathBuf, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            let result = call(cx, services.ignore_file(&path)).await;
+        let command = self.services.ignore_file(&path);
+        self.run_command(path, PendingEdit::Ignored, command, cx);
+    }
+
+    /// Shows `edit` at once and sends `command`. Commands run detached, so a
+    /// second click never cancels the first one's engine call.
+    fn run_command(
+        &mut self,
+        path: PathBuf,
+        edit: PendingEdit,
+        command: BoxFuture<Result<usize, EngineError>>,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let previous = self.pending.insert(path.clone(), edit);
+        cx.notify();
+        cx.spawn(async move |store, cx| {
+            let result = call(cx, command).await;
             let _ = store.update(cx, |store, cx| match result {
                 Ok(_) => {
-                    store.pending.insert(path, PendingEdit::Ignored);
                     store.error = None;
-                    store.reload(cx);
+                    store.reload(PendingAfterLoad::Keep, cx);
                 }
                 Err(error) => {
+                    // Roll back only this edit; a later click may own the row.
+                    if store.pending.get(&path) == Some(&edit) {
+                        match previous {
+                            Some(earlier) => store.pending.insert(path, earlier),
+                            None => store.pending.remove(&path),
+                        };
+                    }
                     store.error = Some(error);
                     cx.notify();
                 }
             });
-        }));
+        })
+        .detach();
     }
 
-    fn reload(&mut self, cx: &mut Context<'_, Self>) {
+    /// Reloads the log and media, then applies `pending` to the edits.
+    fn reload(&mut self, pending: PendingAfterLoad, cx: &mut Context<'_, Self>) {
         let services = Arc::clone(&self.services);
         self.load_task = Some(cx.spawn(async move |store, cx| {
-            let Ok(summaries) = call(cx, services.summaries()).await else {
-                return;
-            };
-            let Ok(media) = call(cx, services.library_media_info()).await else {
-                return;
+            let loaded = match call(cx, services.summaries()).await {
+                Ok(summaries) => call(cx, services.library_media_info())
+                    .await
+                    .map(|media| (summaries, media)),
+                Err(error) => Err(error),
             };
             let _ = store.update(cx, |store, cx| {
+                let (summaries, media) = match loaded {
+                    Ok(loaded) => loaded,
+                    Err(error) => {
+                        store.error = Some(error);
+                        cx.notify();
+                        return;
+                    }
+                };
                 store.summaries.clone_from(&summaries);
                 store.media = media;
+                if pending == PendingAfterLoad::Replace {
+                    store.pending.clear();
+                }
                 if store
                     .selected
                     .is_none_or(|at| !summaries.iter().any(|s| s.started_at == at))
@@ -301,7 +330,7 @@ mod tests {
         cx.update(|cx| {
             store.update(cx, |store, cx| store.ignore(path.clone(), cx));
         });
-        cx.run_until_parked();
+        wait_until(cx, &store, |_| calls.commands().len() == 2);
         assert_eq!(
             calls.commands(),
             [
@@ -357,6 +386,163 @@ mod tests {
             store.read_with(cx, |store, _| store.selected_index()),
             Some(2),
             "the highlighted row moved with it"
+        );
+    }
+
+    /// Runs the foreground until `done` holds; the bridge settles on Tokio.
+    fn wait_until(
+        cx: &mut TestAppContext,
+        store: &gpui_kit::Entity<ScanSummariesStore>,
+        done: impl Fn(&ScanSummariesStore) -> bool,
+    ) {
+        for _ in 0..100 {
+            cx.run_until_parked();
+            if store.read_with(cx, |store, _| done(store)) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    fn finished(error: Option<&str>) -> AppEvent {
+        AppEvent::LibraryScanFinished {
+            files_walked: 3,
+            files_matched: 2,
+            files_unmatched: 1,
+            shelved: 0,
+            error: error.map(str::to_owned),
+        }
+    }
+
+    fn opened_store(
+        cx: &mut TestAppContext,
+        services: &LibraryServices,
+    ) -> (
+        tokio::runtime::Runtime,
+        gpui_kit::Entity<ScanSummariesStore>,
+    ) {
+        cx.executor().allow_parking();
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a test runtime");
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let fake = Arc::new(services.clone());
+        let store = cx.new(|_| ScanSummariesStore::new(fake));
+        cx.update(|cx| store.update(cx, ScanSummariesStore::open));
+        settle(cx, &store);
+        (runtime, store)
+    }
+
+    #[gpui_kit::test]
+    fn two_quick_commands_both_reach_the_engine_and_show_at_once(cx: &mut TestAppContext) {
+        let services = LibraryServices::default().with_summaries(vec![summary(1)]);
+        let (_runtime, store) = opened_store(cx, &services);
+        let first = PathBuf::from("/shows/first.mkv");
+        let second = PathBuf::from("/shows/second.mkv");
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.match_file(first.clone(), 42, None, cx);
+                store.ignore(second.clone(), cx);
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.pending().get(&first).copied()),
+            Some(PendingEdit::Matched(42)),
+            "the match shows before the engine answers"
+        );
+        assert_eq!(
+            store.read_with(cx, |store, _| store.pending().get(&second).copied()),
+            Some(PendingEdit::Ignored)
+        );
+
+        wait_until(cx, &store, |_| services.commands().len() == 2);
+        assert_eq!(
+            services.commands(),
+            [
+                LibraryCommand::Match {
+                    path: first,
+                    anilist_id: 42,
+                    episode: None,
+                },
+                LibraryCommand::Ignore(second),
+            ],
+            "the second click did not cancel the first"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_failed_command_rolls_back_and_reports_its_error(cx: &mut TestAppContext) {
+        let services = LibraryServices::default().with_summaries(vec![summary(1)]);
+        let (_runtime, store) = opened_store(cx, &services);
+        let path = PathBuf::from("/shows/unknown.mkv");
+        services.fail_calls();
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| store.match_file(path.clone(), 42, None, cx));
+        });
+        assert!(store.read_with(cx, |store, _| store.pending().contains_key(&path)));
+        wait_until(cx, &store, |store| store.pending().is_empty());
+
+        assert!(
+            store.read_with(cx, |store, _| store.pending().is_empty()),
+            "the optimistic edit was rolled back"
+        );
+        assert!(
+            cx.update(|cx| store.update(cx, |store, _| store.take_error()))
+                .is_some(),
+            "the failure is reported"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_failed_load_is_reported(cx: &mut TestAppContext) {
+        let services = LibraryServices::default().with_summaries(vec![summary(1)]);
+        let (_runtime, store) = opened_store(cx, &services);
+        services.fail_calls();
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| store.apply(&AppEvent::LibraryChanged, cx));
+        });
+        wait_until(cx, &store, |store| store.error.is_some());
+
+        assert!(
+            cx.update(|cx| store.update(cx, |store, _| store.take_error()))
+                .is_some(),
+            "the load error is shown like a command error"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn pending_edits_survive_a_failed_scan(cx: &mut TestAppContext) {
+        let services = LibraryServices::default().with_summaries(vec![summary(1)]);
+        let (_runtime, store) = opened_store(cx, &services);
+        let path = PathBuf::from("/shows/unknown.mkv");
+        cx.update(|cx| {
+            store.update(cx, |store, cx| store.match_file(path.clone(), 42, None, cx));
+        });
+        wait_until(cx, &store, |_| services.commands().len() == 1);
+
+        // The failed scan still logged a summary; wait for its reload to land.
+        services.set_summaries(vec![summary(0), summary(1)]);
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(&finished(Some("disk gone")), cx);
+            });
+        });
+        wait_until(cx, &store, |store| store.summaries().len() == 2);
+        assert_eq!(
+            store.read_with(cx, |store, _| store.pending().get(&path).copied()),
+            Some(PendingEdit::Matched(42)),
+            "a failed scan keeps the match on screen"
+        );
+
+        cx.update(|cx| store.update(cx, |store, cx| store.apply(&finished(None), cx)));
+        wait_until(cx, &store, |store| store.pending().is_empty());
+        assert!(
+            store.read_with(cx, |store, _| store.pending().is_empty()),
+            "a successful scan replaces the pending edits"
         );
     }
 }
