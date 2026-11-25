@@ -19,7 +19,7 @@ use std::{
 };
 
 use db::Db;
-use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind};
+use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
 use flume::Sender;
 use library::{AutoScan, Library};
 use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
@@ -68,6 +68,9 @@ pub enum EngineError {
     /// A play request could not start.
     #[error("playback could not start: {0}")]
     Playback(#[from] PlaybackError),
+    /// A HUD command arrived with no session to receive it.
+    #[error("no playback session is running")]
+    NoSession,
 }
 
 /// The engine's services: what the Anime Entry and Home screens call through
@@ -112,6 +115,16 @@ pub trait EngineServices: Send + Sync + 'static {
 
     /// Retries a failed progress sync. The default is a no-op for fakes.
     fn retry_sync(&self, _media: MediaId, _episode: u32) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Pauses or resumes the active session. The default is a no-op for fakes.
+    fn set_playback_state(&self, _state: PlaybackControl) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Seeks the active session to `seconds`. The default is a no-op for fakes.
+    fn seek(&self, _seconds: f64) -> BoxFuture<Result<(), EngineError>> {
         Box::pin(async { Ok(()) })
     }
 }
@@ -443,6 +456,28 @@ impl EngineServices for Engine {
         Box::pin(async move {
             playback.retry_sync(media, episode).await;
             Ok(())
+        })
+    }
+
+    fn set_playback_state(&self, state: PlaybackControl) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            if playback.set_playback_state(state) {
+                Ok(())
+            } else {
+                Err(EngineError::NoSession)
+            }
+        })
+    }
+
+    fn seek(&self, seconds: f64) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            if playback.seek(seconds) {
+                Ok(())
+            } else {
+                Err(EngineError::NoSession)
+            }
         })
     }
 }

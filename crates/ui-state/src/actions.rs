@@ -8,6 +8,9 @@ pub const WORKSPACE: &str = "Workspace";
 /// The key context of the command palette.
 pub const COMMAND_PALETTE: &str = "CommandPalette";
 
+/// The key context of the playback HUD while it has focus.
+pub const PLAYER: &str = "Player";
+
 /// The shell's context while no text input has focus, so single-letter
 /// shortcuts never eat typed text. Must name [`WORKSPACE`].
 const WORKSPACE_NOT_TYPING: &str = "Workspace && !Input";
@@ -23,6 +26,20 @@ actions!(
         OpenCommandPalette,
         /// Opens the command palette in `/search` mode.
         OpenSearch
+    ]
+);
+
+actions!(
+    player,
+    [
+        /// Plays or pauses the active session.
+        PlayPause,
+        /// Seeks ten seconds back.
+        SeekBack,
+        /// Seeks ten seconds forward.
+        SeekForward,
+        /// Stops the active session.
+        StopPlayback
     ]
 );
 
@@ -65,6 +82,11 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(PALETTE_KEY, OpenCommandPalette, Some(WORKSPACE)),
         KeyBinding::new("q", OpenCommandPalette, Some(WORKSPACE_NOT_TYPING)),
         KeyBinding::new("s", OpenSearch, Some(WORKSPACE_NOT_TYPING)),
+    ]);
+    cx.bind_keys([
+        KeyBinding::new("space", PlayPause, Some(PLAYER)),
+        KeyBinding::new("left", SeekBack, Some(PLAYER)),
+        KeyBinding::new("right", SeekForward, Some(PLAYER)),
     ]);
     #[cfg(debug_assertions)]
     cx.bind_keys([

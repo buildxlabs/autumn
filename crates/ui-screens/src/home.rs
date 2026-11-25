@@ -509,6 +509,11 @@ mod tests {
                             }),
                             entry_store,
                             home_store,
+                            cx.new(|_| {
+                                ui_state::PlaybackStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             window,
                             cx,
                         )
