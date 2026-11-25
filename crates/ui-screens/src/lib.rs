@@ -18,4 +18,7 @@ pub use discover::{
     DiscoverLoader, DiscoverStore, DiscoverUpdate, DiscoverView, RealDiscoverCatalog,
 };
 
-pub use shell::{AppShell, PosterCacheAction, RailMode, RailPrefs, SYSTEM_ROUTES};
+pub use shell::{
+    AppShell, PlaybackServices, PlaybackSettings, PlaybackTestError, PlayerOption,
+    PosterCacheAction, RailMode, RailPrefs, SYSTEM_ROUTES,
+};

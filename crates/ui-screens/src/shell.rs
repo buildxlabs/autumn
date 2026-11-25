@@ -39,8 +39,9 @@ use ui_state::{
     fetch_status::DebugFetch,
 };
 
-pub use settings::PosterCacheAction;
-use settings::{PosterCacheRequest, StorageStatus};
+pub use ::settings::PlaybackSettings;
+pub use settings::{PlaybackServices, PlaybackTestError, PlayerOption, PosterCacheAction};
+use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus};
 
 mod settings;
 
@@ -149,6 +150,17 @@ pub struct AppShell {
     poster_cache: PosterCacheRequest,
     storage_status: StorageStatus,
     storage_task: Option<Task<()>>,
+    /// The Playback tab's current values and its composition-root callbacks.
+    playback: PlaybackSettings,
+    playback_services: PlaybackServices,
+    players: Vec<PlayerOption>,
+    players_task: Option<Task<()>>,
+    player_pick_task: Option<Task<()>>,
+    player_pick_error: Option<String>,
+    playback_test_status: PlaybackTestStatus,
+    playback_test_task: Option<Task<()>>,
+    playback_error: Option<String>,
+    save_playback_task: Option<Task<()>>,
     /// The latest save, if it is still running.
     saving: Option<Task<()>>,
     /// Whether the rail is expanded, by hover or by the click-pin toggle.
@@ -197,6 +209,8 @@ impl AppShell {
     )]
     pub fn new(
         prefs: RailPrefs,
+        playback: PlaybackSettings,
+        playback_services: PlaybackServices,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -284,7 +298,7 @@ impl AppShell {
             });
         })
         .detach();
-        Self {
+        let mut shell = Self {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
             focus,
@@ -309,6 +323,16 @@ impl AppShell {
             poster_cache: Box::new(poster_cache),
             storage_status: StorageStatus::Measuring,
             storage_task: None,
+            playback,
+            playback_services,
+            players: Vec::new(),
+            players_task: None,
+            player_pick_task: None,
+            player_pick_error: None,
+            playback_test_status: PlaybackTestStatus::Idle,
+            playback_test_task: None,
+            playback_error: None,
+            save_playback_task: None,
             saving: None,
             rail_open: false,
             hover_open: None,
@@ -322,7 +346,10 @@ impl AppShell {
             banner_cache,
             search: None,
             search_events: None,
-        }
+        };
+        // Detection is I/O, so it starts here rather than in `render()`.
+        shell.request_players(cx);
+        shell
     }
 
     /// A shell whose command palette can search the Local platform's list
@@ -333,6 +360,8 @@ impl AppShell {
     )]
     pub fn new_with_palette_sources(
         prefs: RailPrefs,
+        playback: PlaybackSettings,
+        playback_services: PlaybackServices,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -351,6 +380,8 @@ impl AppShell {
     ) -> Self {
         let mut shell = Self::new(
             prefs,
+            playback,
+            playback_services,
             fetch_status,
             account,
             login_url,
@@ -1215,6 +1246,8 @@ mod tests {
                     cx.new(|cx| {
                         AppShell::new(
                             prefs,
+                            settings::PlaybackSettings::default(),
+                            crate::shell::PlaybackServices::inert(),
                             fetch_status,
                             account,
                             "https://example.test/login".to_owned(),
@@ -1823,6 +1856,37 @@ mod tests {
                     .any(|text| text.visible() && text.text().contains("Open Database License")),
                 "Settings → About credits the ODbL dataset"
             );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn playback_tab_shows_the_player_choice_and_options(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-playback");
+
+        assert_eq!(
+            shell.route(cx),
+            Route::Settings {
+                tab: SettingsTab::Playback
+            }
+        );
+        shell.act(cx, |window, _| {
+            assert!(window.try_find("settings-playback").is_some());
+            let texts = gpui_kit::base::test_support::texts(window);
+            for label in [
+                "Player",
+                "Watched threshold",
+                "Resume where I stopped",
+                "Auto-skip OP/ED",
+            ] {
+                assert!(
+                    texts
+                        .iter()
+                        .any(|text| text.visible() && text.text().contains(label)),
+                    "Settings → Playback shows {label:?}"
+                );
+            }
         });
     }
 
@@ -2456,6 +2520,8 @@ mod tests {
                     cx.new(|cx| {
                         AppShell::new_with_palette_sources(
                             RailPrefs::default(),
+                            settings::PlaybackSettings::default(),
+                            crate::shell::PlaybackServices::inert(),
                             fetch_status,
                             account,
                             "https://example.test/login".to_owned(),

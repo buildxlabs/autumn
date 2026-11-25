@@ -4,6 +4,7 @@ mod account;
 mod fetch_status;
 mod http_client;
 mod logging;
+mod playback;
 mod rail_prefs;
 mod startup;
 
@@ -132,6 +133,12 @@ fn main() -> ExitCode {
         async move { fetch_status::observe(&client, events).await }
     });
     let prefs = rail_prefs::from_settings(engine.settings());
+    let playback = engine.settings().playback.clone();
+    let playback_services = playback::services(
+        engine.db().clone(),
+        engine.settings().clone(),
+        started.paths.cache_dir(),
+    );
     let storage_request = poster_cache_request(engine.poster_cache());
     let save_prefs = rail_prefs::saver(engine.db().clone(), engine.settings().clone());
     let discover_catalog = RealDiscoverCatalog::new(
@@ -173,6 +180,8 @@ fn main() -> ExitCode {
             ui_state::actions::bind_keys(cx);
             if let Err(err) = open_main_window(
                 prefs,
+                playback,
+                playback_services,
                 fetch_status,
                 account,
                 login_url(),
@@ -230,6 +239,8 @@ fn main_window_decorations() -> Option<WindowDecorations> {
 )]
 fn open_main_window(
     prefs: RailPrefs,
+    playback: ui_screens::PlaybackSettings,
+    playback_services: ui_screens::PlaybackServices,
     fetch_status: Entity<FetchStatus>,
     account: Entity<AccountStore>,
     login_url: String,
@@ -251,6 +262,8 @@ fn open_main_window(
         cx.new(|cx| {
             AppShell::new_with_palette_sources(
                 prefs,
+                playback,
+                playback_services,
                 fetch_status,
                 account,
                 login_url,
@@ -343,6 +356,8 @@ mod tests {
             let entry_store = cx.new(|_| EntryStore::new(services));
             open_main_window(
                 RailPrefs::default(),
+                settings::PlaybackSettings::default(),
+                ui_screens::PlaybackServices::inert(),
                 fetch_status,
                 account,
                 "https://example.test/login".to_owned(),

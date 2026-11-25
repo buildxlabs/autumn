@@ -37,6 +37,14 @@ pub enum SettingsError {
     /// The settings could not be encoded as JSON.
     #[error("could not encode the settings as JSON")]
     Serialize(#[source] serde_json::Error),
+    /// A settings value is outside the range or form the app accepts.
+    #[error("settings field {field:?} is invalid: {message}")]
+    Validation {
+        /// The field that failed validation.
+        field: &'static str,
+        /// Why the value was rejected.
+        message: &'static str,
+    },
 }
 
 impl SettingsError {

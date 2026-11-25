@@ -18,6 +18,7 @@ engine.workspace             = true
 gpui-kit.workspace           = true
 metadata.workspace           = true
 net.workspace                = true
+player.workspace             = true
 settings                     = { path = "../settings" }
 tokio                        = { features = [ "io-util", "rt-multi-thread" ], workspace = true }
 tracing.workspace            = true

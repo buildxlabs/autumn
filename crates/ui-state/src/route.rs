@@ -16,6 +16,8 @@ pub enum SettingsTab {
     Appearance,
     /// AniList connection, avatar and token expiry.
     Account,
+    /// Player choice and playback options.
+    Playback,
     /// Disk cache usage and controls.
     Storage,
     /// Data-source attribution and licences.

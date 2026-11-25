@@ -9,6 +9,7 @@ fn pinned() -> Settings {
             ..AppearanceSettings::default()
         },
         library: LibrarySettings::default(),
+        playback: settings::PlaybackSettings::default(),
     }
 }
 
@@ -26,8 +27,9 @@ fn rows_round_trip() {
 fn there_is_one_row_per_tab() {
     let rows = Settings::default().to_rows().unwrap();
 
-    let tabs: Vec<&str> = rows.iter().map(|(tab, _)| tab.as_str()).collect();
-    assert_eq!(tabs, ["appearance", "library"]);
+    let mut tabs: Vec<&str> = rows.iter().map(|(tab, _)| tab.as_str()).collect();
+    tabs.sort_unstable();
+    assert_eq!(tabs, ["appearance", "library", "playback"]);
 }
 
 #[test]
