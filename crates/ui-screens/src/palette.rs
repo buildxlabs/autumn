@@ -48,11 +48,13 @@ pub(crate) enum Mode {
     Search,
     /// `/anime`.
     Anime,
+    /// `/library scan`.
+    Library,
 }
 
 impl Mode {
     /// The modes a slash command selects, in the order they are listed.
-    const SLASH: [Self; 2] = [Self::Search, Self::Anime];
+    const SLASH: [Self; 3] = [Self::Search, Self::Anime, Self::Library];
 
     /// The slash command that selects this mode; empty for [`Self::Navigate`].
     fn command(self) -> &'static str {
@@ -60,6 +62,7 @@ impl Mode {
             Self::Navigate => "",
             Self::Search => "/search",
             Self::Anime => "/anime",
+            Self::Library => "/library",
         }
     }
 
@@ -67,6 +70,7 @@ impl Mode {
     fn prefix(self) -> SharedString {
         match self {
             Self::Navigate => SharedString::default(),
+            Self::Library => "/library scan ".into(),
             Self::Search | Self::Anime => format!("{} ", self.command()).into(),
         }
     }
@@ -74,7 +78,7 @@ impl Mode {
     /// The media kinds this mode lists, or none for navigation.
     fn kinds(self) -> &'static [MediaKind] {
         match self {
-            Self::Navigate => &[],
+            Self::Navigate | Self::Library => &[],
             Self::Anime | Self::Search => &[MediaKind::Anime],
         }
     }
@@ -83,7 +87,7 @@ impl Mode {
     fn kind(self) -> Option<MediaKind> {
         match self {
             Self::Anime | Self::Search => Some(MediaKind::Anime),
-            Self::Navigate => None,
+            Self::Navigate | Self::Library => None,
         }
     }
 
@@ -111,6 +115,8 @@ enum Entry {
     Media(MediaSummary),
     /// A query used earlier, for the empty-query mode.
     Search(String),
+    /// The manual library scan command.
+    ScanLibrary,
 }
 
 impl Entry {
@@ -126,6 +132,9 @@ impl Entry {
             Self::Search(text) => CommandItem::new()
                 .label(format!("Recent: {text}"))
                 .icon(IconName::Search),
+            Self::ScanLibrary => CommandItem::new()
+                .label("/library scan")
+                .icon(IconName::RefreshCw),
         }
     }
 }
@@ -150,6 +159,7 @@ fn entries_for(
             .map(Entry::Search)
             .chain(ROUTES.into_iter().map(Entry::Route))
             .collect(),
+        Mode::Library => vec![Entry::ScanLibrary],
         Mode::Search | Mode::Anime => {
             let kinds = mode.kinds();
             let local: Vec<MediaSummary> = local
@@ -174,6 +184,8 @@ fn entries_for(
 pub(crate) enum PaletteEvent {
     /// The user picked a route; the host navigates and closes the palette.
     Navigate(Route),
+    /// The user picked `/library scan`; the host starts one scan.
+    ScanLibrary,
 }
 
 /// The palette's view, kept alive between openings by the shell.
@@ -273,7 +285,7 @@ impl CommandPalette {
         let text = text.to_owned();
         self.search = None;
         self.remote = None;
-        if mode == Mode::Navigate || !needs_remote(&text) {
+        if matches!(mode, Mode::Navigate | Mode::Library) || !needs_remote(&text) {
             cx.notify();
             return;
         }
@@ -336,6 +348,7 @@ impl CommandPalette {
             Entry::Media(media) => cx.emit(PaletteEvent::Navigate(Route::Entry {
                 id: media.anilist_id,
             })),
+            Entry::ScanLibrary => cx.emit(PaletteEvent::ScanLibrary),
         }
     }
 
@@ -346,7 +359,7 @@ impl CommandPalette {
     /// dialog when the query is empty and clears it otherwise.
     fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<'_, Self>) {
         let query = self.state.read(cx).query(cx);
-        if let (Mode::Search | Mode::Anime, "") = Mode::parse(&query) {
+        if let (Mode::Search | Mode::Anime | Mode::Library, "") = Mode::parse(&query) {
             self.state
                 .update(cx, |state, cx| state.set_query("", window, cx));
         }
@@ -392,6 +405,7 @@ fn empty_state(mode: Mode, cx: &App) -> impl IntoElement + use<> {
         Mode::Navigate => "No page or mode matches",
         Mode::Search => "No local or AniList matches yet",
         Mode::Anime => "No anime matches yet",
+        Mode::Library => "No library command matches",
     };
     div()
         .id("palette-empty")
@@ -434,7 +448,11 @@ mod tests {
         assert_eq!(Mode::Search.kinds(), &[MediaKind::Anime]);
         assert_eq!(Mode::Search.kind(), Some(MediaKind::Anime));
         assert_eq!(Mode::Anime.kind(), Some(MediaKind::Anime));
-        assert_eq!(Mode::SLASH, [Mode::Search, Mode::Anime]);
+        assert_eq!(
+            Mode::SLASH,
+            [Mode::Search, Mode::Anime, Mode::Library],
+            "manga stays hidden; library commands are the third mode"
+        );
     }
 
     #[gpui_kit::test]

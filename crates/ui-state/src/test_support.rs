@@ -3,8 +3,12 @@
 //! Screens reach the engine only through ui-state stores, so their test
 //! fakes live here with the stores rather than in `ui-screens`.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
+use db::{LocalFile, ScanSummary};
 use domain::{ExternalId, ListEntry, MediaId, MediaKind, PlaybackControl};
 use engine::{BoxFuture, EngineError, EngineServices, ListedEntry, PlayRequest};
 use metadata::{HomeLoad, Load, MediaDetail};
@@ -194,6 +198,125 @@ impl EngineServices for PendingServices {
         _kind: MediaKind,
     ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
         Box::pin(std::future::pending())
+    }
+}
+
+/// An engine fake that records scans and serves a canned library.
+#[derive(Debug, Clone, Default)]
+pub struct LibraryServices {
+    scans: Arc<AtomicUsize>,
+    summary: Arc<Mutex<Option<ScanSummary>>>,
+    files: Arc<Mutex<Vec<LocalFile>>>,
+}
+
+impl LibraryServices {
+    /// Serves `summary` and `files` from the library calls.
+    #[must_use]
+    pub fn new(summary: ScanSummary, files: Vec<LocalFile>) -> Self {
+        Self {
+            scans: Arc::new(AtomicUsize::new(0)),
+            summary: Arc::new(Mutex::new(Some(summary))),
+            files: Arc::new(Mutex::new(files)),
+        }
+    }
+
+    /// How many scans were requested.
+    #[must_use]
+    pub fn scan_count(&self) -> usize {
+        self.scans.load(Ordering::SeqCst)
+    }
+}
+
+impl EngineServices for LibraryServices {
+    fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn local_media(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn local_entry(&self, _media: MediaId) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn save_entry(&self, _entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn mint(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<MediaId, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn missed_sequels(
+        &self,
+        _kind: MediaKind,
+    ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn start_scan(&self) -> BoxFuture<Result<(), EngineError>> {
+        self.scans.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(()) })
+    }
+
+    fn latest_scan_summary(&self) -> BoxFuture<Result<Option<ScanSummary>, EngineError>> {
+        let summary = self
+            .summary
+            .lock()
+            .map_or_else(|_| None, |summary| summary.clone());
+        Box::pin(async move { Ok(summary) })
+    }
+
+    fn library_media(&self) -> BoxFuture<Result<Vec<MediaId>, EngineError>> {
+        let media: Vec<MediaId> = self.files.lock().map_or_else(
+            |_| Vec::new(),
+            |files| {
+                let mut ids: Vec<MediaId> = files.iter().filter_map(|file| file.media_id).collect();
+                ids.sort_by_key(|id| id.get());
+                ids.dedup();
+                ids
+            },
+        );
+        Box::pin(async move { Ok(media) })
+    }
+
+    fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let files = self
+            .files
+            .lock()
+            .map_or_else(|_| Vec::new(), |files| files.clone());
+        Box::pin(async move { Ok(files) })
+    }
+
+    fn library_files(&self, media: MediaId) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let files: Vec<LocalFile> = self.files.lock().map_or_else(
+            |_| Vec::new(),
+            |files| {
+                files
+                    .iter()
+                    .filter(|file| file.media_id == Some(media))
+                    .cloned()
+                    .collect()
+            },
+        );
+        Box::pin(async move { Ok(files) })
     }
 }
 

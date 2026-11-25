@@ -3,6 +3,7 @@
 mod account;
 mod fetch_status;
 mod http_client;
+mod library;
 mod logging;
 mod playback;
 mod playback_sync;
@@ -24,7 +25,7 @@ use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
 use ui_state::{
-    AniListHandle, PlatformGateway,
+    AniListHandle, LibraryStore, PlatformGateway,
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
@@ -89,6 +90,8 @@ fn main() -> ExitCode {
         tracing::warn!(%err, "the library watcher could not start");
     }
     let gateway = PlatformGateway::with_events(engine.db().clone(), engine_events.clone());
+    // Scans take their user's shows from whichever platform is active (ADR 0004).
+    engine.set_anime_list(Arc::new(library::GatewayListSource::new(gateway.clone())));
     // Playback writes progress through the same gateway the screens use, so
     // switching platforms changes where watched episodes are recorded.
     engine.set_progress_sync(Arc::new(playback_sync::GatewaySync::new(gateway.clone())));
@@ -139,6 +142,12 @@ fn main() -> ExitCode {
     });
     let prefs = rail_prefs::from_settings(engine.settings());
     let playback = engine.settings().playback.clone();
+    let library_settings = engine.settings().library.clone();
+    let library_services = library::saver(
+        engine.db().clone(),
+        engine.clone(),
+        engine.settings().clone(),
+    );
     let playback_services = playback::services(
         engine.db().clone(),
         engine.settings().clone(),
@@ -171,16 +180,19 @@ fn main() -> ExitCode {
             let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
+            let library_store = cx.new(|_| LibraryStore::new(Arc::clone(&services)));
             let playback_store = cx.new(|_| PlaybackStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
             ui_state::events::start_pump(cx, ui_events, {
                 let store = fetch_status.clone();
                 let account = account.clone();
+                let library = library_store.clone();
                 let playback = playback_store.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
                     account.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    library.update(cx, |store, cx| store.apply(event.clone(), cx));
                     playback.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
@@ -190,6 +202,9 @@ fn main() -> ExitCode {
                 prefs,
                 playback,
                 playback_services,
+                library_settings,
+                library_services,
+                library_store,
                 fetch_status,
                 account,
                 login_url(),
@@ -250,6 +265,9 @@ fn open_main_window(
     prefs: RailPrefs,
     playback: ui_screens::PlaybackSettings,
     playback_services: ui_screens::PlaybackServices,
+    library_settings: ui_screens::LibrarySettings,
+    library_services: ui_screens::LibraryServices,
+    library_store: Entity<LibraryStore>,
     fetch_status: Entity<FetchStatus>,
     account: Entity<AccountStore>,
     login_url: String,
@@ -274,6 +292,9 @@ fn open_main_window(
                 prefs,
                 playback,
                 playback_services,
+                library_settings,
+                library_services,
+                library_store,
                 fetch_status,
                 account,
                 login_url,
@@ -337,8 +358,8 @@ mod tests {
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::PlatformGateway;
     use ui_state::{
-        PlaybackStore, account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
-        home_store::HomeStore, test_support::pending_services,
+        LibraryStore, PlaybackStore, account::AccountStore, bridge::BridgeError,
+        entry_store::EntryStore, home_store::HomeStore, test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
@@ -364,11 +385,15 @@ mod tests {
             let fetch_status = cx.new(|_| FetchStatus::default());
             let account = cx.new(|_| AccountStore::default());
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
-            let entry_store = cx.new(|_| EntryStore::new(services));
+            let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
+            let library_store = cx.new(|_| LibraryStore::new(services));
             open_main_window(
                 RailPrefs::default(),
                 settings::PlaybackSettings::default(),
                 ui_screens::PlaybackServices::inert(),
+                settings::LibrarySettings::default(),
+                ui_screens::LibraryServices::inert(),
+                library_store,
                 fetch_status,
                 account,
                 "https://example.test/login".to_owned(),

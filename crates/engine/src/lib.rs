@@ -8,6 +8,7 @@
 //! into ARCHITECTURE's engine in Phase 2.
 
 mod chapters;
+mod library;
 mod playback;
 mod settings_store;
 
@@ -15,20 +16,20 @@ use std::{
     collections::HashSet,
     future::Future,
     pin::Pin,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    sync::{Arc, Mutex, RwLock},
 };
 
-use db::Db;
+use ::library::{AutoScan, Library, ScanSummary};
+use db::{Db, LocalFile};
 use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
 use flume::Sender;
-use library::{AutoScan, Library};
 use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
 use net::{Client, PosterCache};
-use settings::{AppPaths, Settings};
+use settings::{AppPaths, LibrarySettings, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
 
+pub use library::{AnimeList, FillerPolicy, LibraryScanner, PlatformCandidates, ScanError};
 pub use playback::{
     LocalProgressSync, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager, PlaybackSession,
     PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
@@ -60,12 +61,24 @@ pub enum EngineError {
     /// A platform call failed.
     #[error("the platform call failed: {0}")]
     Platform(#[from] PlatformError),
+    /// The active platform exposed by the composition root failed.
+    #[error("the active platform call failed: {0}")]
+    ActivePlatform(String),
     /// A library scan failed.
     #[error("the library scan failed: {0}")]
-    Library(#[from] library::LibraryError),
+    Library(#[from] ::library::LibraryError),
+    /// A scan was refused because another one is running.
+    #[error("{0}")]
+    Scan(#[from] ScanError),
+    /// The candidate-source slot was poisoned.
+    #[error("the library candidate lock was poisoned")]
+    CandidateLock(String),
     /// The watcher state lock was poisoned.
     #[error("the library watcher lock was poisoned")]
     WatcherLock,
+    /// The live Library settings lock was poisoned.
+    #[error("the library settings lock was poisoned")]
+    SettingsLock,
     /// A play request could not start.
     #[error("playback could not start: {0}")]
     Playback(#[from] PlaybackError),
@@ -133,6 +146,33 @@ pub trait EngineServices: Send + Sync + 'static {
     fn skip_chapter(&self) -> BoxFuture<Result<(), EngineError>> {
         Box::pin(async { Ok(()) })
     }
+
+    /// Starts one scan of the folders in the Library settings. A second call
+    /// while a scan runs fails with [`ScanError::AlreadyScanning`]. The default
+    /// is a no-op for fakes.
+    fn start_scan(&self) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// The library files matched to `media`, path ordered.
+    fn library_files(&self, _media: MediaId) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Every media with at least one local file.
+    fn library_media(&self) -> BoxFuture<Result<Vec<MediaId>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// The newest scan summary, if one has been recorded.
+    fn latest_scan_summary(&self) -> BoxFuture<Result<Option<ScanSummary>, EngineError>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    /// Every local file, so stores can load the library in one call.
+    fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
 }
 
 /// The engine: owns the database, the shared client, the catalog cache and
@@ -145,9 +185,13 @@ pub struct Engine {
     catalog: CatalogCache,
     platform: Local,
     settings: Settings,
+    /// The Library tab's current values, shared with scans so saves take
+    /// effect without a restart (#127).
+    library_settings: Arc<RwLock<LibrarySettings>>,
     library: Library,
     handle: tokio::runtime::Handle,
-    events: Option<Sender<AppEvent>>,
+    events: Arc<Mutex<Option<Sender<AppEvent>>>>,
+    scanner: Arc<LibraryScanner>,
     watcher: Arc<Mutex<Option<AutoScan>>>,
     playback: Arc<PlaybackManager>,
 }
@@ -180,6 +224,25 @@ impl Engine {
         let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());
         let platform = Local::new(db.clone());
         let library = Library::new(db.clone());
+        let entries: Arc<dyn AnimeList> = Arc::new(platform.clone());
+        let candidates: Arc<dyn library::CandidateSource> = Arc::new(PlatformCandidates::new(
+            entries,
+            db.clone(),
+            catalog.clone(),
+            client.clone(),
+            poster_cache.clone(),
+        ));
+        let events_slot = Arc::new(Mutex::new(None));
+        let library_settings = Arc::new(RwLock::new(settings.library.clone()));
+        let scanner = Arc::new(LibraryScanner::with_hydration(
+            db.clone(),
+            candidates,
+            Arc::clone(&library_settings),
+            client.clone(),
+            poster_cache.clone(),
+            Arc::clone(&events_slot),
+            runtime.handle().clone(),
+        ));
         let playback = Arc::new(PlaybackManager::new(
             db.clone(),
             catalog.clone(),
@@ -195,9 +258,11 @@ impl Engine {
             catalog,
             platform,
             settings,
+            library_settings,
             library,
             handle: runtime.handle().clone(),
-            events: None,
+            events: events_slot,
+            scanner,
             watcher: Arc::new(Mutex::new(None)),
             playback,
         })
@@ -206,9 +271,24 @@ impl Engine {
     /// Attaches the engine-to-UI event channel used for scan progress and the
     /// library-changed event.
     #[must_use]
-    pub fn with_events(mut self, events: Sender<AppEvent>) -> Self {
-        self.events = Some(events);
+    pub fn with_events(self, events: Sender<AppEvent>) -> Self {
+        if let Ok(mut slot) = self.events.lock() {
+            *slot = Some(events);
+        }
         self
+    }
+
+    /// Uses `entries` as the active platform's list when building candidates.
+    /// The binary calls this after login so scans follow ADR 0004.
+    pub fn set_anime_list(&self, entries: Arc<dyn AnimeList>) {
+        let candidates: Arc<dyn library::CandidateSource> = Arc::new(PlatformCandidates::new(
+            entries,
+            self.db.clone(),
+            self.catalog.clone(),
+            self.client.clone(),
+            self.poster_cache.clone(),
+        ));
+        self.scanner.set_candidates(candidates);
     }
 
     /// The library service, for explicit scans from screens and the watcher.
@@ -231,6 +311,13 @@ impl Engine {
     /// [`EngineError::WatcherLock`] if the watcher state lock is poisoned, or
     /// [`EngineError::Library`] if a folder cannot be watched.
     pub fn apply_library_settings(&self, settings: &Settings) -> Result<(), EngineError> {
+        {
+            let mut current = self
+                .library_settings
+                .write()
+                .map_err(|_| EngineError::SettingsLock)?;
+            *current = settings.library.clone();
+        }
         let mut watcher = self.watcher.lock().map_err(|_| EngineError::WatcherLock)?;
         let folders = &settings.library.folders;
         if !settings.library.auto_scan || folders.is_empty() {
@@ -239,72 +326,18 @@ impl Engine {
             }
             return Ok(());
         }
-        let engine = self.clone();
-        let events = self.events.clone();
+        let scanner = Arc::clone(&self.scanner);
         let handle = self.handle.clone();
-        let callback_handle = handle.clone();
         // Build the replacement first: a failed restart must not leave the
-        // engine with no watcher at all.
-        let auto_scan = AutoScan::start(folders, &handle, move |changed| {
-            let engine = engine.clone();
-            let events = events.clone();
-            let handle = callback_handle.clone();
-            handle.spawn(async move {
-                engine.run_auto_scan(&changed, events).await;
-            });
+        // engine with no watcher at all. A change in one folder still rescans
+        // every folder, because a partial scan would drop the others' rows.
+        let auto_scan = AutoScan::start(folders, &handle, move |_changed| {
+            scanner.request_rescan();
         })?;
         if let Some(previous) = watcher.replace(auto_scan) {
             previous.stop();
         }
         Ok(())
-    }
-
-    /// Runs one auto-scan and publishes its progress and completion.
-    async fn run_auto_scan(
-        &self,
-        folders: &[std::path::PathBuf],
-        events: Option<Sender<AppEvent>>,
-    ) {
-        // Candidates arrive from the metadata engine in #127; until then the
-        // scan still stores and shelves files, just without a match.
-        let last = Arc::new(Mutex::new(
-            Instant::now()
-                .checked_sub(Duration::from_secs(1))
-                .unwrap_or(Instant::now()),
-        ));
-        let result = self
-            .library
-            .scan(folders, &[], |progress| {
-                let Some(events) = &events else {
-                    return;
-                };
-                let Ok(mut last) = last.lock() else {
-                    return;
-                };
-                if last.elapsed() < Duration::from_millis(250) {
-                    return;
-                }
-                *last = Instant::now();
-                let _ = events.send(AppEvent::LibraryScanProgress {
-                    files_walked: progress.files_walked,
-                    files_matched: progress.files_matched,
-                });
-            })
-            .await;
-        match result {
-            Ok(summary) => {
-                if let Some(events) = events {
-                    // The throttle can drop the last intermediate update, so
-                    // publish the final counts before the completion event.
-                    let _ = events.send(AppEvent::LibraryScanProgress {
-                        files_walked: summary.files_walked,
-                        files_matched: summary.files_matched,
-                    });
-                    let _ = events.send(AppEvent::LibraryChanged);
-                }
-            }
-            Err(error) => tracing::warn!(%error, "auto-scan failed"),
-        }
     }
 
     /// Replaces the playback manager's progress sync with the active platform
@@ -496,6 +529,38 @@ impl EngineServices for Engine {
                 Err(EngineError::NoSession)
             }
         })
+    }
+
+    fn start_scan(&self) -> BoxFuture<Result<(), EngineError>> {
+        let scanner = Arc::clone(&self.scanner);
+        Box::pin(async move {
+            scanner.start()?;
+            Ok(())
+        })
+    }
+
+    fn library_files(&self, media: MediaId) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            library::files_for(&db, media)
+                .await
+                .map_err(EngineError::from)
+        })
+    }
+
+    fn library_media(&self) -> BoxFuture<Result<Vec<MediaId>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move { library::matched_media(&db).await.map_err(EngineError::from) })
+    }
+
+    fn latest_scan_summary(&self) -> BoxFuture<Result<Option<ScanSummary>, EngineError>> {
+        let library = self.library.clone();
+        Box::pin(async move { library.latest_summary().await.map_err(EngineError::from) })
+    }
+
+    fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move { db.local_file().all().await.map_err(EngineError::from) })
     }
 }
 

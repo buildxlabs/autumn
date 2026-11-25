@@ -25,7 +25,9 @@ actions!(
         /// Opens the command palette with an empty query.
         OpenCommandPalette,
         /// Opens the command palette in `/search` mode.
-        OpenSearch
+        OpenSearch,
+        /// Starts one manual library scan.
+        ScanLibrary
     ]
 );
 
@@ -71,6 +73,12 @@ const PALETTE_KEY: &str = "cmd-j";
 #[cfg(not(target_os = "macos"))]
 const PALETTE_KEY: &str = "ctrl-j";
 
+/// The manual scan shortcut: `cmd-shift-s` on macOS, `ctrl-shift-s` elsewhere.
+#[cfg(target_os = "macos")]
+const SCAN_KEY: &str = "cmd-shift-s";
+#[cfg(not(target_os = "macos"))]
+const SCAN_KEY: &str = "ctrl-shift-s";
+
 /// Arrow-key chords to walk the same history as [`NAVIGATION_KEYS`] on
 /// Windows and Linux, where `ctrl-[` is awkward on many keyboard layouts.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -84,6 +92,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(PALETTE_KEY, OpenCommandPalette, Some(WORKSPACE)),
         KeyBinding::new("q", OpenCommandPalette, Some(WORKSPACE_NOT_TYPING)),
         KeyBinding::new("s", OpenSearch, Some(WORKSPACE_NOT_TYPING)),
+        KeyBinding::new(SCAN_KEY, ScanLibrary, Some(WORKSPACE)),
     ]);
     cx.bind_keys([
         KeyBinding::new("space", PlayPause, Some(PLAYER)),

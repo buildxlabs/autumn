@@ -69,10 +69,14 @@ impl Library {
     /// A library that hydrates its matches with `AniZip` and filler metadata.
     /// The clients are fetched once per matched media on each scan.
     pub fn with_metadata(db: Db, anizip: AniZip, filler: AnimeFillerList) -> Self {
-        Self {
-            hydration: Some(Hydration { anizip, filler }),
-            ..Self::new(db)
-        }
+        Self::new(db).hydrating(anizip, filler)
+    }
+
+    /// Hydrates matches while keeping this library's matching threshold.
+    #[must_use]
+    pub fn hydrating(mut self, anizip: AniZip, filler: AnimeFillerList) -> Self {
+        self.hydration = Some(Hydration { anizip, filler });
+        self
     }
 
     /// Walks `folders`, matches their titles against `candidates`, and stores

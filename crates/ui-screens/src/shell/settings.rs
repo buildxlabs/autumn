@@ -1,6 +1,9 @@
 //! Settings pages and their poster cache controls.
 
-use std::{path::PathBuf, rc::Rc};
+use std::{
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use domain::{
     ListStatus, TransferChoice, TransferDirection, TransferPreview, TransferProgress, TransferState,
@@ -16,6 +19,7 @@ use gpui_kit::{
         label::Label,
         radio::{Radio, RadioGroup},
         setting::{SettingField, SettingGroup, SettingItem, SettingPage, Settings},
+        slider::Slider,
         switch::Switch,
         tab::{Tab, TabBar},
     },
@@ -24,9 +28,9 @@ use gpui_kit::{
     px,
 };
 use metadata::ODBL_CREDIT;
-use settings::{PlaybackKind, PlaybackSettings, PlayerChoice};
+use settings::{LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice};
 use ui_state::{
-    Route, SettingsTab,
+    LibraryStore, Route, ScanState, SettingsTab,
     account::{AccountCommand, AccountStore},
 };
 
@@ -71,6 +75,7 @@ impl std::fmt::Display for PlaybackTestError {
 }
 
 type SavePlayback = Rc<dyn Fn(&PlaybackSettings, &mut App) -> Task<()>>;
+type SaveLibrary = Rc<dyn Fn(&LibrarySettings, &mut App) -> Task<()>>;
 type DetectPlayers = Rc<dyn Fn(&mut App) -> Task<Vec<PlayerOption>>>;
 type ValidatePlayer = Rc<dyn Fn(PathBuf, &mut App) -> Task<Result<PlayerOption, String>>>;
 type TestPlayer = Rc<dyn Fn(PlaybackSettings, &mut App) -> Task<Result<(), PlaybackTestError>>>;
@@ -120,6 +125,33 @@ impl PlaybackServices {
                 )))
             },
         )
+    }
+}
+
+/// The composition-root callback that persists the Library tab.
+#[derive(Clone)]
+pub struct LibraryServices {
+    save: SaveLibrary,
+}
+
+impl std::fmt::Debug for LibraryServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LibraryServices").finish_non_exhaustive()
+    }
+}
+
+impl LibraryServices {
+    /// Creates the save callback the Library tab needs.
+    pub fn new(save: impl Fn(&LibrarySettings, &mut App) -> Task<()> + 'static) -> Self {
+        Self {
+            save: Rc::new(save),
+        }
+    }
+
+    /// Inert callbacks for embedding the shell without a settings backend.
+    #[must_use]
+    pub fn inert() -> Self {
+        Self::new(|_, _| Task::ready(()))
     }
 }
 
@@ -299,6 +331,85 @@ impl AppShell {
         }));
     }
 
+    /// Adds the chosen folders to the library, skipping ones already listed.
+    pub(super) fn add_library_folders(&mut self, cx: &mut Context<'_, Self>) {
+        if self.library_pick_task.is_some() {
+            return;
+        }
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: true,
+            prompt: Some("Choose library folders".into()),
+        });
+        let shell = cx.entity().downgrade();
+        self.library_pick_task = Some(cx.spawn(async move |_, cx| {
+            let picked = match receiver.await {
+                Ok(Ok(Some(paths))) => paths,
+                _ => Vec::new(),
+            };
+            let _ = shell.update(cx, |shell, cx| {
+                shell.library_pick_task = None;
+                for path in picked {
+                    if !shell.library.folders.contains(&path) {
+                        shell.library.folders.push(path);
+                    }
+                }
+                shell.commit_library(cx);
+            });
+        }));
+        cx.notify();
+    }
+
+    /// Removes one folder; files found only there are shelved on the next scan.
+    fn remove_library_folder(&mut self, path: &Path, cx: &mut Context<'_, Self>) {
+        self.library.folders.retain(|folder| folder != path);
+        self.commit_library(cx);
+        cx.notify();
+    }
+
+    /// Applies one Library change and saves it without waiting.
+    fn update_library(
+        &mut self,
+        change: impl FnOnce(&mut LibrarySettings),
+        cx: &mut Context<'_, Self>,
+    ) {
+        change(&mut self.library);
+        self.commit_library(cx);
+        cx.notify();
+    }
+
+    fn commit_library(&mut self, cx: &mut Context<'_, Self>) {
+        if let Err(error) = self.library.validate() {
+            self.library_error = Some(error.to_string());
+            return;
+        }
+        self.library_error = None;
+        let task = (self.library_services.save)(&self.library, cx);
+        self.save_library_task = Some(cx.spawn(async move |_, _| {
+            task.await;
+        }));
+    }
+
+    /// Requests one scan from the Library tab. Progress arrives as `AppEvent`s.
+    pub(super) fn start_scan(&mut self, cx: &mut Context<'_, Self>) {
+        self.library_store.update(cx, LibraryStore::start_scan);
+    }
+
+    /// Keeps the slider's value in step with the saved setting.
+    #[expect(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the slider is clamped to 0..=100 before conversion"
+    )]
+    pub(super) fn library_threshold_changed(&mut self, value: f32, cx: &mut Context<'_, Self>) {
+        let percent = value.round().clamp(0.0, 100.0) as u8;
+        if self.library.matching_threshold != percent {
+            self.update_library(|settings| settings.matching_threshold = percent, cx);
+        }
+    }
+
     pub(super) fn request_poster_cache(
         &mut self,
         action: PosterCacheAction,
@@ -337,10 +448,11 @@ impl AppShell {
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 5] = [
+        const TABS: [SettingsTab; 6] = [
             SettingsTab::Appearance,
             SettingsTab::Account,
             SettingsTab::Playback,
+            SettingsTab::Library,
             SettingsTab::Storage,
             SettingsTab::About,
         ];
@@ -348,8 +460,9 @@ impl AppShell {
             SettingsTab::Appearance => 0,
             SettingsTab::Account => 1,
             SettingsTab::Playback => 2,
-            SettingsTab::Storage => 3,
-            SettingsTab::About => 4,
+            SettingsTab::Library => 3,
+            SettingsTab::Storage => 4,
+            SettingsTab::About => 5,
         };
         let tabs = TabBar::new("settings-tabs")
             .underline()
@@ -357,6 +470,7 @@ impl AppShell {
             .child(settings_tab("settings-appearance", "Appearance"))
             .child(settings_tab("settings-account", "Account"))
             .child(settings_tab("settings-playback", "Playback"))
+            .child(settings_tab("settings-library", "Library"))
             .child(settings_tab("settings-storage", "Storage"))
             .child(settings_tab("settings-about", "About"))
             .on_click(cx.listener(|shell, index: &usize, _, cx| {
@@ -913,6 +1027,155 @@ impl AppShell {
                 }));
 
                 ("Playback", items)
+            }
+            SettingsTab::Library => {
+                let shell = cx.entity().downgrade();
+                let folders = self.library.folders.clone();
+                let pick_busy = self.library_pick_task.is_some();
+                let validation_error = self.library_error.clone();
+                let slider = self.threshold_slider.clone();
+                let scan_state = self.library_store.read(cx).scan();
+                let last = self.library_store.read(cx).summary().cloned();
+                let scanning = matches!(scan_state, ScanState::Running { .. });
+                let progress = match scan_state {
+                    ScanState::Running {
+                        files_walked,
+                        files_matched,
+                    } => format!("Scanning… {files_matched} matched of {files_walked} files"),
+                    _ => "Ready to scan".to_owned(),
+                };
+                let folder_shell = shell.clone();
+                let scan_shell = shell;
+                let items = vec![
+                    SettingItem::render(move |_, _, _| {
+                        let shell = folder_shell.clone();
+                        let mut column = div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(Label::new("Library folders"));
+                        for folder in &folders {
+                            let path = folder.clone();
+                            let remove_shell = shell.clone();
+                            column = column.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap_3()
+                                    .child(
+                                        Label::new(folder.to_string_lossy().to_string()).text_sm(),
+                                    )
+                                    .child(
+                                        Button::new(format!("remove-folder-{}", folder.display()))
+                                            .label("Remove")
+                                            .on_click(move |_, _, cx| {
+                                                let _ = remove_shell.update(cx, |shell, cx| {
+                                                    shell.remove_library_folder(&path, cx);
+                                                });
+                                            }),
+                                    ),
+                            );
+                        }
+                        column
+                            .child(
+                                Button::new("add-library-folder")
+                                    .label(if pick_busy {
+                                        "Choosing…"
+                                    } else {
+                                        "Add folder…"
+                                    })
+                                    .disabled(pick_busy)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = shell.update(cx, AppShell::add_library_folders);
+                                    }),
+                            )
+                            .when_some(validation_error.clone(), |column, message| {
+                                column.child(Label::new(message).text_sm())
+                            })
+                    }),
+                    SettingItem::render(move |_, _, cx| {
+                        let value = slider.read(cx).value().end();
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(Label::new(format!("Matching threshold: {value:.0}%")))
+                            .child(Slider::new(&slider).accessibility_label("Matching threshold"))
+                    }),
+                    SettingItem::new(
+                        "Auto-scan folders",
+                        SettingField::switch(
+                            {
+                                let shell = cx.entity();
+                                move |cx: &gpui_kit::App| shell.read(cx).library.auto_scan
+                            },
+                            {
+                                let shell = cx.entity();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_library(
+                                            |settings| settings.auto_scan = value,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Scan again when a folder's contents change."),
+                    SettingItem::new(
+                        "Mark filler episodes",
+                        SettingField::switch(
+                            {
+                                let shell = cx.entity();
+                                move |cx: &gpui_kit::App| {
+                                    shell.read(cx).library.fetch_filler_episodes
+                                }
+                            },
+                            {
+                                let shell = cx.entity();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_library(
+                                            |settings| settings.fetch_filler_episodes = value,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Look up filler lists from animefillerlist.com (OD-3)."),
+                    SettingItem::render(move |_, _, _| {
+                        let shell = scan_shell.clone();
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(
+                                Button::new("scan-now")
+                                    .label(if scanning { "Scanning…" } else { "Scan now" })
+                                    .disabled(scanning)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = shell.update(cx, AppShell::start_scan);
+                                    }),
+                            )
+                            .child(Label::new(progress.clone()).text_sm())
+                            .when_some(last.clone(), |column, summary| {
+                                column.child(
+                                    Label::new(format!(
+                                        "Last scan: {} files matched to {} media, {} unmatched",
+                                        summary.files_matched,
+                                        summary.by_media.len(),
+                                        summary.files_unmatched
+                                    ))
+                                    .text_sm(),
+                                )
+                            })
+                    }),
+                ];
+                ("Library", items)
             }
             SettingsTab::About => (
                 "About",

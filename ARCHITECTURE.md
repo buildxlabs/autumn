@@ -105,7 +105,7 @@ Foundation, UI and binary edges in use (rules 1–3 already allow them; they're 
 ```text
 db            → domain
 auth           → domain, net
-engine         → domain, net, db, metadata, tracker, settings, library, player, mkv (library watcher #123, playback manager #128, chapter skip #131)
+engine         → domain, net, db, metadata, tracker, settings, library, player, mkv (library watcher #123, scan module + playback manager #127/#128, chapter skip #131)
 library        → domain, db
 metadata      → domain, net
 player        → domain

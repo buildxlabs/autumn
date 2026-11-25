@@ -8,6 +8,8 @@ use serde_json::{Map, Value};
 
 use crate::SettingsError;
 
+/// The default title-similarity a file needs to match a candidate, in percent (#127).
+pub const DEFAULT_MATCH_THRESHOLD: u8 = 50;
 /// The watched-at threshold bounds, as a percentage of a file's duration.
 pub const WATCHED_THRESHOLD_RANGE: std::ops::RangeInclusive<u8> = 50..=100;
 /// The default MPC-HC web-interface host, used when the field is left empty.
@@ -35,12 +37,14 @@ pub struct Settings {
 #[serde(default)]
 pub struct LibrarySettings {
     /// When on, library hydration looks up filler episode lists on
-    /// animefillerlist.com. On by default.
+    /// animefillerlist.com. On by default (OD-3).
     pub fetch_filler_episodes: bool,
     /// Folders scanned for local files.
     pub folders: Vec<PathBuf>,
     /// Whether a watcher runs scans when the library folders change.
     pub auto_scan: bool,
+    /// The lowest title similarity that wins a match, in percent.
+    pub matching_threshold: u8,
 }
 
 impl Default for LibrarySettings {
@@ -49,7 +53,26 @@ impl Default for LibrarySettings {
             fetch_filler_episodes: true,
             folders: Vec::new(),
             auto_scan: true,
+            matching_threshold: DEFAULT_MATCH_THRESHOLD,
         }
+    }
+}
+
+impl LibrarySettings {
+    /// Checks the values the Library tab must keep in range.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SettingsError::Validation`] when the matching threshold
+    /// is above 100 percent.
+    pub fn validate(&self) -> Result<(), SettingsError> {
+        if self.matching_threshold > 100 {
+            return Err(SettingsError::Validation {
+                field: "library.matching_threshold",
+                message: "must be at most 100 percent",
+            });
+        }
+        Ok(())
     }
 }
 

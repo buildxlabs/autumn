@@ -9,6 +9,7 @@ mod settings;
 pub use error::SettingsError;
 pub use paths::AppPaths;
 pub use settings::{
-    AppearanceSettings, DEFAULT_MPCHC_HOST, DEFAULT_MPCHC_PORT, LibrarySettings, PlaybackKind,
-    PlaybackSettings, PlayerChoice, Settings, WATCHED_THRESHOLD_RANGE,
+    AppearanceSettings, DEFAULT_MATCH_THRESHOLD, DEFAULT_MPCHC_HOST, DEFAULT_MPCHC_PORT,
+    LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice, Settings,
+    WATCHED_THRESHOLD_RANGE,
 };

@@ -58,6 +58,20 @@ pub enum AppEvent {
     },
     /// A library scan finished and the local files may have changed.
     LibraryChanged,
+    /// A scan ended. The counts feed the summary toast; `error` is set when
+    /// the scan failed before it could write a summary.
+    LibraryScanFinished {
+        /// Files found by the walk.
+        files_walked: usize,
+        /// Files matched to a media.
+        files_matched: usize,
+        /// Files left without a media.
+        files_unmatched: usize,
+        /// Files on a disconnected drive.
+        shelved: usize,
+        /// Why the scan failed, when it did.
+        error: Option<String>,
+    },
     /// A list transfer preview is ready for review, or `None` when dismissed.
     TransferPreview(Option<TransferPreview>),
     /// A background list transfer processed another entry.
