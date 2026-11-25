@@ -50,7 +50,7 @@ use crate::{
     home::{HomeCarousels, observe as observe_home, render as render_home},
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
-    placeholder::{mock_media_views, placeholder},
+    placeholder::{episode_gallery, mock_media_views, placeholder},
     search::{SearchEvent, SearchScreen},
 };
 
@@ -806,6 +806,11 @@ impl AppShell {
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
                 .child(self.discover_view.clone())
+                .into_any_element(),
+            Route::Schedule => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(episode_gallery(&self.banner_cache))
                 .into_any_element(),
             Route::Entry { id } => route_view
                 .overflow_y_scroll()
@@ -2071,6 +2076,31 @@ mod tests {
 
         shell.click(cx, "rail-home");
         assert_eq!(shell.route(cx), Route::Home, "back home");
+    }
+
+    /// The placeholder route shows every episode-card state in both layouts.
+    #[gpui_kit::test]
+    fn schedule_placeholder_shows_the_episode_gallery(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-schedule");
+        assert_eq!(shell.route(cx), Route::Schedule);
+
+        for id in [
+            "mock-episode-card-0",
+            "mock-episode-card-1",
+            "mock-episode-card-2",
+            "mock-episode-card-3",
+            "mock-episode-card-4",
+            "mock-episode-card-5",
+            "mock-episode-row-0",
+            "mock-episode-row-1",
+            "mock-episode-row-2",
+            "mock-episode-row-3",
+            "mock-episode-row-4",
+            "mock-episode-row-5",
+        ] {
+            assert!(shell.shows(cx, id), "{id} is drawn on the Schedule route");
+        }
     }
 
     /// The Phase 0 exit criterion.

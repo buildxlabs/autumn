@@ -1,7 +1,12 @@
 //! Stand-in screens for routes whose real screen comes in a later phase.
 
-use gpui_kit::{Hsla, IntoElement, ParentElement, Resource, SharedString, Styled, div, px};
-use ui_components::{MediaCardView, MediaFormat};
+use gpui_kit::{
+    ElementId, Entity, Hsla, IntoElement, ParentElement, Resource, SharedString, Styled, div,
+    image_cache, px,
+};
+use ui_components::{
+    EpisodeCard, EpisodeCardView, EpisodeRow, LruImageCache, MediaCardView, MediaFormat,
+};
 
 /// A titled screen; with `rows`, a long list to scroll through.
 pub(crate) fn placeholder(title: SharedString, rows: usize, muted: Hsla) -> impl IntoElement {
@@ -42,4 +47,94 @@ pub(crate) fn mock_media_views() -> Vec<MediaCardView> {
             detail: "A mock media card detail.".into(),
         })
         .collect()
+}
+
+/// Mock episodes covering every state the card renders: unwatched, in
+/// progress, watched, filler, no thumbnail and skeleton.
+pub(crate) fn mock_episode_views() -> Vec<EpisodeCardView> {
+    let base = EpisodeCardView {
+        thumbnail: Some(Resource::Uri(
+            format!("{SAMPLE_POSTER}?episode=mock").into(),
+        )),
+        episode_number: 7,
+        title: "The Stranger at the Window".into(),
+        media_title: Some("Frieren: Beyond Journey's End".into()),
+        filename: Some("[Group] Frieren - 07.mkv".into()),
+        ..EpisodeCardView::default()
+    };
+    vec![
+        EpisodeCardView {
+            episode_number: 1,
+            title: "Unwatched".into(),
+            ..base.clone()
+        },
+        EpisodeCardView {
+            episode_number: 2,
+            title: "In progress (40%)".into(),
+            progress: Some(0.4),
+            ..base.clone()
+        },
+        EpisodeCardView {
+            episode_number: 3,
+            title: "Watched".into(),
+            watched: true,
+            progress: Some(1.0),
+            ..base.clone()
+        },
+        EpisodeCardView {
+            episode_number: 4,
+            title: "Filler".into(),
+            filler: true,
+            ..base.clone()
+        },
+        EpisodeCardView {
+            episode_number: 5,
+            title: "No thumbnail".into(),
+            thumbnail: None,
+            ..base.clone()
+        },
+        EpisodeCardView {
+            episode_number: 6,
+            title: "Loading".into(),
+            skeleton: true,
+            ..base
+        },
+    ]
+}
+
+/// The component gallery on the Schedule placeholder route, until its real
+/// screen lands. Both layouts use the bounded image cache.
+pub(crate) fn episode_gallery(cache: &Entity<LruImageCache>) -> impl IntoElement {
+    let views = mock_episode_views();
+    div()
+        .p_8()
+        .flex()
+        .flex_col()
+        .gap_8()
+        .child(div().text_xl().child("Episode cards"))
+        .child(
+            image_cache(cache.clone())
+                .flex()
+                .flex_wrap()
+                .gap_4()
+                .children(views.iter().enumerate().map(|(ix, view)| {
+                    EpisodeCard::new(
+                        view.clone(),
+                        ElementId::Name(format!("mock-episode-card-{ix}").into()),
+                    )
+                })),
+        )
+        .child(div().text_xl().child("Episode rows"))
+        .child(
+            image_cache(cache.clone())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .children(views.iter().enumerate().map(|(ix, view)| {
+                    EpisodeRow::new(
+                        view.clone(),
+                        ElementId::Name(format!("mock-episode-row-{ix}").into()),
+                    )
+                })),
+        )
 }

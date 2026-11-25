@@ -3,6 +3,7 @@
 //! See ARCHITECTURE §2 and §5.
 
 pub mod carousel;
+pub mod episode_card;
 pub mod fetch_status;
 pub mod hero;
 mod image_cache;
@@ -12,6 +13,9 @@ mod rail;
 
 pub use carousel::{
     CarouselWheel, MediaCarousel, PageDirection, WHEEL_PAGE_THRESHOLD, alt_wheel_delta, page,
+};
+pub use episode_card::{
+    EPISODE_CARD_WIDTH, EPISODE_ROW_WIDTH, EpisodeActions, EpisodeCard, EpisodeCardView, EpisodeRow,
 };
 pub use image_cache::{LruImageCache, POSTER_IMAGE_CAPACITY};
 pub use media_card::{
