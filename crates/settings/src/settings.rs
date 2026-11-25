@@ -170,8 +170,8 @@ impl Default for PlaybackSettings {
             auto_next: true,
             auto_next_seconds: 5,
             skip_op_ed: true,
-            opening_patterns: vec!["op".to_owned(), "opening".to_owned()],
-            ending_patterns: vec!["ed".to_owned(), "ending".to_owned()],
+            opening_patterns: vec!["^OP$".to_owned(), "Opening".to_owned(), "Intro".to_owned()],
+            ending_patterns: vec!["^ED$".to_owned(), "Ending".to_owned(), "Credits".to_owned()],
         }
     }
 }

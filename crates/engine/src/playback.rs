@@ -23,7 +23,7 @@ use std::{
 use db::Db;
 use domain::{
     AdvancedScores, AppEvent, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId,
-    PlaybackControl, PlaybackDetails, PlaybackState, Score, StreamSource,
+    PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState, Score, StreamSource,
 };
 use flume::Sender;
 use metadata::CatalogCache;
@@ -37,7 +37,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
-use crate::BoxFuture;
+use crate::{BoxFuture, chapters};
 
 /// How long a saved position is worth resuming.
 const MIN_RESUME: f64 = 30.0;
@@ -212,6 +212,9 @@ pub trait PlaybackSession: Debug + Send + Sync {
         state: PlaybackControl,
     ) -> SessionFuture<'_, Result<(), PlayerError>>;
 
+    /// Shows a short message in the player's on-screen display.
+    fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>>;
+
     /// Asks the player to quit.
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>>;
 }
@@ -236,6 +239,10 @@ impl PlaybackSession for MpvSession {
                 MpvSession::resume(self).await
             }
         })
+    }
+
+    fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>> {
+        Box::pin(async move { MpvSession::show_text(self, text).await })
     }
 
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
@@ -426,6 +433,8 @@ enum Control {
     SetPlaybackState(PlaybackControl),
     /// Seek to an absolute position in seconds.
     Seek(f64),
+    /// Skip the chapter currently playing.
+    SkipChapter,
 }
 
 /// The one slot a play request reserves before it awaits the launcher, so a
@@ -478,6 +487,14 @@ impl SessionState {
     }
 }
 
+/// The chapters of the running session and what was already skipped.
+#[derive(Debug, Default)]
+struct ChapterState {
+    chapters: Vec<PlaybackChapter>,
+    current: Option<usize>,
+    skipped: Option<usize>,
+}
+
 /// Drives the one active session and publishes its state to the UI.
 #[derive(Debug)]
 pub struct PlaybackManager {
@@ -493,6 +510,8 @@ pub struct PlaybackManager {
     threshold: u8,
     resume: bool,
     auto_sync: bool,
+    skip_op_ed: bool,
+    patterns: Arc<chapters::SkipPatterns>,
     save_interval: Duration,
     next_id: AtomicU64,
     /// Serializes play and stop so a stop during a launch is never lost.
@@ -548,6 +567,11 @@ impl PlaybackManager {
                 .clamp(THRESHOLD_MIN, THRESHOLD_MAX),
             resume: settings.resume,
             auto_sync: settings.auto_sync_progress,
+            skip_op_ed: settings.skip_op_ed,
+            patterns: Arc::new(chapters::SkipPatterns::new(
+                &settings.opening_patterns,
+                &settings.ending_patterns,
+            )),
             save_interval: Duration::from_secs(5),
             next_id: AtomicU64::new(1),
             commands: Arc::new(tokio::sync::Mutex::new(())),
@@ -579,6 +603,16 @@ impl PlaybackManager {
             .continuity()
             .get(request.media, request.episode)
             .await?;
+        // Reading EBML metadata is blocking I/O, so it runs off the runtime's
+        // worker threads. A failure means no container chapters; the player's
+        // chapter-list still supplies them.
+        let mkv_path = path.clone();
+        let patterns = Arc::clone(&self.patterns);
+        let container_chapters = tokio::task::spawn_blocking(move || {
+            chapters::read_mkv(mkv_path.as_path(), &patterns).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default();
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (settle, settled) = oneshot::channel();
         *lock(&self.current) = Some(SessionControl::Launching { id, settled });
@@ -612,7 +646,16 @@ impl PlaybackManager {
         let manager = Arc::clone(self);
         tokio::spawn(async move {
             manager
-                .drive(id, session, request, resume, stopped, controls, done)
+                .drive(
+                    id,
+                    session,
+                    request,
+                    resume,
+                    container_chapters,
+                    stopped,
+                    controls,
+                    done,
+                )
                 .await;
         });
         Ok(())
@@ -660,6 +703,11 @@ impl PlaybackManager {
         self.send_control(Control::Seek(seconds))
     }
 
+    /// Skips the chapter currently playing, when the player is in one.
+    pub fn skip_chapter(&self) -> bool {
+        self.send_control(Control::SkipChapter)
+    }
+
     /// Retries a failed progress sync for `episode`.
     pub async fn retry_sync(&self, media: MediaId, episode: u32) {
         self.sync_progress(media, episode).await;
@@ -675,11 +723,17 @@ impl PlaybackManager {
         mut session: Box<dyn PlaybackSession>,
         request: PlayRequest,
         resume: Option<db::Continuity>,
+        container_chapters: Vec<PlaybackChapter>,
         mut stopped: oneshot::Receiver<()>,
         mut controls: mpsc::UnboundedReceiver<Control>,
         done: oneshot::Sender<()>,
     ) {
         let mut state = SessionState::new(resume);
+        let mut chapter_state = ChapterState {
+            chapters: chapters::with_ends(container_chapters, None),
+            ..ChapterState::default()
+        };
+        self.publish_chapters(&chapter_state);
         let mut tick = tokio::time::interval(self.save_interval);
         tick.tick().await; // The first tick is immediate; nothing to save yet.
         let mut unexpected = false;
@@ -696,10 +750,9 @@ impl PlaybackManager {
                     let _ = result;
                     Step::Stop
                 }
-                control = controls.recv() => match control {
-                    Some(control) => Step::Control(control),
-                    None => Step::Tick,
-                },
+                // A closed channel disables this branch; without the pattern
+                // it would resolve to `None` forever and spin on every pass.
+                Some(control) = controls.recv() => Step::Control(control),
                 _ = tick.tick() => Step::Tick,
             };
             match step {
@@ -710,15 +763,18 @@ impl PlaybackManager {
                 Step::Stop => break,
                 Step::Control(control) => {
                     let result = match control {
-                        Control::SetPlaybackState(state) => {
-                            session.set_playback_state(state).await
-                        }
+                        Control::SetPlaybackState(mode) => session.set_playback_state(mode).await,
                         Control::Seek(seconds) => {
                             if seconds.is_finite() && seconds >= 0.0 {
                                 state.position = seconds;
                                 self.publish(&state, &request);
                             }
                             session.seek(seconds).await
+                        }
+                        Control::SkipChapter => {
+                            self.skip_current(session.as_ref(), &mut state, &mut chapter_state)
+                                .await;
+                            Ok(())
                         }
                     };
                     if let Err(error) = result {
@@ -730,7 +786,13 @@ impl PlaybackManager {
                         unexpected = !state.eof;
                     }
                     if !self
-                        .handle(session.as_ref(), &mut state, &request, event)
+                        .handle(
+                            session.as_ref(),
+                            &mut state,
+                            &mut chapter_state,
+                            &request,
+                            event,
+                        )
                         .await
                     {
                         break;
@@ -763,6 +825,7 @@ impl PlaybackManager {
         &self,
         session: &dyn PlaybackSession,
         state: &mut SessionState,
+        chapter_state: &mut ChapterState,
         request: &PlayRequest,
         event: PlayerEvent,
     ) -> bool {
@@ -784,6 +847,11 @@ impl PlaybackManager {
                 if seconds.is_finite() && seconds >= 0.0 {
                     state.position = seconds;
                     self.publish(state, request);
+                    chapter_state.current = chapter_current(&chapter_state.chapters, seconds);
+                    if self.skip_op_ed {
+                        self.skip_current_if_entered(session, state, chapter_state)
+                            .await;
+                    }
                     if self.is_watched(state) {
                         self.mark_watched(state, request).await;
                     }
@@ -798,9 +866,110 @@ impl PlaybackManager {
                 self.mark_watched(state, request).await;
             }
             PlayerEvent::Exited => return false,
+            PlayerEvent::Chapters { list, .. } => {
+                self.update_chapters(chapter_state, state.position, &list);
+                self.publish_chapters(chapter_state);
+                if self.skip_op_ed {
+                    self.skip_current_if_entered(session, state, chapter_state)
+                        .await;
+                }
+            }
             _ => {}
         }
         true
+    }
+
+    /// Keeps the container's chapters when it had any; otherwise falls back
+    /// to the player's `chapter-list`. The current index is resolved against
+    /// the chosen list, never against the player's list: mpv's index may
+    /// point at a different chapter when the two lists differ.
+    fn update_chapters(
+        &self,
+        chapter_state: &mut ChapterState,
+        position: f64,
+        player_list: &[player::Chapter],
+    ) {
+        let container = std::mem::take(&mut chapter_state.chapters);
+        let from_player = chapters::from_player(player_list, &self.patterns);
+        chapter_state.chapters =
+            chapters::with_ends(chapters::prefer_mkv(container, from_player), None);
+        chapter_state.current = chapter_current(&chapter_state.chapters, position);
+    }
+
+    fn publish_chapters(&self, chapter_state: &ChapterState) {
+        let _ = self.events.send(AppEvent::PlaybackChapters {
+            chapters: chapter_state.chapters.clone(),
+            current: chapter_state.current,
+        });
+    }
+
+    /// Seeks past the current chapter once, with a short player message.
+    async fn skip_current(
+        &self,
+        session: &dyn PlaybackSession,
+        state: &mut SessionState,
+        chapter_state: &mut ChapterState,
+    ) {
+        let Some(index) = chapter_state.current else {
+            return;
+        };
+        let Some(chapter) = chapter_state.chapters.get(index) else {
+            return;
+        };
+        let Some(kind) = chapter.kind else {
+            return;
+        };
+        let to = chapter
+            .end
+            .or_else(|| chapter_state.chapters.get(index + 1).map(|next| next.start))
+            .or(state.duration.map(Duration::from_secs_f64));
+        let Some(to) = to else {
+            return;
+        };
+        // Mark the attempt even when the seek fails: otherwise the 4 Hz
+        // position events would retry it continuously.
+        chapter_state.skipped = Some(index);
+        match session.seek(to.as_secs_f64()).await {
+            Ok(()) => {
+                state.position = to.as_secs_f64();
+                let message = match kind {
+                    domain::ChapterKind::Opening => "Skipped opening",
+                    domain::ChapterKind::Ending => "Skipped ending",
+                    _ => "Skipped chapter",
+                };
+                if let Err(error) = session.show_text(message).await {
+                    debug!(%error, "could not show the chapter skip message");
+                }
+            }
+            Err(error) => debug!(%error, "could not skip the chapter"),
+        }
+    }
+
+    /// Auto-skip only when the position is inside a matching chapter.
+    async fn skip_current_if_entered(
+        &self,
+        session: &dyn PlaybackSession,
+        state: &mut SessionState,
+        chapter_state: &mut ChapterState,
+    ) {
+        let Some(index) = chapter_state.current else {
+            return;
+        };
+        if chapter_state.skipped == Some(index) {
+            return;
+        }
+        let Some(chapter) = chapter_state.chapters.get(index) else {
+            return;
+        };
+        if chapter.kind.is_none() || state.position < chapter.start.as_secs_f64() {
+            return;
+        }
+        if let Some(end) = chapter.end
+            && state.position >= end.as_secs_f64()
+        {
+            return;
+        }
+        self.skip_current(session, state, chapter_state).await;
     }
 
     /// Seeks to the saved position once the duration is known, unless the
@@ -955,6 +1124,17 @@ impl PlaybackManager {
     }
 }
 
+/// The chapter containing `position`, in seconds, in the chosen chapter list.
+fn chapter_current(chapters: &[PlaybackChapter], position: f64) -> Option<usize> {
+    if !position.is_finite() || position < 0.0 {
+        return None;
+    }
+    let at = Duration::from_secs_f64(position);
+    chapters
+        .iter()
+        .rposition(|chapter| chapter.start <= at && chapter.end.is_none_or(|end| at < end))
+}
+
 fn new_entry(media: MediaId, progress: u32, status: ListStatus) -> ListEntry {
     ListEntry {
         media,
@@ -994,7 +1174,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use domain::{ExternalId, ListStatus, MediaKind};
+    use domain::{ChapterKind, ExternalId, ListStatus, MediaKind};
     use futures::{SinkExt, StreamExt, channel::mpsc};
     use settings::PlaybackSettings;
     use tokio::sync::Mutex as AsyncMutex;
@@ -1073,6 +1253,7 @@ mod tests {
         gate: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
         /// Keeps each session's event sender alive until its test ends.
         senders: Arc<Mutex<Vec<mpsc::UnboundedSender<PlayerEvent>>>>,
+        messages: Arc<Mutex<Vec<String>>>,
     }
 
     impl FakeLauncher {
@@ -1083,6 +1264,7 @@ mod tests {
                 rx: AsyncMutex::new(rx),
                 seeks: Arc::clone(&self.seeks),
                 pauses: Arc::clone(&self.pauses),
+                messages: Arc::clone(&self.messages),
                 quits: Arc::clone(&self.quits),
             };
             (Box::new(session), tx)
@@ -1129,6 +1311,7 @@ mod tests {
         rx: AsyncMutex<mpsc::UnboundedReceiver<PlayerEvent>>,
         seeks: Arc<Mutex<Vec<f64>>>,
         pauses: Arc<Mutex<Vec<PlaybackControl>>>,
+        messages: Arc<Mutex<Vec<String>>>,
         quits: Arc<AtomicUsize>,
     }
 
@@ -1156,6 +1339,15 @@ mod tests {
             })
         }
 
+        fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>> {
+            let messages = Arc::clone(&self.messages);
+            let text = text.to_owned();
+            Box::pin(async move {
+                lock(&messages).push(text);
+                Ok(())
+            })
+        }
+
         fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
             let quits = Arc::clone(&self.quits);
             Box::pin(async move {
@@ -1172,6 +1364,8 @@ mod tests {
         sync: Arc<FakeSync>,
         launcher: FakeLauncher,
         events: flume::Receiver<AppEvent>,
+        /// Kept alive so the drive loop's control branch stays open.
+        control_senders: Arc<Mutex<Vec<tokio::sync::mpsc::UnboundedSender<Control>>>>,
     }
 
     impl Fixture {
@@ -1209,6 +1403,7 @@ mod tests {
                 sync,
                 launcher,
                 events: receiver,
+                control_senders: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -1230,15 +1425,31 @@ mod tests {
             oneshot::Sender<()>,
             oneshot::Receiver<()>,
         ) {
+            self.drive_with_chapters(resume, request, Vec::new())
+        }
+
+        fn drive_with_chapters(
+            &self,
+            resume: Option<db::Continuity>,
+            request: &PlayRequest,
+            chapters: Vec<PlaybackChapter>,
+        ) -> (
+            mpsc::UnboundedSender<PlayerEvent>,
+            oneshot::Sender<()>,
+            oneshot::Receiver<()>,
+        ) {
             let (session, events) = self.launcher.session();
             let (stop, stopped) = oneshot::channel();
             let (done, finished) = oneshot::channel();
-            let (_control, controls) = tokio::sync::mpsc::unbounded_channel();
+            let (control, controls) = tokio::sync::mpsc::unbounded_channel::<Control>();
+            lock(&self.control_senders).push(control);
             let manager = Arc::clone(&self.manager);
             let request = request.clone();
             tokio::spawn(async move {
                 manager
-                    .drive(1, session, request, resume, stopped, controls, done)
+                    .drive(
+                        1, session, request, resume, chapters, stopped, controls, done,
+                    )
                     .await;
             });
             (events, stop, finished)
@@ -1678,6 +1889,199 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_closed_control_channel_does_not_spin_and_save() {
+        let fixture =
+            Fixture::with_interval(PlaybackSettings::default(), Duration::from_secs(60)).await;
+        let media = fixture.media(1).await;
+        let request = request(media, 1);
+        let (session, mut events) = fixture.launcher.session();
+        let (stop, stopped) = oneshot::channel();
+        let (done, finished) = oneshot::channel();
+        let (control, controls) = tokio::sync::mpsc::unbounded_channel::<Control>();
+        drop(control);
+        let manager = Arc::clone(&fixture.manager);
+        tokio::spawn(async move {
+            manager
+                .drive(
+                    1,
+                    session,
+                    request,
+                    None,
+                    Vec::new(),
+                    stopped,
+                    controls,
+                    done,
+                )
+                .await;
+        });
+
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            fixture.db.continuity().get(media, 1).await.unwrap(),
+            None,
+            "a closed command channel must not spin on periodic saves"
+        );
+
+        events.send(PlayerEvent::Exited).await.unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(1), finished).await;
+        drop(stop);
+    }
+
+    fn opening_chapter() -> PlaybackChapter {
+        PlaybackChapter::new(
+            Some("Opening".to_owned()),
+            Duration::from_secs(10),
+            Some(Duration::from_secs(90)),
+            Some(ChapterKind::Opening),
+        )
+    }
+
+    #[tokio::test]
+    async fn entering_an_opening_chapter_skips_it_once_with_an_osd_message() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &request(media, 1), vec![opening_chapter()]);
+
+        events
+            .send(PlayerEvent::Chapters {
+                current: Some(0),
+                list: vec![player::Chapter {
+                    title: Some("Opening".to_owned()),
+                    start: 10.0,
+                }],
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 12.0 })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 13.0 })
+            .await
+            .unwrap();
+        finish(events, stop, done).await;
+
+        assert_eq!(fixture.launcher.seeks(), [90.0], "skipped only once");
+        assert_eq!(
+            *lock(&fixture.launcher.messages),
+            ["Skipped opening".to_owned()],
+            "the player shows the OSD message"
+        );
+        assert!(
+            fixture
+                .events
+                .try_iter()
+                .any(|event| matches!(event, AppEvent::PlaybackChapters { .. })),
+            "the HUD receives the chapter marks"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_current_chapter_comes_from_the_chosen_list_not_mpv() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let ending = PlaybackChapter::new(
+            Some("Ending".to_owned()),
+            Duration::from_secs(200),
+            Some(Duration::from_secs(240)),
+            Some(ChapterKind::Ending),
+        );
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &request(media, 1), vec![opening_chapter(), ending]);
+
+        events
+            .send(PlayerEvent::Position { seconds: 60.0 })
+            .await
+            .unwrap();
+        // mpv's index and timings are for a different list: index 1 points at
+        // its "Ending", while 60 s is inside the container's "Opening".
+        events
+            .send(PlayerEvent::Chapters {
+                current: Some(1),
+                list: vec![
+                    player::Chapter {
+                        title: Some("Opening".to_owned()),
+                        start: 50.0,
+                    },
+                    player::Chapter {
+                        title: Some("Ending".to_owned()),
+                        start: 150.0,
+                    },
+                    player::Chapter {
+                        title: Some("Credits".to_owned()),
+                        start: 300.0,
+                    },
+                ],
+            })
+            .await
+            .unwrap();
+        finish(events, stop, done).await;
+
+        assert_eq!(
+            fixture.launcher.seeks(),
+            [90.0],
+            "the container chapter won"
+        );
+        assert_eq!(
+            *lock(&fixture.launcher.messages),
+            ["Skipped opening".to_owned()]
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_skip_can_be_turned_off() {
+        let settings = PlaybackSettings {
+            skip_op_ed: false,
+            ..PlaybackSettings::default()
+        };
+        let fixture = Fixture::new(settings).await;
+        let media = fixture.media(1).await;
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &request(media, 1), vec![opening_chapter()]);
+        events
+            .send(PlayerEvent::Chapters {
+                current: Some(0),
+                list: Vec::new(),
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 12.0 })
+            .await
+            .unwrap();
+        finish(events, stop, done).await;
+
+        assert!(fixture.launcher.seeks().is_empty(), "auto-skip is off");
+    }
+
+    #[tokio::test]
+    async fn a_skip_command_seeks_past_the_current_chapter() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let (session, _) = fixture.launcher.session();
+        let mut state = SessionState::new(None);
+        let mut chapter_state = ChapterState {
+            chapters: vec![opening_chapter()],
+            current: Some(0),
+            ..ChapterState::default()
+        };
+
+        fixture
+            .manager
+            .skip_current(session.as_ref(), &mut state, &mut chapter_state)
+            .await;
+
+        assert_eq!(fixture.launcher.seeks(), [90.0]);
+        assert_eq!(
+            *lock(&fixture.launcher.messages),
+            ["Skipped opening".to_owned()]
+        );
+    }
+
+    #[tokio::test]
     async fn hud_commands_reach_the_running_session() {
         let fixture = Fixture::new(PlaybackSettings::default()).await;
         let media = fixture.media(1).await;
@@ -1687,9 +2091,7 @@ mod tests {
             .expect("the launcher was called");
 
         assert!(
-            fixture
-                .manager
-                .set_playback_state(PlaybackControl::Pause),
+            fixture.manager.set_playback_state(PlaybackControl::Pause),
             "a session is running"
         );
         assert!(fixture.manager.seek(42.0));
@@ -1770,6 +2172,10 @@ mod tests {
                     self.inner.resume().await
                 }
             })
+        }
+
+        fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>> {
+            Box::pin(async move { self.inner.show_text(text).await })
         }
 
         fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {

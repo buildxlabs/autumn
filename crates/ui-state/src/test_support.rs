@@ -211,6 +211,8 @@ pub enum PlaybackCall {
     Pause(PlaybackControl),
     /// An absolute seek, in seconds.
     Seek(f64),
+    /// A request to skip the current chapter.
+    SkipChapter,
 }
 
 /// An engine fake that records playback commands; other calls stay pending.
@@ -294,10 +296,7 @@ impl EngineServices for PlaybackServices {
         Box::pin(async { Ok(()) })
     }
 
-    fn set_playback_state(
-        &self,
-        state: PlaybackControl,
-    ) -> BoxFuture<Result<(), EngineError>> {
+    fn set_playback_state(&self, state: PlaybackControl) -> BoxFuture<Result<(), EngineError>> {
         if let Ok(mut calls) = self.calls.lock() {
             calls.push(PlaybackCall::Pause(state));
         }
@@ -307,6 +306,13 @@ impl EngineServices for PlaybackServices {
     fn seek(&self, seconds: f64) -> BoxFuture<Result<(), EngineError>> {
         if let Ok(mut calls) = self.calls.lock() {
             calls.push(PlaybackCall::Seek(seconds));
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn skip_chapter(&self) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::SkipChapter);
         }
         Box::pin(async { Ok(()) })
     }

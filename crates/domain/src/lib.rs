@@ -16,7 +16,9 @@ pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
-pub use playback::{PlaybackControl, PlaybackDetails, PlaybackState, StreamSource};
+pub use playback::{
+    ChapterKind, PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState, StreamSource,
+};
 pub use score::{Score, ScoreError};
 pub use transfer::{
     TransferChoice, TransferDirection, TransferItem, TransferPreview, TransferProgress,
@@ -62,6 +64,13 @@ pub enum AppEvent {
     TransferProgress(TransferProgress),
     /// The one active session's position changed.
     PlaybackState(PlaybackState),
+    /// The chapters of the playing file and the current chapter, if any.
+    PlaybackChapters {
+        /// The chapter marks in playback order.
+        chapters: Vec<PlaybackChapter>,
+        /// The chapter the player is in, when one is selected.
+        current: Option<usize>,
+    },
     /// The session ended, so the HUD has nothing to show.
     PlaybackStopped {
         /// Whether the player quit on its own rather than through a command.

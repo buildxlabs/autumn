@@ -39,7 +39,9 @@ actions!(
         /// Seeks ten seconds forward.
         SeekForward,
         /// Stops the active session.
-        StopPlayback
+        StopPlayback,
+        /// Skips the opening or ending chapter currently playing.
+        SkipChapter
     ]
 );
 
@@ -87,6 +89,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("space", PlayPause, Some(PLAYER)),
         KeyBinding::new("left", SeekBack, Some(PLAYER)),
         KeyBinding::new("right", SeekForward, Some(PLAYER)),
+        KeyBinding::new("enter", SkipChapter, Some(PLAYER)),
+        KeyBinding::new("escape", StopPlayback, Some(PLAYER)),
     ]);
     #[cfg(debug_assertions)]
     cx.bind_keys([

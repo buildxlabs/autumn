@@ -37,6 +37,17 @@ const POSITION: &str = "playback-hud-position";
 const SEEK_TRACK: &str = "playback-hud-seek-track";
 const SEEK_FILL: &str = "playback-hud-seek-fill";
 const PLAY_PAUSE: &str = "playback-hud-play-pause";
+const SKIP: &str = "playback-hud-skip";
+
+/// A chapter the HUD can offer to skip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SkipKind {
+    /// The opening is playing.
+    Opening,
+    /// The ending is playing.
+    Ending,
+}
 
 /// A chapter mark on the seek bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +77,8 @@ pub struct PlaybackHudView {
     pub paused: bool,
     /// Chapter marks to draw as ticks on the seek bar.
     pub chapters: Vec<ChapterMark>,
+    /// Whether to offer Skip Opening or Skip Ending.
+    pub skip: Option<SkipKind>,
 }
 
 /// One button callback: the screen updates its store from it.
@@ -81,6 +94,7 @@ pub struct PlaybackHudActions {
     skip_back: Option<HudCallback>,
     skip_forward: Option<HudCallback>,
     stop: Option<HudCallback>,
+    skip: Option<HudCallback>,
 }
 
 impl std::fmt::Debug for PlaybackHudActions {
@@ -91,6 +105,7 @@ impl std::fmt::Debug for PlaybackHudActions {
             .field("skip_back", &self.skip_back.is_some())
             .field("skip_forward", &self.skip_forward.is_some())
             .field("stop", &self.stop.is_some())
+            .field("skip", &self.skip.is_some())
             .finish()
     }
 }
@@ -134,6 +149,13 @@ impl PlaybackHudActions {
     #[must_use]
     pub fn on_stop(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.stop = Some(Rc::new(action));
+        self
+    }
+
+    /// Called when the Skip Opening / Skip Ending button is pressed.
+    #[must_use]
+    pub fn on_skip(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.skip = Some(Rc::new(action));
         self
     }
 }
@@ -311,6 +333,13 @@ impl RenderOnce for PlaybackHud {
                     .text_color(colors.muted_foreground)
                     .child(Label::new(self.view.player.clone())),
             )
+            .children(self.view.skip.map(|kind| {
+                let label = match kind {
+                    SkipKind::Opening => "Skip Opening",
+                    SkipKind::Ending => "Skip Ending",
+                };
+                text_button(SKIP, label, self.actions.skip.as_ref())
+            }))
             .child(skip_button(
                 "playback-hud-back",
                 IconName::RotateCcw,
@@ -370,11 +399,27 @@ fn action_button(
     }
 }
 
-fn skip_button(
+fn text_button(
     id: &'static str,
-    icon: IconName,
+    label: &'static str,
     action: Option<&HudCallback>,
 ) -> impl IntoElement {
+    let button = Button::new(id)
+        .small()
+        .child(Label::new(label))
+        .disabled(action.is_none());
+    match action {
+        Some(action) => {
+            let action = Rc::clone(action);
+            button
+                .on_click(move |_: &ClickEvent, window, cx| action(window, cx))
+                .into_any_element()
+        }
+        None => button.into_any_element(),
+    }
+}
+
+fn skip_button(id: &'static str, icon: IconName, action: Option<&HudCallback>) -> impl IntoElement {
     action_button(id, icon, action)
 }
 
@@ -454,7 +499,9 @@ mod tests {
         test::{ClickOptions, TestWindowExt},
     };
 
-    use super::{ChapterMark, PlaybackHud, PlaybackHudActions, PlaybackHudView, SEEK_TRACK};
+    use super::{
+        ChapterMark, PlaybackHud, PlaybackHudActions, PlaybackHudView, SEEK_TRACK, SKIP, SkipKind,
+    };
 
     struct HudTest {
         view: PlaybackHudView,
@@ -523,6 +570,28 @@ mod tests {
             cx.debug_bounds(SEEK_TRACK).map(|b| b.size.height),
             Some(px(4.))
         );
+    }
+
+    #[gpui_kit::test]
+    fn the_skip_button_shows_the_chapter_kind_and_fires(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let skips = Rc::new(RefCell::new(0));
+        let recorded = Rc::clone(&skips);
+        let actions = PlaybackHudActions::new().on_skip(move |_, _| {
+            *recorded.borrow_mut() += 1;
+        });
+        let mut view = view();
+        view.skip = Some(SkipKind::Opening);
+        let (_, cx) = cx.add_window_view(move |_, _| HudTest { view, actions });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(
+            cx.update(|window, _| window.try_find(SKIP).is_some()),
+            "the skip button is drawn"
+        );
+        assert!(has_text(cx, "Skip Opening"), "the button names the chapter");
+
+        cx.update(|window, app| window.click(SKIP, app));
+        assert_eq!(*skips.borrow(), 1, "the skip callback fired");
     }
 
     #[gpui_kit::test]
