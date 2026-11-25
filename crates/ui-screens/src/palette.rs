@@ -118,6 +118,8 @@ enum Entry {
     Search(String),
     /// The manual library scan command.
     ScanLibrary,
+    /// Opens the Library Explorer sheet.
+    OpenExplorer,
 }
 
 impl Entry {
@@ -136,6 +138,9 @@ impl Entry {
             Self::ScanLibrary => CommandItem::new()
                 .label("/library scan")
                 .icon(IconName::RefreshCw),
+            Self::OpenExplorer => CommandItem::new()
+                .label("/library explorer")
+                .icon(IconName::FolderSync),
         }
     }
 }
@@ -160,7 +165,7 @@ fn entries_for(
             .map(Entry::Search)
             .chain(ROUTES.into_iter().map(Entry::Route))
             .collect(),
-        Mode::Library => vec![Entry::ScanLibrary],
+        Mode::Library => vec![Entry::ScanLibrary, Entry::OpenExplorer],
         Mode::Search | Mode::Anime => {
             let kinds = mode.kinds();
             let local: Vec<MediaSummary> = local
@@ -187,6 +192,8 @@ pub(crate) enum PaletteEvent {
     Navigate(Route),
     /// The user picked `/library scan`; the host starts one scan.
     ScanLibrary,
+    /// The user picked `/library explorer`; the host opens the sheet.
+    OpenExplorer,
 }
 
 /// The palette's view, kept alive between openings by the shell.
@@ -350,6 +357,7 @@ impl CommandPalette {
                 id: media.anilist_id,
             })),
             Entry::ScanLibrary => cx.emit(PaletteEvent::ScanLibrary),
+            Entry::OpenExplorer => cx.emit(PaletteEvent::OpenExplorer),
         }
     }
 

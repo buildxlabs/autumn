@@ -24,6 +24,7 @@ use ui_components::{
 };
 use ui_state::{
     Route,
+    actions::OpenLibraryExplorer,
     entry_store::{EntryDraft, EntryState, EntryStore},
 };
 
@@ -259,6 +260,15 @@ fn render_ready(
         .gap_6()
         .p_6()
         .child(hero)
+        .child(
+            div().flex().justify_end().child(
+                Button::new("entry-library-explorer")
+                    .label("Browse library files")
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
+                    }),
+            ),
+        )
         .child(info)
         .children((!detail.characters.is_empty()).then(|| characters_section(&detail.characters)))
         .child(div().flex().gap_6().child(card))
@@ -811,6 +821,11 @@ mod tests {
                             }),
                             cx.new(|_| {
                                 ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::LibraryExplorerStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),

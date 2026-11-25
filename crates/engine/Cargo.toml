@@ -25,6 +25,7 @@ thiserror.workspace = true
 tokio.workspace     = true
 tracing.workspace   = true
 tracker.workspace   = true
+trash.workspace     = true
 
 [dev-dependencies]
 tempfile.workspace           = true

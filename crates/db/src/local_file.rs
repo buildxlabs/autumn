@@ -96,6 +96,42 @@ impl<'a> LocalFileRepo<'a> {
         rows.into_iter().map(LocalFileRow::into_file).collect()
     }
 
+    /// Changes the stored path of one local file after an on-disk rename.
+    /// Returns the rows changed, so a missing row can be detected.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the update fails.
+    pub async fn rename(&self, from: &Path, to: &Path) -> Result<u64, DbError> {
+        sqlx::query("UPDATE local_file SET path = ? WHERE path = ?")
+            .bind(to.to_string_lossy())
+            .bind(from.to_string_lossy())
+            .execute(self.pool)
+            .await
+            .map(|result| result.rows_affected())
+            .map_err(Into::into)
+    }
+
+    /// Removes the rows for files that have left the library.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the delete fails.
+    pub async fn delete(&self, paths: &[PathBuf]) -> Result<u64, DbError> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut total = 0;
+        for path in paths {
+            total += sqlx::query("DELETE FROM local_file WHERE path = ?")
+                .bind(path.to_string_lossy())
+                .execute(&mut *tx)
+                .await
+                .map(|result| result.rows_affected())
+                .map_err(DbError::from)?;
+        }
+        tx.commit().await?;
+        Ok(total)
+    }
+
     /// Adds new files, updates existing rows in place and deletes rows for
     /// files no longer present. Flags are preserved for rows that exist.
     ///

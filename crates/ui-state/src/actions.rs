@@ -27,7 +27,9 @@ actions!(
         /// Opens the command palette in `/search` mode.
         OpenSearch,
         /// Starts one manual library scan.
-        ScanLibrary
+        ScanLibrary,
+        /// Opens the Library Explorer sheet.
+        OpenLibraryExplorer
     ]
 );
 
