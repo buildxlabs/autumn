@@ -11,10 +11,19 @@ use std::{
     },
 };
 
-use db::{Continuity, LocalFile, ScanSummary};
+use db::{Continuity, LocalFile, ResumePoint, ScanSummary};
 use domain::{ExternalId, ListEntry, MediaId, MediaKind, PlaybackControl};
 use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry, PlayRequest};
-use metadata::{HomeLoad, Load, MediaDetail};
+use metadata::{AiringEpisode, Cached, HomeLoad, Load, MediaDetail};
+
+/// The canned library snapshot a Home fake serves: files, media, resume
+/// points and the airing schedule.
+type LibrarySnapshot = (
+    Vec<LocalFile>,
+    Vec<LibraryMediaInfo>,
+    Vec<ResumePoint>,
+    Vec<AiringEpisode>,
+);
 
 /// An engine service whose calls never resolve, for tests that only need a
 /// store to construct without loading data.
@@ -43,6 +52,8 @@ pub struct CannedServices {
     home_fails: bool,
     /// The Home collection, when a test serves one.
     collection: Option<Vec<ListedEntry>>,
+    /// The local library the Home library widgets serve.
+    library: Option<LibrarySnapshot>,
 }
 
 impl CannedServices {
@@ -54,6 +65,7 @@ impl CannedServices {
             saved: Arc::new(Mutex::new(Vec::new())),
             home_fails: false,
             collection: None,
+            library: None,
         }
     }
 
@@ -68,6 +80,19 @@ impl CannedServices {
     #[must_use]
     pub fn collection(mut self, entries: Vec<ListedEntry>) -> Self {
         self.collection = Some(entries);
+        self
+    }
+
+    /// Serves the Home library widgets from one canned snapshot.
+    #[must_use]
+    pub fn library(
+        mut self,
+        files: Vec<LocalFile>,
+        media: Vec<LibraryMediaInfo>,
+        resume: Vec<ResumePoint>,
+        schedule: Vec<AiringEpisode>,
+    ) -> Self {
+        self.library = Some((files, media, resume, schedule));
         self
     }
 
@@ -156,6 +181,47 @@ impl EngineServices for CannedServices {
         } else {
             Box::pin(std::future::pending())
         }
+    }
+
+    fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let files = self
+            .library
+            .as_ref()
+            .map_or_else(Vec::new, |(files, _, _, _)| files.clone());
+        Box::pin(async move { Ok(files) })
+    }
+
+    fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
+        let media = self
+            .library
+            .as_ref()
+            .map_or_else(Vec::new, |(_, media, _, _)| media.clone());
+        Box::pin(async move { Ok(media) })
+    }
+
+    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+        let resume = self
+            .library
+            .as_ref()
+            .map_or_else(Vec::new, |(_, _, resume, _)| resume.clone());
+        Box::pin(async move { Ok(resume) })
+    }
+
+    fn airing_schedule(&self) -> BoxFuture<Result<Load<Vec<AiringEpisode>>, EngineError>> {
+        let schedule = self
+            .library
+            .as_ref()
+            .map_or_else(Vec::new, |(_, _, _, schedule)| schedule.clone());
+        Box::pin(async move {
+            Ok(Load {
+                cached: Cached {
+                    value: schedule,
+                    updated_at: std::time::SystemTime::UNIX_EPOCH,
+                    offline: false,
+                },
+                refresh: None,
+            })
+        })
     }
 }
 

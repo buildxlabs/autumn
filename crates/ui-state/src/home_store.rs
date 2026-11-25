@@ -1,18 +1,26 @@
-//! The Home screen's fixed widget set: the Home store (#61).
+//! The Home screen's fixed widget set: the Home store (#61, #136).
 //!
 //! The store holds every section's state, and each section resolves on its
 //! own, so one failing section doesn't stop the others. The platform
 //! sections come from one collection read and one missed-sequels read; the
 //! catalog sections come from one stale-first Home load: the cached value
 //! shows at once, and a refresh that can't reach AniList marks the sections
-//! `Offline` over the cached data.
+//! `Offline` over the cached data. The library sections read the local file
+//! table, saved resume positions and the airing schedule; they make no other
+//! AniList request (ARCHITECTURE §6).
 
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+    time::SystemTime,
+};
 
-use domain::{ListEntry, ListStatus, MediaKind};
-use engine::EngineServices;
+use db::{LocalFile, ResumePoint};
+use domain::{ListEntry, ListStatus, MediaId, MediaKind};
+use engine::{EngineServices, LibraryMediaInfo};
 use gpui_kit::{Context, Task, WeakEntity};
-use metadata::{AiringEpisode, Cached, HomeLoad, MediaSummary};
+use metadata::{AiringEpisode, Cached, HomeLoad, Load, MediaSummary};
 
 use crate::{bridge, entry_store::call};
 
@@ -25,10 +33,20 @@ use crate::{bridge, entry_store::call};
 pub enum HomeSection {
     /// The continue-watching header: the shows the user is watching.
     ContinueWatching,
+    /// The library's next episodes, with a resume position first.
+    AnimeContinueWatching,
     /// The discover header: the catalog's trending anime.
     DiscoverHeader,
     /// The user's list.
     MyLists,
+    /// The user's media with local files, grouped by list status.
+    AnimeLibrary,
+    /// Every matched media on disk.
+    LocalAnimeLibrary,
+    /// Counts for the local library.
+    LocalAnimeLibraryStats,
+    /// Airing episodes of the media in the local library.
+    LibraryUpcomingEpisodes,
     /// Sequels of completed shows that are not on the list yet.
     MissedSequels,
     /// The aired-recently carousel.
@@ -41,10 +59,15 @@ pub enum HomeSection {
 
 impl HomeSection {
     /// Every section, in the order they render.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 12] = [
         Self::ContinueWatching,
+        Self::AnimeContinueWatching,
         Self::DiscoverHeader,
         Self::MyLists,
+        Self::AnimeLibrary,
+        Self::LocalAnimeLibrary,
+        Self::LocalAnimeLibraryStats,
+        Self::LibraryUpcomingEpisodes,
         Self::MissedSequels,
         Self::AiredRecently,
         Self::AnimeCarousel,
@@ -55,12 +78,17 @@ impl HomeSection {
     fn index(self) -> usize {
         match self {
             Self::ContinueWatching => 0,
-            Self::DiscoverHeader => 1,
-            Self::MyLists => 2,
-            Self::MissedSequels => 3,
-            Self::AiredRecently => 4,
-            Self::AnimeCarousel => 5,
-            Self::CenteredTitle => 6,
+            Self::AnimeContinueWatching => 1,
+            Self::DiscoverHeader => 2,
+            Self::MyLists => 3,
+            Self::AnimeLibrary => 4,
+            Self::LocalAnimeLibrary => 5,
+            Self::LocalAnimeLibraryStats => 6,
+            Self::LibraryUpcomingEpisodes => 7,
+            Self::MissedSequels => 8,
+            Self::AiredRecently => 9,
+            Self::AnimeCarousel => 10,
+            Self::CenteredTitle => 11,
         }
     }
 
@@ -73,6 +101,16 @@ impl HomeSection {
         Self::AiredRecently,
         Self::AnimeCarousel,
     ];
+
+    /// The sections filled from the local library (#136). They hide together
+    /// when no files have been scanned.
+    const LIBRARY: [Self; 5] = [
+        Self::AnimeContinueWatching,
+        Self::AnimeLibrary,
+        Self::LocalAnimeLibrary,
+        Self::LocalAnimeLibraryStats,
+        Self::LibraryUpcomingEpisodes,
+    ];
 }
 
 /// The state of one Home widget.
@@ -84,6 +122,8 @@ impl HomeSection {
 pub enum SectionState {
     /// The section's data is loading.
     Loading,
+    /// A library widget with no local files yet: the renderer skips it.
+    Hidden,
     /// The section's data.
     Ready(SectionData),
     /// The request failed; the screen shows the section's error card.
@@ -103,6 +143,41 @@ pub struct HomeEntry {
     pub media: Option<MediaSummary>,
 }
 
+/// The next episode of one media with a local file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContinueEpisode {
+    /// The list entry and its cached card text.
+    pub entry: HomeEntry,
+    /// The episode to play.
+    pub episode: u32,
+    /// The local file that plays it.
+    pub path: PathBuf,
+    /// Saved position as a whole percentage, when the episode was resumed.
+    pub progress: Option<u8>,
+}
+
+/// The media with local files in one list status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryGroup {
+    /// The status the group collects.
+    pub status: ListStatus,
+    /// Its entries, most recently updated first.
+    pub entries: Vec<HomeEntry>,
+}
+
+/// The counts shown in the library's stats strip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryStats {
+    /// Local files on disk.
+    pub files: usize,
+    /// Bytes those files occupy.
+    pub bytes: u64,
+    /// Distinct matched media.
+    pub media: usize,
+    /// Files with no media match.
+    pub unmatched: usize,
+}
+
 /// One Home widget's data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
@@ -112,10 +187,20 @@ pub struct HomeEntry {
 pub enum SectionData {
     /// The continue-watching header: Watching entries, most recent first.
     ContinueWatching(Vec<HomeEntry>),
+    /// The library's next episodes, resumed ones first.
+    AnimeContinueWatching(Vec<ContinueEpisode>),
     /// The discover header: trending anime.
     DiscoverHeader(Vec<MediaSummary>),
     /// The user's list, most recently updated first.
     MyLists(Vec<HomeEntry>),
+    /// The user's local media, grouped by list status.
+    AnimeLibrary(Vec<LibraryGroup>),
+    /// Every matched media on disk.
+    LocalAnimeLibrary(Vec<LibraryMediaInfo>),
+    /// Counts for the local library.
+    LocalAnimeLibraryStats(LibraryStats),
+    /// Airing episodes of the media in the local library.
+    LibraryUpcomingEpisodes(Vec<AiringEpisode>),
     /// The missed sequels.
     MissedSequels(Vec<MediaSummary>),
     /// The aired-recently carousel.
@@ -138,6 +223,11 @@ pub struct HomeStore {
     platform_task: Option<Task<()>>,
     /// The catalog sections' load and refresh; replacing it cancels both.
     catalog_task: Option<Task<()>>,
+    /// The library sections' load; replacing it cancels the older one.
+    library_task: Option<Task<()>>,
+    /// The collection behind the platform and library sections, kept so a
+    /// `LibraryChanged` event can refresh them without another read.
+    collection: Vec<HomeEntry>,
 }
 
 impl std::fmt::Debug for HomeStore {
@@ -161,6 +251,8 @@ impl HomeStore {
             states,
             platform_task: None,
             catalog_task: None,
+            library_task: None,
+            collection: Vec::new(),
         }
     }
 
@@ -201,8 +293,21 @@ impl HomeStore {
         } else if HomeSection::CATALOG.contains(&section) {
             self.set_loading(&HomeSection::CATALOG);
             self.load_catalog(cx);
+        } else if HomeSection::LIBRARY.contains(&section) {
+            self.set_loading(&HomeSection::LIBRARY);
+            self.load_library(cx);
         }
         cx.notify();
+    }
+
+    /// Applies an engine event. A library change refreshes the library
+    /// widgets; the scan's live progress stays with [`crate::LibraryStore`].
+    pub fn apply(&mut self, event: &domain::AppEvent, cx: &mut Context<'_, Self>) {
+        if matches!(event, domain::AppEvent::LibraryChanged) {
+            self.library_task = None;
+            self.load_library(cx);
+            cx.notify();
+        }
     }
 
     fn set_loading(&mut self, sections: &[HomeSection]) {
@@ -224,7 +329,7 @@ impl HomeStore {
         let services = Arc::clone(&self.services);
         self.platform_task = Some(cx.spawn(async move |store, cx| {
             let collection = call(cx, services.collection(MediaKind::Anime)).await;
-            let (watching, lists) = match collection {
+            let (watching, lists, entries) = match collection {
                 Ok(listed) => {
                     let entries: Vec<HomeEntry> = listed
                         .into_iter()
@@ -237,17 +342,26 @@ impl HomeStore {
                         .collect();
                     (
                         SectionState::Ready(SectionData::ContinueWatching(watching)),
-                        SectionState::Ready(SectionData::MyLists(entries)),
+                        SectionState::Ready(SectionData::MyLists(entries.clone())),
+                        entries,
                     )
                 }
                 Err(message) => (
                     SectionState::Failed(message.clone()),
                     SectionState::Failed(message),
+                    Vec::new(),
                 ),
             };
             update(&store, cx, |store| {
+                store.collection = entries;
                 store.set(HomeSection::ContinueWatching, watching);
                 store.set(HomeSection::MyLists, lists);
+            });
+            // One collection read fills both the platform and the library
+            // sections; the library's own calls carry their own failures.
+            let _ = store.update(cx, |store, cx| {
+                store.load_library(cx);
+                cx.notify();
             });
             let missed = match call(cx, services.missed_sequels(MediaKind::Anime)).await {
                 Ok(sequels) => SectionState::Ready(SectionData::MissedSequels(sequels)),
@@ -298,6 +412,127 @@ impl HomeStore {
         }));
     }
 
+    /// Reads the library from the engine. The four calls are independent:
+    /// each widget's state is set from the result it needs, so one failed
+    /// call doesn't blank the others.
+    fn load_library(&mut self, cx: &mut Context<'_, Self>) {
+        let services = Arc::clone(&self.services);
+        let entries = self.collection.clone();
+        self.library_task = Some(cx.spawn(async move |store, cx| {
+            let files = call(cx, services.all_library_files()).await;
+            let info = call(cx, services.library_media_info()).await;
+            let resume = call(cx, services.continuity()).await;
+            let schedule = call(cx, services.airing_schedule()).await;
+            update(&store, cx, |store| {
+                store.apply_library(&entries, files, info, resume, schedule);
+            });
+        }));
+    }
+
+    fn apply_library(
+        &mut self,
+        entries: &[HomeEntry],
+        files: Result<Vec<LocalFile>, String>,
+        info: Result<Vec<LibraryMediaInfo>, String>,
+        resume: Result<Vec<ResumePoint>, String>,
+        schedule: Result<Load<Vec<AiringEpisode>>, String>,
+    ) {
+        // Nothing scanned: the five library widgets are not part of Home yet.
+        if files.as_ref().is_ok_and(Vec::is_empty) {
+            for section in HomeSection::LIBRARY {
+                self.set(section, SectionState::Hidden);
+            }
+            return;
+        }
+        let files_error = files.as_ref().err().cloned();
+        let info_error = info.as_ref().err().cloned();
+        let resume_error = resume.as_ref().err().cloned();
+        let schedule_error = schedule.as_ref().err().cloned();
+        let files = files.ok();
+        let info = info.ok();
+        let resume = resume.ok();
+        let schedule = schedule.ok();
+
+        if let Some(message) = &files_error {
+            self.fail(HomeSection::AnimeContinueWatching, message);
+            self.fail(HomeSection::AnimeLibrary, message);
+            self.fail(HomeSection::LocalAnimeLibraryStats, message);
+        }
+        if let Some(message) = &resume_error {
+            self.fail(HomeSection::AnimeContinueWatching, message);
+        }
+        if let Some(message) = &info_error {
+            self.fail(HomeSection::LocalAnimeLibrary, message);
+            self.fail(HomeSection::LibraryUpcomingEpisodes, message);
+        }
+        if let Some(message) = &schedule_error {
+            self.fail(HomeSection::LibraryUpcomingEpisodes, message);
+        }
+
+        if let Some(files) = files.as_ref() {
+            let matched: std::collections::HashSet<MediaId> =
+                files.iter().filter_map(|file| file.media_id).collect();
+            if self.pending(HomeSection::AnimeContinueWatching) && resume.is_some() {
+                let episodes = next_episodes(entries, files, resume.as_deref().unwrap_or(&[]));
+                self.set(
+                    HomeSection::AnimeContinueWatching,
+                    SectionState::Ready(SectionData::AnimeContinueWatching(episodes)),
+                );
+            }
+            if self.pending(HomeSection::AnimeLibrary) {
+                self.set(
+                    HomeSection::AnimeLibrary,
+                    SectionState::Ready(SectionData::AnimeLibrary(status_groups(
+                        entries, &matched,
+                    ))),
+                );
+            }
+            if self.pending(HomeSection::LocalAnimeLibraryStats) {
+                self.set(
+                    HomeSection::LocalAnimeLibraryStats,
+                    SectionState::Ready(SectionData::LocalAnimeLibraryStats(stats(files))),
+                );
+            }
+        }
+        let Some(info) = info.as_ref() else {
+            return;
+        };
+        if self.pending(HomeSection::LocalAnimeLibrary) {
+            self.set(
+                HomeSection::LocalAnimeLibrary,
+                SectionState::Ready(SectionData::LocalAnimeLibrary(info.clone())),
+            );
+        }
+        if self.pending(HomeSection::LibraryUpcomingEpisodes)
+            && let Some(schedule) = schedule
+        {
+            let cached = schedule.cached;
+            let ids: std::collections::HashSet<u32> =
+                info.iter().filter_map(|media| media.anilist_id).collect();
+            let mut upcoming: Vec<AiringEpisode> = cached
+                .value
+                .into_iter()
+                .filter(|episode| ids.contains(&episode.media.anilist_id))
+                .collect();
+            upcoming.sort_by_key(|episode| episode.time_until_airing);
+            let data = SectionData::LibraryUpcomingEpisodes(upcoming);
+            let state = if cached.offline {
+                SectionState::Offline(data, cached.updated_at)
+            } else {
+                SectionState::Ready(data)
+            };
+            self.set(HomeSection::LibraryUpcomingEpisodes, state);
+        }
+    }
+
+    fn pending(&self, section: HomeSection) -> bool {
+        matches!(self.state(section), SectionState::Loading)
+    }
+
+    fn fail(&mut self, section: HomeSection, message: &str) {
+        self.set(section, SectionState::Failed(message.to_owned()));
+    }
+
     /// Shows a Home load in the catalog sections: offline when the refresh
     /// behind it couldn't reach AniList.
     fn apply_catalog(&mut self, home: &Cached<HomeLoad>) {
@@ -326,6 +561,157 @@ impl HomeStore {
     }
 }
 
+/// The status groups the library widget renders, in order. A Repeating entry
+/// sits with Watching: both are shows the user is currently working through.
+const STATUS_ORDER: [ListStatus; 5] = [
+    ListStatus::Current,
+    ListStatus::Paused,
+    ListStatus::Planning,
+    ListStatus::Completed,
+    ListStatus::Dropped,
+];
+
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a clamped, non-negative fraction is stored as a whole percentage for the progress bar"
+)]
+fn percentage(position: f64, duration: f64) -> u8 {
+    (position * 100.0 / duration).clamp(0.0, 100.0) as u8
+}
+
+/// The next playable episode of each media with local files. A saved resume
+/// position wins; otherwise the first file from `progress + 1` on is used.
+/// Resumed episodes sort ahead of the rest, newest position first.
+fn next_episodes(
+    entries: &[HomeEntry],
+    files: &[LocalFile],
+    resume: &[ResumePoint],
+) -> Vec<ContinueEpisode> {
+    let mut playable: HashMap<MediaId, Vec<&LocalFile>> = HashMap::new();
+    for file in files {
+        if file.kind == "episode"
+            && !file.ignored
+            && !file.shelved
+            && file.episode.is_some()
+            && let Some(media) = file.media_id
+        {
+            playable.entry(media).or_default().push(file);
+        }
+    }
+    let mut episodes: Vec<(bool, SystemTime, ContinueEpisode)> = Vec::new();
+    for item in entries {
+        if matches!(
+            item.entry.status,
+            ListStatus::Completed | ListStatus::Dropped
+        ) {
+            continue;
+        }
+        let Some(candidates) = playable.get(&item.entry.media) else {
+            continue;
+        };
+        let saved = resume.iter().find_map(|point| {
+            if point.media != item.entry.media || point.position < engine::MIN_RESUME {
+                return None;
+            }
+            let duration = point.duration?;
+            if point.position >= duration {
+                return None;
+            }
+            let file = candidates
+                .iter()
+                .find(|file| file.episode == Some(point.episode))?;
+            let percentage = percentage(point.position, duration);
+            Some((
+                true,
+                SystemTime::UNIX_EPOCH
+                    + std::time::Duration::from_secs(u64::try_from(point.updated_at).unwrap_or(0)),
+                ContinueEpisode {
+                    entry: item.clone(),
+                    episode: point.episode,
+                    path: file.path.clone(),
+                    progress: Some(percentage),
+                },
+            ))
+        });
+        let next = item.entry.progress.saturating_add(1);
+        let chosen = saved.or_else(|| {
+            candidates
+                .iter()
+                .filter(|file| file.episode.is_some_and(|episode| episode >= next))
+                .min_by_key(|file| file.episode)
+                .and_then(|file| {
+                    file.episode.map(|episode| {
+                        (
+                            false,
+                            item.entry.updated_at,
+                            ContinueEpisode {
+                                entry: item.clone(),
+                                episode,
+                                path: file.path.clone(),
+                                progress: None,
+                            },
+                        )
+                    })
+                })
+        });
+        if let Some(chosen) = chosen {
+            episodes.push(chosen);
+        }
+    }
+    episodes.sort_by_key(|(resumed, updated, _)| (!*resumed, std::cmp::Reverse(*updated)));
+    episodes
+        .into_iter()
+        .map(|(_, _, episode)| episode)
+        .collect()
+}
+
+/// Groups `entries` with local files by list status, dropping empty groups.
+fn status_groups(entries: &[HomeEntry], matched: &HashSet<MediaId>) -> Vec<LibraryGroup> {
+    STATUS_ORDER
+        .iter()
+        .filter_map(|status| {
+            let mut group: Vec<HomeEntry> = entries
+                .iter()
+                .filter(|item| {
+                    let entry_status = if item.entry.status == ListStatus::Repeating {
+                        ListStatus::Current
+                    } else {
+                        item.entry.status
+                    };
+                    matched.contains(&item.entry.media) && entry_status == *status
+                })
+                .cloned()
+                .collect();
+            if group.is_empty() {
+                return None;
+            }
+            group.sort_by_key(|item| std::cmp::Reverse(item.entry.updated_at));
+            Some(LibraryGroup {
+                status: *status,
+                entries: group,
+            })
+        })
+        .collect()
+}
+
+/// The counts in the library's stats strip.
+fn stats(files: &[LocalFile]) -> LibraryStats {
+    LibraryStats {
+        files: files.len(),
+        bytes: files.iter().fold(0_u64, |total, file| {
+            total.saturating_add(u64::try_from(file.size).unwrap_or(0))
+        }),
+        media: files
+            .iter()
+            .filter_map(|file| file.media_id)
+            .collect::<HashSet<_>>()
+            .len(),
+        unmatched: files.iter().filter(|file| file.media_id.is_none()).count(),
+    }
+}
+
 /// Applies `change` to the store and re-renders it, if it is still alive.
 fn update(
     store: &WeakEntity<HomeStore>,
@@ -341,6 +727,7 @@ fn update(
 #[cfg(test)]
 mod tests {
     use std::{
+        path::PathBuf,
         sync::{
             Arc,
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -348,8 +735,9 @@ mod tests {
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
+    use db::{LocalFile, ResumePoint};
     use domain::{AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score};
-    use engine::{BoxFuture, EngineError, EngineServices, ListedEntry};
+    use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry};
     use gpui_kit::{AppContext, TestAppContext};
     use metadata::{
         AiringEpisode, Cached, Error as MetadataError, HomeLoad, Load, MediaSummary, MediaTitle,
@@ -357,7 +745,7 @@ mod tests {
     };
     use tokio::runtime::{Builder, Runtime};
 
-    use super::{HomeEntry, HomeSection, HomeStore, SectionData, SectionState};
+    use super::{HomeEntry, HomeSection, HomeStore, LibraryStats, SectionData, SectionState};
     use crate::bridge;
 
     /// The canned Home load: one media per section.
@@ -429,6 +817,54 @@ mod tests {
         HomeEntry { entry, media }
     }
 
+    fn file(path: &str, media: MediaId, episode: u32, size: i64) -> LocalFile {
+        LocalFile {
+            path: PathBuf::from(path),
+            size,
+            modified: 0,
+            title: None,
+            group: None,
+            season: None,
+            episode: Some(episode),
+            kind: "episode".to_owned(),
+            media_id: Some(media),
+            confidence: Some(0.9),
+            locked: false,
+            ignored: false,
+            filler: false,
+            shelved: false,
+        }
+    }
+
+    fn resume(
+        media: MediaId,
+        episode: u32,
+        position: f64,
+        duration: f64,
+        updated_at: i64,
+    ) -> ResumePoint {
+        ResumePoint {
+            media,
+            episode,
+            position,
+            duration: Some(duration),
+            updated_at,
+        }
+    }
+
+    fn info(media: MediaId, anilist_id: u32, title: &str) -> LibraryMediaInfo {
+        LibraryMediaInfo::new(media, Some(anilist_id), Some(title.to_owned()))
+    }
+
+    fn airing(anilist_id: u32, episode: u32, time_until_airing: i32) -> AiringEpisode {
+        AiringEpisode {
+            media: summary(anilist_id),
+            episode,
+            airing_at: 0,
+            time_until_airing,
+        }
+    }
+
     /// What a fake `home` refresh resolves to.
     #[derive(Clone)]
     enum RefreshMode {
@@ -455,6 +891,22 @@ mod tests {
         home_calls: AtomicUsize,
         /// How many times `collection` was called.
         collection_calls: AtomicUsize,
+        /// The local files the library sections serve.
+        files: Vec<LocalFile>,
+        /// Whether `all_library_files` fails.
+        files_fails: AtomicBool,
+        /// The media with local files the library sections serve.
+        media_info: Vec<LibraryMediaInfo>,
+        /// Whether `library_media_info` fails.
+        info_fails: AtomicBool,
+        /// The saved resume positions.
+        resume: Vec<ResumePoint>,
+        /// Whether `continuity` fails.
+        resume_fails: AtomicBool,
+        /// The airing schedule.
+        schedule: Vec<AiringEpisode>,
+        /// Whether `airing_schedule` fails.
+        schedule_fails: AtomicBool,
     }
 
     fn failure() -> EngineError {
@@ -549,6 +1001,42 @@ mod tests {
         ) -> BoxFuture<Result<Vec<MediaSummary>, EngineError>> {
             Box::pin(async move { Ok(vec![summary(301)]) })
         }
+
+        fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+            let files = self.files.clone();
+            let fails = self.files_fails.load(Ordering::SeqCst);
+            Box::pin(async move { if fails { Err(failure()) } else { Ok(files) } })
+        }
+
+        fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
+            let info = self.media_info.clone();
+            let fails = self.info_fails.load(Ordering::SeqCst);
+            Box::pin(async move { if fails { Err(failure()) } else { Ok(info) } })
+        }
+
+        fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+            let resume = self.resume.clone();
+            let fails = self.resume_fails.load(Ordering::SeqCst);
+            Box::pin(async move { if fails { Err(failure()) } else { Ok(resume) } })
+        }
+
+        fn airing_schedule(&self) -> BoxFuture<Result<Load<Vec<AiringEpisode>>, EngineError>> {
+            let schedule = self.schedule.clone();
+            let fails = self.schedule_fails.load(Ordering::SeqCst);
+            Box::pin(async move {
+                if fails {
+                    return Err(failure());
+                }
+                Ok(Load {
+                    cached: Cached {
+                        value: schedule,
+                        updated_at: UNIX_EPOCH,
+                        offline: false,
+                    },
+                    refresh: None,
+                })
+            })
+        }
     }
 
     fn runtime() -> Runtime {
@@ -600,15 +1088,22 @@ mod tests {
         let store = open_store(cx, &runtime, Arc::clone(&services)).await;
 
         let expected = [
-            SectionData::ContinueWatching(vec![home_entry(watching())]),
-            SectionData::DiscoverHeader(home_load().trending),
-            SectionData::MyLists(vec![home_entry(watching()), home_entry(planning())]),
-            SectionData::MissedSequels(vec![summary(301)]),
-            SectionData::AiredRecently(home_load().aired_recently),
-            SectionData::AnimeCarousel(home_load().anime_carousel),
-            SectionData::CenteredTitle("Autumn".to_owned()),
-        ]
-        .map(SectionState::Ready);
+            SectionState::Ready(SectionData::ContinueWatching(vec![home_entry(watching())])),
+            SectionState::Hidden,
+            SectionState::Ready(SectionData::DiscoverHeader(home_load().trending)),
+            SectionState::Ready(SectionData::MyLists(vec![
+                home_entry(watching()),
+                home_entry(planning()),
+            ])),
+            SectionState::Hidden,
+            SectionState::Hidden,
+            SectionState::Hidden,
+            SectionState::Hidden,
+            SectionState::Ready(SectionData::MissedSequels(vec![summary(301)])),
+            SectionState::Ready(SectionData::AiredRecently(home_load().aired_recently)),
+            SectionState::Ready(SectionData::AnimeCarousel(home_load().anime_carousel)),
+            SectionState::Ready(SectionData::CenteredTitle("Autumn".to_owned())),
+        ];
         assert_eq!(
             store.read_with(cx, |store, _| store.states().to_vec()),
             expected,
@@ -756,6 +1251,268 @@ mod tests {
                 SectionState::Offline(..)
             ),
             "the offline banner stays while the new refresh is pending"
+        );
+    }
+
+    /// The episodes behind the library widget, through the store's API.
+    fn episodes_of(
+        cx: &TestAppContext,
+        store: &gpui_kit::Entity<HomeStore>,
+    ) -> Vec<super::ContinueEpisode> {
+        match state_of(cx, store, HomeSection::AnimeContinueWatching) {
+            SectionState::Ready(SectionData::AnimeContinueWatching(episodes)) => episodes,
+            _ => Vec::new(),
+        }
+    }
+
+    #[gpui_kit::test]
+    async fn a_resumed_episode_leads_and_others_start_at_progress_plus_one(
+        cx: &mut TestAppContext,
+    ) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let services = Arc::new(FakeServices {
+            collection: vec![
+                (entry(1, ListStatus::Current, 3), Some(summary(1))),
+                (entry(2, ListStatus::Current, 5), Some(summary(2))),
+                (entry(3, ListStatus::Current, 0), Some(summary(3))),
+                (entry(4, ListStatus::Current, 2), Some(summary(4))),
+            ],
+            files: vec![
+                file("/a/03.mkv", MediaId::new(1), 3, 100),
+                file("/a/04.mkv", MediaId::new(1), 4, 100),
+                file("/b/05.mkv", MediaId::new(2), 5, 100),
+                file("/b/06.mkv", MediaId::new(2), 6, 100),
+                file("/c/01.mkv", MediaId::new(3), 1, 100),
+                file("/d/03.mkv", MediaId::new(4), 3, 100),
+            ],
+            resume: vec![
+                resume(MediaId::new(1), 3, 120.0, 1200.0, 10),
+                resume(MediaId::new(2), 5, 600.0, 1200.0, 20),
+                // At the file's end: no longer in progress, so fall back.
+                resume(MediaId::new(4), 3, 1200.0, 1200.0, 30),
+            ],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
+
+        let episodes = episodes_of(cx, &store);
+        let chosen: Vec<_> = episodes
+            .iter()
+            .map(|item| {
+                (
+                    item.entry.entry.media,
+                    item.episode,
+                    item.path.clone(),
+                    item.progress,
+                )
+            })
+            .collect();
+        assert!(
+            !episodes.is_empty(),
+            "the continue-watching widget has data"
+        );
+        assert_eq!(
+            chosen,
+            vec![
+                (MediaId::new(2), 5, PathBuf::from("/b/05.mkv"), Some(50)),
+                (MediaId::new(1), 3, PathBuf::from("/a/03.mkv"), Some(10)),
+                (MediaId::new(3), 1, PathBuf::from("/c/01.mkv"), None),
+                (MediaId::new(4), 3, PathBuf::from("/d/03.mkv"), None),
+            ],
+            "the newest resume leads, then progress + 1; a finished resume is ignored"
+        );
+        assert_eq!(
+            services.collection_calls.load(Ordering::SeqCst),
+            1,
+            "the library reused the one collection read"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn library_widgets_group_by_status_count_files_and_filter_the_schedule(
+        cx: &mut TestAppContext,
+    ) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let services = Arc::new(FakeServices {
+            collection: vec![
+                (entry(1, ListStatus::Current, 3), Some(summary(101))),
+                (entry(2, ListStatus::Repeating, 3), Some(summary(102))),
+                (entry(3, ListStatus::Paused, 1), Some(summary(103))),
+                (entry(4, ListStatus::Planning, 0), Some(summary(104))),
+                (entry(5, ListStatus::Completed, 12), Some(summary(105))),
+                (entry(6, ListStatus::Dropped, 2), Some(summary(106))),
+            ],
+            files: vec![
+                file("/a/01.mkv", MediaId::new(1), 1, 100),
+                file("/a/02.mkv", MediaId::new(1), 2, 200),
+                file("/b/01.mkv", MediaId::new(2), 1, 300),
+                file("/c/01.mkv", MediaId::new(3), 1, 400),
+                file("/d/01.mkv", MediaId::new(4), 1, 500),
+                file("/e/01.mkv", MediaId::new(5), 1, 600),
+                file("/f/01.mkv", MediaId::new(6), 1, 700),
+                LocalFile {
+                    media_id: None,
+                    ..file("/loose.mkv", MediaId::new(9), 1, 900)
+                },
+            ],
+            media_info: vec![
+                info(MediaId::new(1), 101, "One"),
+                info(MediaId::new(3), 103, "Three"),
+            ],
+            schedule: vec![
+                airing(999, 1, 60),
+                airing(103, 8, 7200),
+                airing(101, 12, 3600),
+            ],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
+
+        let groups = match state_of(cx, &store, HomeSection::AnimeLibrary) {
+            SectionState::Ready(SectionData::AnimeLibrary(groups)) => groups,
+            _ => Vec::new(),
+        };
+        assert_eq!(
+            groups.iter().map(|group| group.status).collect::<Vec<_>>(),
+            vec![
+                ListStatus::Current,
+                ListStatus::Paused,
+                ListStatus::Planning,
+                ListStatus::Completed,
+                ListStatus::Dropped,
+            ],
+            "the five statuses in order, with Repeating under Watching"
+        );
+        assert_eq!(
+            groups.first().map(|group| group.entries.len()),
+            Some(2),
+            "Repeating joins Watching"
+        );
+
+        assert_eq!(
+            state_of(cx, &store, HomeSection::LocalAnimeLibraryStats),
+            SectionState::Ready(SectionData::LocalAnimeLibraryStats(LibraryStats {
+                files: 8,
+                bytes: 3700,
+                media: 6,
+                unmatched: 1,
+            }))
+        );
+        assert_eq!(
+            state_of(cx, &store, HomeSection::LocalAnimeLibrary),
+            SectionState::Ready(SectionData::LocalAnimeLibrary(vec![
+                info(MediaId::new(1), 101, "One"),
+                info(MediaId::new(3), 103, "Three"),
+            ]))
+        );
+        assert_eq!(
+            state_of(cx, &store, HomeSection::LibraryUpcomingEpisodes),
+            SectionState::Ready(SectionData::LibraryUpcomingEpisodes(vec![
+                airing(101, 12, 3600),
+                airing(103, 8, 7200),
+            ])),
+            "only library media, soonest first"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn an_empty_library_hides_every_library_widget(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let services = Arc::new(FakeServices {
+            media_info: vec![info(MediaId::new(1), 101, "One")],
+            schedule: vec![airing(101, 1, 60)],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
+
+        for section in [
+            HomeSection::AnimeContinueWatching,
+            HomeSection::AnimeLibrary,
+            HomeSection::LocalAnimeLibrary,
+            HomeSection::LocalAnimeLibraryStats,
+            HomeSection::LibraryUpcomingEpisodes,
+        ] {
+            assert_eq!(
+                state_of(cx, &store, section),
+                SectionState::Hidden,
+                "{section:?} is not part of an empty Home"
+            );
+        }
+        assert_eq!(
+            state_of(cx, &store, HomeSection::MyLists),
+            SectionState::Ready(SectionData::MyLists(Vec::new())),
+            "the non-library widgets stay"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn a_failed_library_call_only_fails_the_widgets_that_need_it(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let services = Arc::new(FakeServices {
+            collection: vec![(entry(1, ListStatus::Current, 3), Some(summary(1)))],
+            files: vec![file("/a/03.mkv", MediaId::new(1), 3, 100)],
+            media_info: vec![info(MediaId::new(1), 101, "One")],
+            schedule: vec![airing(101, 4, 3600)],
+            ..FakeServices::default()
+        });
+        services.files_fails.store(true, Ordering::SeqCst);
+        let store = open_store(cx, &runtime, Arc::clone(&services)).await;
+
+        for section in [
+            HomeSection::AnimeContinueWatching,
+            HomeSection::AnimeLibrary,
+            HomeSection::LocalAnimeLibraryStats,
+        ] {
+            assert!(
+                matches!(state_of(cx, &store, section), SectionState::Failed(_)),
+                "{section:?} needs the file table"
+            );
+        }
+        assert_eq!(
+            state_of(cx, &store, HomeSection::LocalAnimeLibrary),
+            SectionState::Ready(SectionData::LocalAnimeLibrary(vec![info(
+                MediaId::new(1),
+                101,
+                "One"
+            )])),
+            "the media list does not need the file table"
+        );
+        assert_eq!(
+            state_of(cx, &store, HomeSection::LibraryUpcomingEpisodes),
+            SectionState::Ready(SectionData::LibraryUpcomingEpisodes(vec![airing(
+                101, 4, 3600
+            )]))
+        );
+
+        services.files_fails.store(false, Ordering::SeqCst);
+        services.schedule_fails.store(true, Ordering::SeqCst);
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.retry(HomeSection::LibraryUpcomingEpisodes, cx);
+            });
+        });
+        settle(cx).await;
+        assert!(
+            matches!(
+                state_of(cx, &store, HomeSection::LibraryUpcomingEpisodes),
+                SectionState::Failed(_)
+            ),
+            "the schedule widget has its own error"
+        );
+        assert_eq!(
+            state_of(cx, &store, HomeSection::AnimeLibrary),
+            SectionState::Ready(SectionData::AnimeLibrary(vec![super::LibraryGroup {
+                status: ListStatus::Current,
+                entries: vec![home_entry((
+                    entry(1, ListStatus::Current, 3),
+                    Some(summary(1))
+                ))],
+            }])),
+            "the other library widgets recovered"
         );
     }
 }
