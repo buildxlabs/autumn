@@ -4,7 +4,7 @@ The master plan for Autumn: decisions, stack, phases with exit criteria, and a c
 
 Scope: **native desktop only** (macOS, Linux, Windows). No web app, no server mode, no mobile.
 
-Last reviewed: 2026-11-21.
+Last reviewed: 2026-11-25.
 
 ## 1. Decisions
 
@@ -65,30 +65,30 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 - [x] Root `Cargo.toml`: `[workspace.dependencies]`, `[profile.dev.package."*"] opt-level = 2`, release profile (`lto`, `codegen-units = 1`, `strip`).
 - [x] Turn `crates/autumn` into the binary. Create `domain`, `settings`, `ui-theme`, `ui-components`, `ui-state`, `ui-screens`.
 - [x] Add `gpui-kit`; get `cargo deny check` green with the GPUI tree. With gpui-kit 0.10 it already exits 0, with 68 non-blocking duplicate-version warnings ([research](docs/research/cargo-deny-gpui-kit.md)); which exceptions to accept is open in [#22](https://github.com/buildxlabs/autumn/issues/22).
-- [ ] Tokio bridge + event pump (ARCHITECTURE §4) with a test that round-trips a command and an event.
-- [ ] Window: transparent 40px titlebar with back/forward and a search pill, our own sidebar rail with hover expand (click-pin setting) and "More" overflow, router with back/forward and scroll restore, theme tokens applied (ARCHITECTURE §5).
-- [ ] Logging to file. App paths created on first run (ARCHITECTURE §7–8).
-- [ ] CI workflow on pull requests only, running `pnpm check` and `cargo nextest`. Linux runs on every PR through the Nix dev shell. macOS and Windows run when the PR carries the `ci:macos` / `ci:windows` label, or on manual dispatch.
-- [ ] Pre-push hook refuses pushes to `main`. The org's Free plan has no server-side rulesets for a private repo, so the guard is local.
+- [x] Tokio bridge + event pump (ARCHITECTURE §4) with a test that round-trips a command and an event.
+- [x] Window: transparent 40px titlebar with back/forward and a search pill, our own sidebar rail with hover expand (click-pin setting) and "More" overflow, router with back/forward and scroll restore, theme tokens applied (ARCHITECTURE §5).
+- [x] Logging to file. App paths created on first run (ARCHITECTURE §7–8).
+- [x] CI workflow on pull requests only, running `pnpm check` and `cargo nextest`. Linux runs on every PR through the Nix dev shell. macOS and Windows run when the PR carries the `ci:macos` / `ci:windows` label, or on manual dispatch.
+- [x] Pre-push hook refuses pushes to `main`. The org's Free plan has no server-side rulesets for a private repo, so the guard is local.
 - **Exit:** `cargo run -p autumn` opens the themed shell on all three OSes. Navigating between placeholder routes and pressing Back restores scroll position.
 
 ### Phase 1: Catalog, tracking, and discovery
 
-- [ ] `net` (shared client, up to 3 retries, one rate limiter shared by every AniList request at its current degraded 30 req/min plus an unpublished burst limit, poster disk cache), `db` (migrations, settings rows imported once from the Phase 0 `settings.json`, media ids with cross-references to the AniList id and `idMal` only), `metadata` (AniList catalog/search/schedule/user collection; at most 50 items per page, and `MediaListCollection` stops at 11k entries and needs its custom lists read too), `tracker` (AniList + Local platforms).
-- [ ] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator (countdown). Token in keychain; login refused without one (ADR 0002). Re-login prompt before the one-year token expires.
-- [ ] Components: media card (badges, hover popup, context menu, skeleton), carousel (drag, arrows, Alt+wheel), hero banner, virtualized poster grid.
-- [ ] Screens: Home (fixed default widgets: continue-watching header, discover header, my lists, missed sequels, aired recently, anime carousel, centered title), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
-- [ ] Command palette: open/close, `/search`, `/anime`, `/manga`.
-- [ ] Top indefinite loader during background fetches.
-- [ ] Settings screen with a Storage tab holding a "Clear poster cache" button.
+- [x] `net` (shared client, up to 3 retries, one rate limiter shared by every AniList request at its current degraded 30 req/min plus an unpublished burst limit, poster disk cache), `db` (migrations, settings rows imported once from the Phase 0 `settings.json`, media ids with cross-references to the AniList id and `idMal` only), `metadata` (AniList catalog/search/schedule/user collection; at most 50 items per page, and `MediaListCollection` stops at 11k entries and needs its custom lists read too), `tracker` (AniList + Local platforms).
+- [x] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator (countdown). Token in keychain; login refused without one (ADR 0002). Re-login prompt before the one-year token expires.
+- [x] Components: media card (badges, hover popup, context menu, skeleton), carousel (drag, arrows, Alt+wheel), hero banner, virtualized poster grid.
+- [x] Screens: Home (fixed default widgets: continue-watching header, discover header, my lists, missed sequels, aired recently, anime carousel, centered title), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
+- [x] Command palette: open/close, `/search`, `/anime`, `/manga`.
+- [x] Top indefinite loader during background fetches.
+- [x] Settings screen with a Storage tab holding a "Clear poster cache" button.
 - **Exit:** with no account, a user can browse, search, add a show to a local list and see it on Home after restart. With AniList, the same edits round-trip to AniList.
 
 ### Phase 2: Local library and external playback
 
-- [ ] `release-parser` with a corpus of 500+ real release names. `mkv` (chapters, tracks, fonts).
-- [ ] `library`: multi-folder scan, matcher with threshold, lock/unlock, specials/NCOP/NCED split, filler marking, watcher + auto-scan, shelving, scan summaries.
-- [ ] `player`: detection on all OSes, supervised detached spawn, fresh IPC path per launch, mpv + IINA IPC, VLC, MPC-HC.
-- [ ] `engine` v1: playback manager, continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next with countdown, OP/ED chapter skip.
+- [x] `release-parser` with a corpus of 500+ real release names. `mkv` (chapters, tracks, fonts).
+- [x] `library`: multi-folder scan, matcher with threshold, lock/unlock, specials/NCOP/NCED split, filler marking, watcher + auto-scan, shelving, scan summaries.
+- [x] `player`: detection on all OSes, supervised detached spawn, fresh IPC path per launch, mpv + IINA IPC, VLC, MPC-HC.
+- [ ] `engine` v1: playback manager, continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next with countdown, OP/ED chapter skip. (Core landed in #172; auto-next with countdown and OP/ED chapter skip remain in #131.)
 - [ ] Screens: Entry Library tab (episode cards, range pagination, missing banner, bulk actions), Scan Summaries, Library Explorer (tree), Playback HUD. Home widgets that depend on the library.
 - [ ] First-run onboarding: library path, account choice, player choice.
 - **Exit:** point at a folder of fansub releases. Matched shows appear, play in mpv, resume where they stopped, and progress updates on the active platform at the threshold.
