@@ -14,6 +14,8 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         input::InputState,
         label::Label,
+        notification::Notification,
+        slider::{SliderEvent, SliderState, SliderValue},
     },
     div, px,
 };
@@ -27,11 +29,12 @@ use ui_components::{
     },
 };
 use ui_state::{
-    RailBadges, Route, RouterState, ScrollRestore, SearchFilters, SettingsTab,
+    LibraryStore, RailBadges, Route, RouterState, ScanOutcome, ScrollRestore, SearchFilters,
+    SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{
-        GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, SeekBack,
-        SeekForward, SkipChapter, StopPlayback, WORKSPACE,
+        GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, ScanLibrary,
+        SeekBack, SeekForward, SkipChapter, StopPlayback, WORKSPACE,
     },
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
@@ -45,9 +48,11 @@ use ui_state::{
     fetch_status::DebugFetch,
 };
 
-pub use ::settings::PlaybackSettings;
 use ::settings::PlayerChoice;
-pub use settings::{PlaybackServices, PlaybackTestError, PlayerOption, PosterCacheAction};
+pub use ::settings::{LibrarySettings, PlaybackSettings};
+pub use settings::{
+    LibraryServices, PlaybackServices, PlaybackTestError, PlayerOption, PosterCacheAction,
+};
 use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus};
 
 mod settings;
@@ -172,6 +177,16 @@ pub struct AppShell {
     playback_test_task: Option<Task<()>>,
     playback_error: Option<String>,
     save_playback_task: Option<Task<()>>,
+    /// The Library tab's values, store and composition-root callback (#127).
+    library: LibrarySettings,
+    library_services: LibraryServices,
+    library_store: Entity<LibraryStore>,
+    _library_events: Subscription,
+    threshold_slider: Entity<SliderState>,
+    _threshold_events: Subscription,
+    library_error: Option<String>,
+    library_pick_task: Option<Task<()>>,
+    save_library_task: Option<Task<()>>,
     /// The latest save, if it is still running.
     saving: Option<Task<()>>,
     /// Whether the rail is expanded, by hover or by the click-pin toggle.
@@ -222,6 +237,9 @@ impl AppShell {
         prefs: RailPrefs,
         playback: PlaybackSettings,
         playback_services: PlaybackServices,
+        library: LibrarySettings,
+        library_services: LibraryServices,
+        library_store: Entity<LibraryStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -245,6 +263,10 @@ impl AppShell {
                 PaletteEvent::Navigate(route) => {
                     window.close_dialog(cx);
                     shell.navigate(route.clone(), cx);
+                }
+                PaletteEvent::ScanLibrary => {
+                    window.close_dialog(cx);
+                    shell.start_scan(cx);
                 }
             },
         );
@@ -274,6 +296,27 @@ impl AppShell {
                 shell.request_account(command.clone(), cx);
             },
         );
+        let threshold_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(100.0)
+                .step(5.0)
+                .default_value(f32::from(library.matching_threshold))
+        });
+        let threshold_events = cx.subscribe(&threshold_slider, |shell, _, event, cx| {
+            if let SliderEvent::Release(SliderValue::Single(value)) = event {
+                shell.library_threshold_changed(*value, cx);
+            }
+        });
+        let library_events = cx.observe_in(&library_store, window, |shell, store, window, cx| {
+            if let Some(outcome) = store.update(cx, |store, _| store.take_finish()) {
+                shell.show_scan_toast(outcome, window, cx);
+            }
+            if let Some(error) = store.update(cx, |store, _| store.take_scan_error()) {
+                window.push_notification(Notification::error(error), cx);
+            }
+            cx.notify();
+        });
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
         let entry_editor = EntryEditor::new(window, cx);
@@ -350,6 +393,15 @@ impl AppShell {
             playback_test_task: None,
             playback_error: None,
             save_playback_task: None,
+            library,
+            library_services,
+            library_store,
+            _library_events: library_events,
+            threshold_slider,
+            _threshold_events: threshold_events,
+            library_error: None,
+            library_pick_task: None,
+            save_library_task: None,
             saving: None,
             rail_open: false,
             hover_open: None,
@@ -379,6 +431,9 @@ impl AppShell {
         prefs: RailPrefs,
         playback: PlaybackSettings,
         playback_services: PlaybackServices,
+        library: LibrarySettings,
+        library_services: LibraryServices,
+        library_store: Entity<LibraryStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -400,6 +455,9 @@ impl AppShell {
             prefs,
             playback,
             playback_services,
+            library,
+            library_services,
+            library_store,
             fetch_status,
             account,
             login_url,
@@ -528,6 +586,35 @@ impl AppShell {
 
     fn open_search(&mut self, _: &OpenSearch, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.open_palette(Mode::Search, window, cx);
+    }
+
+    fn scan_library(&mut self, _: &ScanLibrary, _: &mut Window, cx: &mut Context<'_, Self>) {
+        self.start_scan(cx);
+    }
+
+    /// Shows the scan summary once, when the store hands over its outcome.
+    /// The Scan Summaries link arrives with that route in #134.
+    fn show_scan_toast(&self, outcome: ScanOutcome, window: &mut Window, cx: &mut App) {
+        let failed = outcome.error.is_some();
+        let message = if let Some(error) = outcome.error {
+            format!("Library scan failed: {error}")
+        } else {
+            format!(
+                "{} files matched to {} media, {} unmatched",
+                outcome.files_matched,
+                self.library_store
+                    .read(cx)
+                    .summary()
+                    .map_or(0, |s| s.by_media.len()),
+                outcome.files_unmatched
+            )
+        };
+        let notification = if failed {
+            Notification::error(message)
+        } else {
+            Notification::success(message)
+        };
+        window.push_notification(notification, cx);
     }
 
     fn go_back(&mut self, _: &GoBack, _: &mut Window, cx: &mut Context<'_, Self>) {
@@ -1134,6 +1221,7 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::go_forward))
             .on_action(cx.listener(Self::open_command_palette))
             .on_action(cx.listener(Self::open_search))
+            .on_action(cx.listener(Self::scan_library))
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|shell, _, window, cx| shell.go_back(&GoBack, window, cx)),
@@ -1479,6 +1567,13 @@ mod tests {
                             prefs,
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::LibrarySettings::default(),
+                            crate::shell::LibraryServices::inert(),
+                            cx.new(|_| {
+                                ui_state::LibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             fetch_status,
                             account,
                             "https://example.test/login".to_owned(),
@@ -2919,6 +3014,13 @@ mod tests {
                             RailPrefs::default(),
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::LibrarySettings::default(),
+                            crate::shell::LibraryServices::inert(),
+                            cx.new(|_| {
+                                ui_state::LibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             fetch_status,
                             account,
                             "https://example.test/login".to_owned(),

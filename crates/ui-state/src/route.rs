@@ -18,6 +18,8 @@ pub enum SettingsTab {
     Account,
     /// Player choice and playback options.
     Playback,
+    /// Library folders, matching and manual scans.
+    Library,
     /// Disk cache usage and controls.
     Storage,
     /// Data-source attribution and licences.
