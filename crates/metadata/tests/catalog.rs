@@ -104,8 +104,6 @@ fn fixture_for<'a>(query: &str, collection: &'a str) -> &'a str {
         "catalog_trending_by_country.json"
     } else if query.contains("format: MOVIE") {
         "catalog_trending_movies.json"
-    } else if query.contains("type: MANGA") {
-        "catalog_trending_manga.json"
     } else if query.contains("sort: [POPULARITY_DESC]") {
         "catalog_popular.json"
     } else {
@@ -187,17 +185,6 @@ async fn trending_movies_decodes_the_movies() {
         Some("Chainsaw Man: Reze-hen")
     );
     assert_eq!(movies[0].format, Some(MediaFormat::Movie));
-}
-
-#[tokio::test]
-async fn trending_manga_decodes_the_manga() {
-    let mock = MockCatalog::serve().await;
-
-    let manga = mock.client.trending_manga().await.unwrap();
-
-    assert_eq!(manga.len(), 50);
-    assert_eq!(manga[0].anilist_id, 211_510);
-    assert_eq!(manga[0].format, Some(MediaFormat::Manga));
 }
 
 #[tokio::test]

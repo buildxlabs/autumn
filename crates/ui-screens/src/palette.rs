@@ -29,7 +29,7 @@ use crate::{
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 6] = [
+const ROUTES: [Route; 5] = [
     Route::Home,
     Route::Discover,
     Route::Search(ui_state::SearchFilters::EMPTY),
@@ -37,7 +37,6 @@ const ROUTES: [Route; 6] = [
         status: ListTab::Status(ListStatus::Current),
     },
     Route::Schedule,
-    Route::Manga,
 ];
 
 /// What the palette lists, chosen by a slash command at the start of the query.
@@ -45,17 +44,15 @@ const ROUTES: [Route; 6] = [
 pub(crate) enum Mode {
     /// No slash command: routes, the slash commands or recent searches.
     Navigate,
-    /// `/search`: anime and manga together.
+    /// `/search`: anime only.
     Search,
     /// `/anime`.
     Anime,
-    /// `/manga`.
-    Manga,
 }
 
 impl Mode {
     /// The modes a slash command selects, in the order they are listed.
-    const SLASH: [Self; 3] = [Self::Search, Self::Anime, Self::Manga];
+    const SLASH: [Self; 2] = [Self::Search, Self::Anime];
 
     /// The slash command that selects this mode; empty for [`Self::Navigate`].
     fn command(self) -> &'static str {
@@ -63,7 +60,6 @@ impl Mode {
             Self::Navigate => "",
             Self::Search => "/search",
             Self::Anime => "/anime",
-            Self::Manga => "/manga",
         }
     }
 
@@ -71,7 +67,7 @@ impl Mode {
     fn prefix(self) -> SharedString {
         match self {
             Self::Navigate => SharedString::default(),
-            Self::Search | Self::Anime | Self::Manga => format!("{} ", self.command()).into(),
+            Self::Search | Self::Anime => format!("{} ", self.command()).into(),
         }
     }
 
@@ -79,18 +75,15 @@ impl Mode {
     fn kinds(self) -> &'static [MediaKind] {
         match self {
             Self::Navigate => &[],
-            Self::Anime => &[MediaKind::Anime],
-            Self::Manga => &[MediaKind::Manga],
-            Self::Search => &[MediaKind::Anime, MediaKind::Manga],
+            Self::Anime | Self::Search => &[MediaKind::Anime],
         }
     }
 
-    /// The AniList media type for a single-kind mode.
+    /// The AniList media type to restrict the remote search to.
     fn kind(self) -> Option<MediaKind> {
         match self {
-            Self::Anime => Some(MediaKind::Anime),
-            Self::Manga => Some(MediaKind::Manga),
-            Self::Search | Self::Navigate => None,
+            Self::Anime | Self::Search => Some(MediaKind::Anime),
+            Self::Navigate => None,
         }
     }
 
@@ -157,7 +150,7 @@ fn entries_for(
             .map(Entry::Search)
             .chain(ROUTES.into_iter().map(Entry::Route))
             .collect(),
-        Mode::Search | Mode::Anime | Mode::Manga => {
+        Mode::Search | Mode::Anime => {
             let kinds = mode.kinds();
             let local: Vec<MediaSummary> = local
                 .iter()
@@ -353,7 +346,7 @@ impl CommandPalette {
     /// dialog when the query is empty and clears it otherwise.
     fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<'_, Self>) {
         let query = self.state.read(cx).query(cx);
-        if let (Mode::Search | Mode::Anime | Mode::Manga, "") = Mode::parse(&query) {
+        if let (Mode::Search | Mode::Anime, "") = Mode::parse(&query) {
             self.state
                 .update(cx, |state, cx| state.set_query("", window, cx));
         }
@@ -399,7 +392,6 @@ fn empty_state(mode: Mode, cx: &App) -> impl IntoElement + use<> {
         Mode::Navigate => "No page or mode matches",
         Mode::Search => "No local or AniList matches yet",
         Mode::Anime => "No anime matches yet",
-        Mode::Manga => "No manga matches yet",
     };
     div()
         .id("palette-empty")
@@ -435,6 +427,14 @@ mod tests {
     struct MockState {
         count: Arc<AtomicUsize>,
         searches: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[test]
+    fn search_modes_are_anime_only() {
+        assert_eq!(Mode::Search.kinds(), &[MediaKind::Anime]);
+        assert_eq!(Mode::Search.kind(), Some(MediaKind::Anime));
+        assert_eq!(Mode::Anime.kind(), Some(MediaKind::Anime));
+        assert_eq!(Mode::SLASH, [Mode::Search, Mode::Anime]);
     }
 
     #[gpui_kit::test]

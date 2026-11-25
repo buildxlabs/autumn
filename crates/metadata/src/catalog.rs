@@ -110,17 +110,6 @@ impl AniList {
         Ok(cards(query.page.and_then(|page| page.media)))
     }
 
-    /// Trending Manga.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::Net`] when the request fails, [`Error::Api`] for a GraphQL
-    /// error, or [`Error::Decode`] for an unexpected response.
-    pub async fn trending_manga(&self) -> Result<Vec<MediaSummary>, Error> {
-        let query = self.query(TrendingMangaQuery::build(first_page())).await?;
-        Ok(cards(query.page.and_then(|page| page.media)))
-    }
-
     /// Trending Anime in one country of origin (`JP`, `KR` or `CN`).
     ///
     /// # Errors
@@ -501,21 +490,6 @@ struct TrendingMoviesQuery {
 #[cynic(graphql_type = "Page")]
 struct TrendingMoviesPage {
     #[arguments(type: ANIME, format: MOVIE, sort: [TRENDING_DESC])]
-    media: Option<Vec<Option<MediaCard>>>,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(graphql_type = "Query", variables = "PageVariables")]
-struct TrendingMangaQuery {
-    #[cynic(rename = "Page")]
-    #[arguments(page: $page, perPage: $per_page)]
-    page: Option<TrendingMangaPage>,
-}
-
-#[derive(cynic::QueryFragment, Debug, Default)]
-#[cynic(graphql_type = "Page")]
-struct TrendingMangaPage {
-    #[arguments(type: MANGA, sort: [TRENDING_DESC])]
     media: Option<Vec<Option<MediaCard>>>,
 }
 

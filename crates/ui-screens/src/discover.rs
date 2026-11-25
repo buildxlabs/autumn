@@ -1,4 +1,4 @@
-//! The Discover screen's data layer: eight sections, each stale-first and
+//! The Discover screen's data layer: seven sections, each stale-first and
 //! independently recoverable (#62, decisions #23 and #31).
 
 use std::{
@@ -46,8 +46,6 @@ pub enum DiscoverKey {
     AiringSchedule,
     /// Missed Sequels.
     MissedSequels,
-    /// Trending Manga.
-    TrendingManga,
     /// Trending Anime from Japan.
     Japan,
     /// Trending Anime from South Korea.
@@ -68,7 +66,6 @@ impl DiscoverKey {
             Self::TrendingMovies => "movies",
             Self::AiringSchedule => "airing",
             Self::MissedSequels => return format!("discover-section:missed:{user}"),
-            Self::TrendingManga => "manga",
             Self::Japan => "country:JP",
             Self::Korea => "country:KR",
             Self::China => "country:CN",
@@ -94,13 +91,12 @@ impl DiscoverKey {
             Self::TrendingMovies => DiscoverSection::TrendingMovies,
             Self::AiringSchedule => DiscoverSection::AiringSchedule,
             Self::MissedSequels => DiscoverSection::MissedSequels,
-            Self::TrendingManga => DiscoverSection::TrendingManga,
             Self::Japan | Self::Korea | Self::China => DiscoverSection::TrendingByCountry,
         }
     }
 }
 
-/// The eight carousels of the Discover screen, in display order (#23).
+/// The seven carousels of the Discover screen, in display order (#23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum DiscoverSection {
     /// Trending Anime, shown as the hero.
@@ -115,22 +111,19 @@ pub(crate) enum DiscoverSection {
     AiringSchedule,
     /// Missed Sequels.
     MissedSequels,
-    /// Trending Manga.
-    TrendingManga,
     /// Trending by Country: JP, KR and CN.
     TrendingByCountry,
 }
 
 impl DiscoverSection {
     /// The sections in the order the ticket lists them.
-    pub(crate) const ORDER: [Self; 8] = [
+    pub(crate) const ORDER: [Self; 7] = [
         Self::Trending,
         Self::Popular,
         Self::UpcomingSeason,
         Self::TrendingMovies,
         Self::AiringSchedule,
         Self::MissedSequels,
-        Self::TrendingManga,
         Self::TrendingByCountry,
     ];
 
@@ -144,7 +137,6 @@ impl DiscoverSection {
             Self::TrendingMovies => "Trending Movies",
             Self::AiringSchedule => "Airing Schedule",
             Self::MissedSequels => "Missed Sequels",
-            Self::TrendingManga => "Trending Manga",
             Self::TrendingByCountry => "Trending by Country",
         }
     }
@@ -320,10 +312,6 @@ impl DiscoverCatalog for RealDiscoverCatalog {
                 )
                 .await
             }
-            DiscoverKey::TrendingManga => {
-                self.media(key, user, async move { anilist.trending_manga().await })
-                    .await
-            }
             DiscoverKey::Japan | DiscoverKey::Korea | DiscoverKey::China => {
                 let country = match key {
                     DiscoverKey::Japan => "JP",
@@ -365,7 +353,7 @@ impl Section {
     }
 }
 
-/// The eight Discover sections, loaded independently.
+/// The seven Discover sections, loaded independently.
 #[derive(Debug, Default, Clone)]
 pub struct DiscoverStore {
     sections: Vec<Section>,
@@ -549,7 +537,7 @@ struct KeyLoad {
 }
 
 /// Load one key; a failed request is data for that section, not an error
-/// that stops the other seven from rendering. A guest skips the one request
+/// that stops the other six from rendering. A guest skips the one request
 /// that reads their personal collection.
 async fn load_key<C: DiscoverCatalog>(
     catalog: &C,
@@ -588,7 +576,6 @@ fn key_of(section: DiscoverSection) -> DiscoverKey {
         DiscoverSection::TrendingMovies => DiscoverKey::TrendingMovies,
         DiscoverSection::AiringSchedule => DiscoverKey::AiringSchedule,
         DiscoverSection::MissedSequels => DiscoverKey::MissedSequels,
-        DiscoverSection::TrendingManga => DiscoverKey::TrendingManga,
         DiscoverSection::TrendingByCountry => DiscoverKey::Japan,
     }
 }
@@ -632,7 +619,7 @@ fn country_state(states: &[SectionFetch; 3]) -> SectionFetch {
     SectionFetch::Ready
 }
 
-/// Loads the eight sections for one account. The composition root builds
+/// Loads the seven sections for one account. The composition root builds
 /// this around the stale-first catalog cache; tests use a fake.
 pub type DiscoverLoader =
     Rc<dyn Fn(Option<String>, &App) -> Task<Result<DiscoverUpdate, BridgeError>>>;
@@ -1217,7 +1204,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_eight_sections_render_in_ticket_order() {
+    async fn the_seven_sections_render_in_ticket_order() {
         let store = DiscoverStore::load(&FakeCatalog::default(), Some("viewer"))
             .await
             .store;
@@ -1359,35 +1346,35 @@ mod tests {
         // Seed every key, then let them all go stale and fail one refresh.
         let _ = settle(DiscoverStore::load(&catalog, Some("viewer")).await).await;
         catalog.advance(Duration::from_hours(7));
-        catalog.fail_refresh(DiscoverKey::TrendingManga);
+        catalog.fail_refresh(DiscoverKey::Popular);
         let update = DiscoverStore::load(&catalog, Some("viewer")).await;
         assert!(
             !update.pending.is_empty(),
             "stale sections come with refreshes"
         );
 
-        let manga = update
+        let popular = update
             .store
             .sections()
             .iter()
-            .find(|section| section.kind == DiscoverSection::TrendingManga)
-            .expect("the manga section");
+            .find(|section| section.kind == DiscoverSection::Popular)
+            .expect("the Popular section");
         assert_ne!(
-            manga.entries,
+            popular.entries,
             SectionEntries::Media(Vec::new()),
             "the cached value is on screen at once"
         );
-        assert_eq!(manga.state, SectionFetch::Ready);
+        assert_eq!(popular.state, SectionFetch::Ready);
 
         let store = settle(update).await;
-        let manga = store
+        let popular = store
             .sections()
             .iter()
-            .find(|section| section.kind == DiscoverSection::TrendingManga)
-            .expect("the manga section");
-        assert!(matches!(manga.state, SectionFetch::Failed(_)));
+            .find(|section| section.kind == DiscoverSection::Popular)
+            .expect("the Popular section");
+        assert!(matches!(popular.state, SectionFetch::Failed(_)));
         assert_ne!(
-            manga.entries,
+            popular.entries,
             SectionEntries::Media(Vec::new()),
             "a failed refresh keeps the stale value"
         );

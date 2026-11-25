@@ -52,8 +52,6 @@ pub enum Route {
     Search(SearchFilters),
     /// The airing schedule.
     Schedule,
-    /// Manga library and sources.
-    Manga,
     /// Installed and available extensions.
     Extensions,
     /// Offline snapshots and sync.
@@ -67,11 +65,10 @@ pub enum Route {
 
 impl Route {
     /// The default destination for each rail item, in rail order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 6] = [
         Self::Home,
         Self::Discover,
         Self::Schedule,
-        Self::Manga,
         Self::Extensions,
         Self::Sync,
         Self::Settings {
@@ -81,7 +78,7 @@ impl Route {
 
     /// Every route that has a stable settings key, including screens that
     /// are not rail items. [`Self::ALL`] stays the rail's default set.
-    pub const ALL_KEYED: [Self; 9] = [
+    pub const ALL_KEYED: [Self; 8] = [
         Self::Home,
         Self::Discover,
         Self::Lists {
@@ -89,7 +86,6 @@ impl Route {
         },
         Self::Search(SearchFilters::EMPTY),
         Self::Schedule,
-        Self::Manga,
         Self::Extensions,
         Self::Sync,
         Self::Settings {
@@ -107,7 +103,6 @@ impl Route {
             Self::Lists { .. } => "lists",
             Self::Search(_) => "search",
             Self::Schedule => "schedule",
-            Self::Manga => "manga",
             Self::Extensions => "extensions",
             Self::Sync => "sync",
             Self::Settings { .. } => "settings",
@@ -139,6 +134,7 @@ mod tests {
             );
         }
         assert_eq!(Route::from_key("retired"), None, "unknown keys are ignored");
+        assert_eq!(Route::from_key("manga"), None, "a retired key is ignored");
     }
 
     #[test]
