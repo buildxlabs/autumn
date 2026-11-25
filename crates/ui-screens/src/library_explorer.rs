@@ -35,8 +35,11 @@ pub(crate) struct LibraryExplorerScreen {
     folders: Vec<PathBuf>,
     dialog: Entity<MediaSearchDialog>,
     rename: Entity<gpui_kit::component::input::InputState>,
-    renaming: bool,
+    /// The file being renamed, recorded when Rename was clicked. The input
+    /// closes when the selection moves, so confirm never renames another row.
+    renaming: Option<PathBuf>,
     _store_events: Subscription,
+    _tree_events: Subscription,
     _dialog_events: Subscription,
     on_trash: Option<TrashCallback>,
 }
@@ -71,10 +74,20 @@ impl LibraryExplorerScreen {
             this.tree.update(cx, |state, cx| state.set_items(items, cx));
             cx.notify();
         });
+        let tree_events = cx.observe(&tree, |this: &mut Self, tree, cx| {
+            let selected = tree
+                .read(cx)
+                .selected_item()
+                .map(|item| PathBuf::from(item.id.to_string()));
+            if this.renaming.is_some() && this.renaming != selected {
+                this.renaming = None;
+                cx.notify();
+            }
+        });
         let dialog_events = cx.subscribe(&dialog, |this, _, event, cx| {
             let crate::scan_summaries::MediaSearchEvent::Matched { path, anilist_id } = event;
             this.store
-                .update(cx, |store, cx| store.rematch(path.clone(), *anilist_id, cx));
+                .update(cx, |store, cx| store.rematch(path, *anilist_id, cx));
         });
         Self {
             store,
@@ -83,8 +96,9 @@ impl LibraryExplorerScreen {
             folders,
             dialog,
             rename,
-            renaming: false,
+            renaming: None,
             _store_events: events,
+            _tree_events: tree_events,
             _dialog_events: dialog_events,
             on_trash: None,
         }
@@ -176,7 +190,7 @@ impl Render for LibraryExplorerScreen {
                     .on_click(move |_, _, cx| {
                         store.update(cx, |store, cx| {
                             store.set_lock(
-                                lock_path.clone(),
+                                &lock_path,
                                 if locked {
                                     FileFlag::Clear
                                 } else {
@@ -201,15 +215,16 @@ impl Render for LibraryExplorerScreen {
             actions = actions.child(Button::new("explorer-ignore").label("Ignore").on_click(
                 move |_, _, cx| {
                     store.update(cx, |store, cx| {
-                        store.set_ignored(ignore_path.clone(), FileFlag::Set, cx);
+                        store.set_ignored(&ignore_path, FileFlag::Set, cx);
                     });
                 },
             ));
             let screen = cx.entity();
+            let rename_path = path.clone();
             actions = actions.child(Button::new("explorer-rename").label("Rename").on_click(
                 move |_, _, cx| {
                     screen.update(cx, |screen, cx| {
-                        screen.renaming = true;
+                        screen.renaming = Some(rename_path.clone());
                         cx.notify();
                     });
                 },
@@ -270,7 +285,7 @@ impl Render for LibraryExplorerScreen {
                     }
                 },
             ));
-        let rename = self.renaming.then(|| {
+        let rename = self.renaming.clone().map(|from| {
             let store = self.store.clone();
             let input = self.rename.clone();
             let screen = cx.entity();
@@ -278,23 +293,15 @@ impl Render for LibraryExplorerScreen {
                 Button::new("explorer-rename-confirm")
                     .label("Rename")
                     .on_click(move |_, _, cx| {
-                        let Some(from) = screen
-                            .read(cx)
-                            .tree
-                            .read(cx)
-                            .selected_item()
-                            .map(|item| PathBuf::from(item.id.to_string()))
-                        else {
-                            return;
-                        };
+                        let from = from.clone();
                         let name = input.read(cx).value().to_string();
                         let Some(parent) = from.parent().map(PathBuf::from) else {
                             return;
                         };
                         let to = parent.join(name);
-                        store.update(cx, |store, cx| store.rename(from, to, cx));
+                        store.update(cx, |store, cx| store.rename(&from, &to, cx));
                         screen.update(cx, |screen, cx| {
-                            screen.renaming = false;
+                            screen.renaming = None;
                             cx.notify();
                         });
                     }),

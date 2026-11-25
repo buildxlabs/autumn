@@ -12,7 +12,7 @@ use std::{
 
 use db::{FileFlag, LocalFile};
 use domain::AppEvent;
-use engine::EngineServices;
+use engine::{BoxFuture, EngineError, EngineServices};
 use gpui_kit::{Context, Task};
 
 use crate::entry_store::call;
@@ -140,7 +140,6 @@ pub struct LibraryExplorerStore {
     files: Vec<LocalFile>,
     filter: ExplorerFilter,
     load_task: Option<Task<()>>,
-    command_task: Option<Task<()>>,
     error: Option<String>,
 }
 
@@ -162,7 +161,6 @@ impl LibraryExplorerStore {
             files: Vec::new(),
             filter: ExplorerFilter::default(),
             load_task: None,
-            command_task: None,
             error: None,
         }
     }
@@ -214,113 +212,54 @@ impl LibraryExplorerStore {
     }
 
     /// Sets or clears a file's lock.
-    pub fn set_lock(&mut self, path: PathBuf, flag: FileFlag, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            match call(cx, services.set_library_lock(&path, flag)).await {
-                Ok(_) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = None;
-                        store.reload(cx);
-                    });
-                }
-                Err(error) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = Some(error);
-                        cx.notify();
-                    });
-                }
-            }
-        }));
+    pub fn set_lock(&mut self, path: &Path, flag: FileFlag, cx: &mut Context<'_, Self>) {
+        let command = self.services.set_library_lock(path, flag);
+        Self::run_command(command, cx);
     }
 
     /// Sets or clears a file's ignored flag.
-    pub fn set_ignored(&mut self, path: PathBuf, flag: FileFlag, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            match call(cx, services.set_library_ignored(&path, flag)).await {
-                Ok(_) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = None;
-                        store.reload(cx);
-                    });
-                }
-                Err(error) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = Some(error);
-                        cx.notify();
-                    });
-                }
-            }
-        }));
+    pub fn set_ignored(&mut self, path: &Path, flag: FileFlag, cx: &mut Context<'_, Self>) {
+        let command = self.services.set_library_ignored(path, flag);
+        Self::run_command(command, cx);
     }
 
     /// Renames a file, updating its tree row through the next reload.
-    pub fn rename(&mut self, from: PathBuf, to: PathBuf, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            match call(cx, services.rename_library_file(&from, &to)).await {
-                Ok(_) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = None;
-                        store.reload(cx);
-                    });
-                }
-                Err(error) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = Some(error);
-                        cx.notify();
-                    });
-                }
-            }
-        }));
+    pub fn rename(&mut self, from: &Path, to: &Path, cx: &mut Context<'_, Self>) {
+        let command = self.services.rename_library_file(from, to);
+        Self::run_command(command, cx);
     }
 
     /// Moves files to the OS trash and removes their rows.
-    pub fn trash(&mut self, paths: Vec<PathBuf>, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            match call(cx, services.trash_library_files(&paths)).await {
-                Ok(_) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = None;
-                        store.reload(cx);
-                    });
-                }
-                Err(error) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = Some(error);
-                        cx.notify();
-                    });
-                }
-            }
-        }));
+    pub fn trash(&mut self, paths: &[PathBuf], cx: &mut Context<'_, Self>) {
+        let command = self.services.trash_library_files(paths);
+        Self::run_command(command, cx);
     }
 
     /// Re-matches a file to AniList media.
-    pub fn rematch(&mut self, path: PathBuf, anilist_id: u32, cx: &mut Context<'_, Self>) {
-        let services = Arc::clone(&self.services);
-        self.command_task = Some(cx.spawn(async move |store, cx| {
-            match call(
-                cx,
-                services.manual_match(std::slice::from_ref(&path), anilist_id, None),
-            )
-            .await
-            {
+    pub fn rematch(&mut self, path: &Path, anilist_id: u32, cx: &mut Context<'_, Self>) {
+        let command = self
+            .services
+            .manual_match(&[path.to_path_buf()], anilist_id, None);
+        Self::run_command(command, cx);
+    }
+
+    /// Sends `command` and reloads after it. Commands run detached, so a
+    /// newer click never cancels an older command's engine call.
+    fn run_command(command: BoxFuture<Result<usize, EngineError>>, cx: &mut Context<'_, Self>) {
+        cx.spawn(async move |store, cx| {
+            let result = call(cx, command).await;
+            let _ = store.update(cx, |store, cx| match result {
                 Ok(_) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = None;
-                        store.reload(cx);
-                    });
+                    store.error = None;
+                    store.reload(cx);
                 }
                 Err(error) => {
-                    let _ = store.update(cx, |store, cx| {
-                        store.error = Some(error);
-                        cx.notify();
-                    });
+                    store.error = Some(error);
+                    cx.notify();
                 }
-            }
-        }));
+            });
+        })
+        .detach();
     }
 
     fn reload(&mut self, cx: &mut Context<'_, Self>) {
@@ -434,6 +373,57 @@ mod tests {
             locked
                 .iter()
                 .any(|row| row.file.as_ref().is_some_and(|file| file.locked))
+        );
+    }
+
+    #[gpui_kit::test]
+    fn two_quick_commands_both_reach_the_engine(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::AppContext;
+
+        use crate::{
+            bridge,
+            test_support::{LibraryCommand, LibraryServices},
+        };
+
+        cx.executor().allow_parking();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a test runtime");
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = LibraryServices::default();
+        let store = cx.new(|_| LibraryExplorerStore::new(Arc::new(services.clone())));
+        let (first, second) = (PathBuf::from("/shows/a.mkv"), PathBuf::from("/shows/b.mkv"));
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.rematch(&first, 1, cx);
+                store.rematch(&second, 2, cx);
+            });
+        });
+        for _ in 0..100 {
+            cx.run_until_parked();
+            if services.commands().len() == 2 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        assert_eq!(
+            services.commands(),
+            [
+                LibraryCommand::Match {
+                    path: first,
+                    anilist_id: 1,
+                    episode: None,
+                },
+                LibraryCommand::Match {
+                    path: second,
+                    anilist_id: 2,
+                    episode: None,
+                },
+            ],
+            "the second command did not cancel the first"
         );
     }
 }

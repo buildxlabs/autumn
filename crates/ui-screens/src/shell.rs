@@ -716,7 +716,7 @@ impl AppShell {
                                     .on_click(move |_, window, cx| {
                                         window.close_dialog(cx);
                                         store.update(cx, |store, cx| {
-                                            store.trash(confirm_paths.clone(), cx);
+                                            store.trash(&confirm_paths, cx);
                                         });
                                     }),
                             )
