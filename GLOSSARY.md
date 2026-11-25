@@ -1,6 +1,6 @@
 # Autumn
 
-A native desktop app for anime and manga: a local library, streaming, online sources from extensions, list tracking and a manga reader.
+A native desktop app for anime: a local library, streaming, online sources from extensions and list tracking. Manga is not planned for now.
 
 ## Language
 

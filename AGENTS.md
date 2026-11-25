@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Autumn is a native desktop app for anime and manga, written in Rust with GPUI (through `gpui-kit`). It brings together a local file library, torrent and debrid streaming, online sources from sandboxed extensions, AniList/MAL/account-free tracking, and a manga reader. Video plays in mpv (and similar players). Desktop only: no web app, no server mode.
+Autumn is a native desktop app for anime, written in Rust with GPUI (through `gpui-kit`). It brings together a local file library, torrent and debrid streaming, online sources from sandboxed extensions, and AniList/MAL/account-free tracking. Manga is not planned for now (ROADMAP Backlog). Video plays in mpv (and similar players). Desktop only: no web app, no server mode.
 
 ## Where things are
 
