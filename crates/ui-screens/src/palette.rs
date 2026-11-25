@@ -27,6 +27,20 @@ use crate::{
     shell::{icon, title},
 };
 
+/// The Local platform's anime entries as palette rows. Manga is on the
+/// ROADMAP Backlog (#185), so its entries are not loaded.
+async fn local_anime(db: Db, gateway: PlatformGateway) -> Vec<MediaSummary> {
+    let mut summaries = Vec::new();
+    if let Ok(entries) = gateway.entries(MediaKind::Anime).await {
+        for entry in entries {
+            if let Ok(ids) = db.media().external_ids(entry.media).await {
+                summaries.push(local_summary(MediaKind::Anime, &ids));
+            }
+        }
+    }
+    summaries
+}
+
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
 const ROUTES: [Route; 5] = [
@@ -242,21 +256,7 @@ impl CommandPalette {
             return;
         };
         self.local_load = Some(cx.spawn(async move |palette, cx| {
-            let load = cx.update(|cx| {
-                bridge::run(cx, async move {
-                    let mut summaries = Vec::new();
-                    for kind in [MediaKind::Anime, MediaKind::Manga] {
-                        if let Ok(entries) = gateway.entries(kind).await {
-                            for entry in entries {
-                                if let Ok(ids) = db.media().external_ids(entry.media).await {
-                                    summaries.push(local_summary(kind, &ids));
-                                }
-                            }
-                        }
-                    }
-                    summaries
-                })
-            });
+            let load = cx.update(|cx| bridge::run(cx, local_anime(db, gateway)));
             let rows = load.await.unwrap_or_default();
             let _ = palette.update(cx, |palette, cx| {
                 palette.local = rows;
@@ -435,6 +435,32 @@ mod tests {
         assert_eq!(Mode::Search.kind(), Some(MediaKind::Anime));
         assert_eq!(Mode::Anime.kind(), Some(MediaKind::Anime));
         assert_eq!(Mode::SLASH, [Mode::Search, Mode::Anime]);
+    }
+
+    #[tokio::test]
+    async fn local_rows_are_anime_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("autumn.db")).await.unwrap();
+        for (kind, anilist_id) in [(MediaKind::Anime, 1), (MediaKind::Manga, 2)] {
+            let minted = db
+                .media()
+                .find_or_mint(kind, &[domain::ExternalId::AniList(anilist_id)])
+                .await
+                .unwrap();
+            db.local_list()
+                .save(&crate::lists_source::tests::entry(
+                    minted.media,
+                    ListStatus::Current,
+                    0,
+                ))
+                .await
+                .unwrap();
+        }
+
+        let rows = local_anime(db.clone(), PlatformGateway::local(db)).await;
+
+        let ids: Vec<u32> = rows.iter().map(|row| row.anilist_id).collect();
+        assert_eq!(ids, [1], "only the anime entry is a palette row");
     }
 
     #[gpui_kit::test]

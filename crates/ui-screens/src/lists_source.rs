@@ -67,11 +67,16 @@ impl PlatformListSource {
 
 impl ListSource for PlatformListSource {
     async fn load(&self) -> Result<Vec<ListCard>, ListSourceError> {
+        // Anime only: manga is on the ROADMAP Backlog (#185). Manga entries
+        // stay stored for tracker sync and transfer.
         let mut cards = Vec::new();
-        for kind in [MediaKind::Anime, MediaKind::Manga] {
-            for entry in self.gateway.entries(kind).await.map_err(source_error)? {
-                cards.push(self.card(entry).await?);
-            }
+        for entry in self
+            .gateway
+            .entries(MediaKind::Anime)
+            .await
+            .map_err(source_error)?
+        {
+            cards.push(self.card(entry).await?);
         }
         Ok(cards)
     }
@@ -88,7 +93,7 @@ impl ListSource for PlatformListSource {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::time::SystemTime;
 
     use db::Db;
@@ -99,7 +104,8 @@ mod tests {
 
     use super::PlatformListSource;
 
-    fn entry(media: MediaId, status: ListStatus, progress: u32) -> ListEntry {
+    /// A minimal list entry, also used by the palette tests.
+    pub(crate) fn entry(media: MediaId, status: ListStatus, progress: u32) -> ListEntry {
         ListEntry {
             media,
             status,
@@ -230,5 +236,43 @@ mod tests {
 
         assert_eq!(session.cards().len(), 1, "the entry was loaded");
         assert_eq!(hits.load(Ordering::SeqCst), 0, "Local made no requests");
+    }
+
+    #[tokio::test]
+    async fn my_lists_shows_anime_entries_only() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let db = Db::open(&dir.path().join("autumn.db")).await.expect("db");
+        let mut saved = Vec::new();
+        for (kind, anilist_id) in [(MediaKind::Anime, 1), (MediaKind::Manga, 2)] {
+            let minted = db
+                .media()
+                .find_or_mint(kind, &[ExternalId::AniList(anilist_id)])
+                .await
+                .expect("mint media");
+            db.local_list()
+                .save(&entry(minted.media, ListStatus::Current, 1))
+                .await
+                .expect("save entry");
+            saved.push(minted.media);
+        }
+
+        let mut session = ListsSession::new(source(db.clone(), dir.path()));
+        session.reload().await.expect("load entries");
+
+        let shown: Vec<MediaId> = session
+            .cards()
+            .iter()
+            .map(|card| card.entry.media)
+            .collect();
+        assert_eq!(
+            shown,
+            saved.first().copied().into_iter().collect::<Vec<_>>(),
+            "only the anime entry"
+        );
+        let manga = PlatformGateway::local(db)
+            .entries(MediaKind::Manga)
+            .await
+            .expect("manga entries");
+        assert_eq!(manga.len(), 1, "the manga entry stays stored");
     }
 }
