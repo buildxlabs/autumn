@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 
 use domain::{
     AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
-    PlaybackState,
+    PlaybackState, StreamSource,
 };
 use engine::{EngineServices, PlayRequest};
 use gpui_kit::{Context, Task, WeakEntity};
@@ -189,6 +189,22 @@ impl PlaybackStore {
             }
             _ => {}
         }
+    }
+
+    /// Plays a local file from another screen; the store builds the engine
+    /// request so screens never name the engine crate.
+    pub fn play_file(
+        &mut self,
+        media: MediaId,
+        episode: u32,
+        path: std::path::PathBuf,
+        details: PlaybackDetails,
+        cx: &mut Context<'_, Self>,
+    ) {
+        self.play(
+            PlayRequest::new(media, episode, StreamSource::local(path)).with_details(details),
+            cx,
+        );
     }
 
     /// Starts `request`; a newer request cancels the older one's task.

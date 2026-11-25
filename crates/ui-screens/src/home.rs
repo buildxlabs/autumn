@@ -3,23 +3,30 @@
 
 use std::rc::Rc;
 
+use domain::{MediaId, PlaybackDetails};
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement, ParentElement,
-    SharedString, Styled, Subscription, TestSupportExt, Window,
+    Resource, SharedString, Styled, Subscription, TestSupportExt, Window,
     component::{ActiveTheme, button::Button, carousel::CarouselState},
     div, px,
 };
 use metadata::MediaSummary;
 use ui_components::{
-    CarouselWheel, LruImageCache, MEDIA_CARD_HEIGHT, MediaCardView, MediaCarousel,
+    CarouselWheel, EpisodeActions, EpisodeCard, EpisodeCardView, LruImageCache, MEDIA_CARD_HEIGHT,
+    MediaCard, MediaCardView, MediaCarousel, PosterGrid,
     fetch_status::{FetchError, error_card, fetch_loader, offline_banner},
     hero::{HeroBannerData, hero_banner},
 };
 use ui_state::{
     Route,
-    actions::OpenLibraryExplorer,
+    actions::{OpenLibraryExplorer, ScanLibrary},
     fetch_status::cache_age,
-    home_store::{HomeEntry, HomeSection, HomeStore, SectionData, SectionState},
+    home_store::{
+        ContinueEpisode, HomeEntry, HomeSection, HomeStore, LibraryGroup, LibraryStats,
+        SectionData, SectionState,
+    },
+    library_store::{LibraryStore, ScanState},
+    playback_store::PlaybackStore,
 };
 
 use crate::{
@@ -39,17 +46,24 @@ const CAROUSELS: [HomeSection; 4] = [
 pub(crate) struct HomeCarousels {
     states: Vec<Entity<CarouselState>>,
     wheels: Vec<CarouselWheel>,
+    /// The Local Library's virtualized poster grid.
+    local_grid: Entity<PosterGrid>,
 }
 
 impl HomeCarousels {
-    /// One paging state per carousel section.
+    /// One paging state per carousel section, plus the poster grid.
     pub(crate) fn new(cx: &mut App) -> Entity<Self> {
         let states = CAROUSELS
             .iter()
             .map(|_| cx.new(|_| CarouselState::new(0)))
             .collect();
         let wheels = CAROUSELS.iter().map(|_| CarouselWheel::default()).collect();
-        cx.new(|_| Self { states, wheels })
+        let local_grid = PosterGrid::new(Vec::new(), cx);
+        cx.new(|_| Self {
+            states,
+            wheels,
+            local_grid,
+        })
     }
 
     fn slot(&self, section: HomeSection) -> Option<(Entity<CarouselState>, CarouselWheel)> {
@@ -69,6 +83,8 @@ pub(crate) fn observe(
     cx: &mut Context<'_, AppShell>,
 ) -> Subscription {
     let carousels = carousels.clone();
+    let grid = carousels.read(cx).local_grid.clone();
+    let shell = cx.entity().downgrade();
     cx.observe(store, move |_, store, cx| {
         let counts: Vec<usize> = CAROUSELS
             .iter()
@@ -78,6 +94,33 @@ pub(crate) fn observe(
         for (state, count) in states.iter().zip(counts) {
             state.update(cx, |state, cx| state.set_item_count(count, cx));
         }
+        let (cards, ids) = match store.read(cx).state(HomeSection::LocalAnimeLibrary) {
+            SectionState::Ready(SectionData::LocalAnimeLibrary(media))
+            | SectionState::Offline(SectionData::LocalAnimeLibrary(media), _) => (
+                media
+                    .iter()
+                    .map(|item| MediaCardView {
+                        title: item
+                            .title
+                            .clone()
+                            .unwrap_or_else(|| format!("Media {}", item.media.get()))
+                            .into(),
+                        ..MediaCardView::default()
+                    })
+                    .collect(),
+                media.iter().map(|item| item.anilist_id).collect(),
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let shell = shell.clone();
+        grid.update(cx, |grid, cx| {
+            grid.set_items(cards, cx);
+            grid.on_open(move |index, _, cx| {
+                if let Some(Some(id)) = ids.get(index).copied() {
+                    let _ = shell.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                }
+            });
+        });
     })
 }
 
@@ -86,13 +129,30 @@ pub(crate) fn render(
     store: &Entity<HomeStore>,
     carousels: &Entity<HomeCarousels>,
     cache: &Entity<LruImageCache>,
+    library_store: &Entity<LibraryStore>,
+    playback_store: &Entity<PlaybackStore>,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
     let states = store.read(cx).states().to_vec();
     let mut sections = Vec::with_capacity(states.len());
     for (section, state) in HomeSection::ALL.into_iter().zip(states) {
-        sections.push(render_section(section, state, store, carousels, cache, cx));
+        sections.push(render_section(
+            section,
+            state,
+            store,
+            carousels,
+            cache,
+            playback_store,
+            cx,
+        ));
     }
+    let scan_label = match library_store.read(cx).scan() {
+        ScanState::Running {
+            files_walked,
+            files_matched,
+        } => format!("Scanning… {files_walked} walked, {files_matched} matched"),
+        _ => "Scan library".to_owned(),
+    };
     div()
         .id("home-view")
         .test_support()
@@ -101,13 +161,22 @@ pub(crate) fn render(
         .gap_6()
         .p_6()
         .child(
-            div().flex().justify_end().child(
-                Button::new("home-library-explorer")
-                    .label("Library Explorer")
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
-                    }),
-            ),
+            div()
+                .flex()
+                .justify_end()
+                .gap_2()
+                .child(Button::new("home-scan-library").label(scan_label).on_click(
+                    |_, window, cx| {
+                        window.dispatch_action(Box::new(ScanLibrary), cx);
+                    },
+                ))
+                .child(
+                    Button::new("home-library-explorer")
+                        .label("Library Explorer")
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
+                        }),
+                ),
         )
         .children(sections)
 }
@@ -120,11 +189,16 @@ fn render_section(
     store: &Entity<HomeStore>,
     carousels: &Entity<HomeCarousels>,
     cache: &Entity<LruImageCache>,
+    playback_store: &Entity<PlaybackStore>,
     cx: &mut Context<'_, AppShell>,
 ) -> gpui_kit::AnyElement {
     let id = section_id(section);
+    if matches!(state, SectionState::Hidden) {
+        return div().id(id).test_support().into_any_element();
+    }
     let body = match state {
         SectionState::Loading => div().child(fetch_loader()).into_any_element(),
+        SectionState::Hidden => div().into_any_element(),
         SectionState::Failed(message) => {
             let store = store.clone();
             error_card(
@@ -136,13 +210,22 @@ fn render_section(
             )
             .into_any_element()
         }
-        SectionState::Ready(data) => render_data(section, &data, carousels, cache, cx),
+        SectionState::Ready(data) => {
+            render_data(section, &data, carousels, cache, playback_store, cx)
+        }
         SectionState::Offline(data, updated_at) => div()
             .flex()
             .flex_col()
             .gap_2()
             .child(offline_banner(&cache_age(updated_at)))
-            .child(render_data(section, &data, carousels, cache, cx))
+            .child(render_data(
+                section,
+                &data,
+                carousels,
+                cache,
+                playback_store,
+                cx,
+            ))
             .into_any_element(),
     };
     let mut container = div().id(id).test_support().flex().flex_col().gap_2();
@@ -152,11 +235,16 @@ fn render_section(
     container.child(body).into_any_element()
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the renderer owns one match arm per Home widget and its empty state"
+)]
 fn render_data(
     section: HomeSection,
     data: &SectionData,
     carousels: &Entity<HomeCarousels>,
     cache: &Entity<LruImageCache>,
+    playback_store: &Entity<PlaybackStore>,
     cx: &mut Context<'_, AppShell>,
 ) -> gpui_kit::AnyElement {
     let colors = cx.theme().colors;
@@ -172,6 +260,21 @@ fn render_data(
             ),
             None => empty("Nothing in progress. Add a show to your list from its Entry page."),
         },
+        SectionData::AnimeContinueWatching(episodes) => {
+            if episodes.is_empty() {
+                return empty("Nothing to continue. Scan your library to find episodes.");
+            }
+            div()
+                .flex()
+                .gap_3()
+                .children(
+                    episodes
+                        .iter()
+                        .enumerate()
+                        .map(|(index, episode)| continue_card(episode, index, playback_store)),
+                )
+                .into_any_element()
+        }
         SectionData::DiscoverHeader(media) => match media.first() {
             Some(first) => hero(
                 "home-discover",
@@ -187,6 +290,48 @@ fn render_data(
             ),
             None => empty("Nothing trending right now."),
         },
+        SectionData::AnimeLibrary(groups) => {
+            if groups.is_empty() {
+                return empty("No local files on your lists yet.");
+            }
+            div()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .children(groups.iter().map(|group| library_group(group, cx)))
+                .into_any_element()
+        }
+        SectionData::LocalAnimeLibrary(media) => {
+            if media.is_empty() {
+                return empty("No matched media on disk yet.");
+            }
+            carousels.read(cx).local_grid.clone().into_any_element()
+        }
+        SectionData::LocalAnimeLibraryStats(stats) => stats_strip(stats, cx),
+        SectionData::LibraryUpcomingEpisodes(episodes) => {
+            if episodes.is_empty() {
+                return empty("Nothing upcoming for your library media.");
+            }
+            div()
+                .flex()
+                .gap_3()
+                .children(episodes.iter().map(|episode| {
+                    MediaCard::new(
+                        MediaCardView {
+                            detail: format!(
+                                "Episode {} · {}",
+                                episode.episode,
+                                countdown(episode.time_until_airing)
+                            )
+                            .into(),
+                            ..media_card(&episode.media)
+                        },
+                        SharedString::from(format!("home-upcoming-{}", episode.media.anilist_id)),
+                    )
+                    .into_any_element()
+                }))
+                .into_any_element()
+        }
         SectionData::CenteredTitle(title) => div()
             .w_full()
             .flex()
@@ -214,6 +359,150 @@ fn render_data(
             }
         }
     }
+}
+
+/// One `EpisodeCard` that plays the next file when clicked.
+fn continue_card(
+    item: &ContinueEpisode,
+    index: usize,
+    playback_store: &Entity<PlaybackStore>,
+) -> gpui_kit::AnyElement {
+    let media = item.entry.media.as_ref();
+    let view = EpisodeCardView {
+        thumbnail: media
+            .and_then(|media| media.banner.clone().or_else(|| media.poster.clone()))
+            .map(|url| Resource::Uri(url.into())),
+        episode_number: item.episode,
+        title: format!("Episode {}", item.episode).into(),
+        media_title: media.map(|media| title_of(media).into()),
+        filename: Some(item.path.to_string_lossy().into_owned().into()),
+        filler: false,
+        watched: false,
+        locked: false,
+        progress: item.progress.map(|percent| f32::from(percent) / 100.0),
+        skeleton: false,
+    };
+    let media_id: MediaId = item.entry.entry.media;
+    let episode = item.episode;
+    let path = item.path.clone();
+    let details = PlaybackDetails::new(
+        media.map_or_else(|| "Untitled".to_owned(), title_of),
+        Some(format!("Episode {episode}")),
+        media.and_then(|media| media.poster.clone()),
+    );
+    let store = playback_store.clone();
+    EpisodeCard::new(
+        view,
+        SharedString::from(format!("home-continue-episode-{index}")),
+    )
+    .actions(EpisodeActions::new().on_play(move |_, cx| {
+        store.update(cx, |store, cx| {
+            store.play_file(media_id, episode, path.clone(), details.clone(), cx);
+        });
+    }))
+    .into_any_element()
+}
+
+/// One list-status group of poster cards.
+fn library_group(group: &LibraryGroup, cx: &mut Context<'_, AppShell>) -> gpui_kit::AnyElement {
+    let label = match group.status {
+        domain::ListStatus::Current | domain::ListStatus::Repeating => "Watching",
+        domain::ListStatus::Paused => "Paused",
+        domain::ListStatus::Planning => "Planning",
+        domain::ListStatus::Completed => "Completed",
+        domain::ListStatus::Dropped => "Dropped",
+        _ => "Other",
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().colors.muted_foreground)
+                .child(label),
+        )
+        .child(
+            div()
+                .flex()
+                .gap_3()
+                .children(group.entries.iter().map(|item| {
+                    let mut view = match item.media.as_ref() {
+                        Some(media) => media_card(media),
+                        None => MediaCardView {
+                            title: entry_title(item).into(),
+                            ..MediaCardView::default()
+                        },
+                    };
+                    view.progress = item.entry.progress;
+                    let id = item.media.as_ref().map(|media| media.anilist_id);
+                    let shell = cx.entity().downgrade();
+                    MediaCard::new(
+                        view,
+                        SharedString::from(format!("home-library-{}", item.entry.media.get())),
+                    )
+                    .on_open(move |_, cx| {
+                        if let Some(id) = id {
+                            let _ = shell
+                                .update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                        }
+                    })
+                    .into_any_element()
+                })),
+        )
+        .into_any_element()
+}
+
+/// The four counts, with a link to the scan log.
+fn stats_strip(stats: &LibraryStats, cx: &mut Context<'_, AppShell>) -> gpui_kit::AnyElement {
+    let colors = cx.theme().colors;
+    let shell = cx.entity().downgrade();
+    let cell = |label: &'static str, value: String| {
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child(label),
+            )
+            .child(div().text_lg().child(value))
+            .into_any_element()
+    };
+    div()
+        .flex()
+        .gap_6()
+        .child(cell("Files", stats.files.to_string()))
+        .child(cell("Size", format!("{} MB", stats.bytes / (1024 * 1024))))
+        .child(cell("Media", stats.media.to_string()))
+        .child(cell("Unmatched", stats.unmatched.to_string()))
+        .child(
+            Button::new("home-stats-scan-summaries")
+                .label("Scan Summaries")
+                .on_click(move |_, _, cx| {
+                    let _ = shell.update(cx, |shell, cx| shell.navigate(Route::ScanSummaries, cx));
+                }),
+        )
+        .into_any_element()
+}
+
+/// A short relative time for an upcoming episode's countdown.
+fn countdown(seconds: i32) -> String {
+    if seconds <= 0 {
+        return "aired".to_owned();
+    }
+    let minutes = seconds / 60;
+    if minutes < 60 {
+        return format!("in {minutes}m");
+    }
+    let hours = minutes / 60;
+    if hours < 24 {
+        return format!("in {hours}h");
+    }
+    format!("in {}d", hours / 24)
 }
 
 /// A hero with one action that opens the media's Entry.
@@ -275,7 +564,9 @@ type CardIds = Vec<Option<u32>>;
 fn section_cards(state: &SectionState) -> (Rc<[MediaCardView]>, CardIds) {
     match state {
         SectionState::Ready(data) | SectionState::Offline(data, _) => section_data_cards(data),
-        SectionState::Loading | SectionState::Failed(_) => (Rc::from([]), Vec::new()),
+        SectionState::Loading | SectionState::Hidden | SectionState::Failed(_) => {
+            (Rc::from([]), Vec::new())
+        }
     }
 }
 
@@ -332,7 +623,12 @@ fn section_data_cards(data: &SectionData) -> (Rc<[MediaCardView]>, CardIds) {
             (cards, ids)
         }
         SectionData::ContinueWatching(_)
+        | SectionData::AnimeContinueWatching(_)
         | SectionData::DiscoverHeader(_)
+        | SectionData::AnimeLibrary(_)
+        | SectionData::LocalAnimeLibrary(_)
+        | SectionData::LocalAnimeLibraryStats(_)
+        | SectionData::LibraryUpcomingEpisodes(_)
         | SectionData::CenteredTitle(_) => (Rc::from([]), Vec::new()),
     }
 }
@@ -355,9 +651,14 @@ fn open_entry(
 /// The element id of a section, for tests and the carousel's child ids.
 pub(crate) fn section_id(section: HomeSection) -> &'static str {
     match section {
-        HomeSection::ContinueWatching => "home-continue-watching",
+        HomeSection::ContinueWatching => "home-continue-watching-header",
+        HomeSection::AnimeContinueWatching => "anime-continue-watching",
         HomeSection::DiscoverHeader => "home-discover-header",
         HomeSection::MyLists => "home-my-lists",
+        HomeSection::AnimeLibrary => "anime-library",
+        HomeSection::LocalAnimeLibrary => "local-anime-library",
+        HomeSection::LocalAnimeLibraryStats => "local-anime-library-stats",
+        HomeSection::LibraryUpcomingEpisodes => "library-upcoming-episodes",
         HomeSection::MissedSequels => "home-missed-sequels",
         HomeSection::AiredRecently => "home-aired-recently",
         HomeSection::AnimeCarousel => "home-anime-carousel",
@@ -368,7 +669,12 @@ pub(crate) fn section_id(section: HomeSection) -> &'static str {
 /// The heading above a carousel section; the headers and the title have none.
 fn section_title(section: HomeSection) -> Option<&'static str> {
     match section {
+        HomeSection::AnimeContinueWatching => Some("Continue Watching"),
         HomeSection::MyLists => Some("My Lists"),
+        HomeSection::AnimeLibrary => Some("Library"),
+        HomeSection::LocalAnimeLibrary => Some("Local Library"),
+        HomeSection::LocalAnimeLibraryStats => Some("Library Stats"),
+        HomeSection::LibraryUpcomingEpisodes => Some("Upcoming Episodes"),
         HomeSection::MissedSequels => Some("Missed Sequels"),
         HomeSection::AiredRecently => Some("Aired Recently"),
         HomeSection::AnimeCarousel => Some("Popular Anime"),
@@ -382,19 +688,23 @@ fn section_title(section: HomeSection) -> Option<&'static str> {
 mod tests {
     use std::{rc::Rc, sync::Arc, time::Duration, time::SystemTime};
 
-    use domain::{AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score};
+    use db::{LocalFile, ResumePoint};
+    use domain::{
+        AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score, StreamSource,
+    };
     use gpui_kit::{
         App, AppContext, Bounds, Task, TestAppContext, WindowBounds, WindowOptions, base::Root,
         point, px, size, test::TestWindowExt,
     };
-    use metadata::{MediaDetail, MediaSummary, MediaTitle};
+    use metadata::{AiringEpisode, MediaDetail, MediaSummary, MediaTitle};
     use tokio::runtime::Builder;
     use ui_state::{
-        Route,
+        LibraryMediaInfo, Route,
         bridge::{self, BridgeError},
         entry_store::EntryStore,
         home_store::{HomeSection, HomeStore},
-        test_support::CannedServices,
+        playback_store::PlaybackStore,
+        test_support::{CannedServices, PlaybackCall, PlaybackServices},
     };
 
     use crate::{
@@ -611,6 +921,159 @@ mod tests {
                 tab: None
             },
             "Continue opens the watched show's Entry"
+        );
+    }
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one screen test builds the shell, then checks the toolbar, widgets and play action"
+    )]
+    async fn library_widgets_render_and_their_episode_cards_play(cx: &mut TestAppContext) {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let file = LocalFile {
+            path: "/shows/ep3.mkv".into(),
+            size: 1024 * 1024,
+            modified: 0,
+            title: None,
+            group: None,
+            season: None,
+            episode: Some(3),
+            kind: "episode".to_owned(),
+            media_id: Some(MediaId::new(1)),
+            confidence: Some(0.9),
+            locked: false,
+            ignored: false,
+            filler: false,
+            shelved: false,
+        };
+        let services = Arc::new(
+            CannedServices::new(detail())
+                .collection(vec![(watching(), Some(summary()))])
+                .library(
+                    vec![file],
+                    vec![LibraryMediaInfo::new(
+                        MediaId::new(1),
+                        Some(WATCHED),
+                        Some("A Watched Show".to_owned()),
+                    )],
+                    vec![ResumePoint {
+                        media: MediaId::new(1),
+                        episode: 3,
+                        position: 600.0,
+                        duration: Some(1200.0),
+                        updated_at: 100,
+                    }],
+                    vec![AiringEpisode {
+                        media: summary(),
+                        episode: 4,
+                        airing_at: 0,
+                        time_until_airing: 3600,
+                    }],
+                ),
+        );
+        let playback = PlaybackServices::default();
+        let playback_calls = playback.clone();
+        let (window, _) = cx
+            .update(|cx| {
+                gpui_kit::init(cx);
+                ui_theme::init(cx);
+                cx.set_reduce_motion(true);
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: point(px(0.), px(0.)),
+                        size: size(px(1280.), px(4000.)),
+                    })),
+                    ..WindowOptions::default()
+                };
+                gpui_kit::open_window(options, cx, |window, cx| {
+                    let entry_store =
+                        cx.new(|_| EntryStore::new(Arc::<CannedServices>::clone(&services)));
+                    let home_store =
+                        cx.new(|_| HomeStore::new(Arc::<CannedServices>::clone(&services)));
+                    cx.new(|cx| {
+                        AppShell::new(
+                            RailPrefs::default(),
+                            settings::PlaybackSettings::default(),
+                            crate::shell::PlaybackServices::inert(),
+                            settings::LibrarySettings::default(),
+                            crate::shell::LibraryServices::inert(),
+                            cx.new(|_| {
+                                ui_state::LibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::LibraryExplorerStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| ui_state::fetch_status::FetchStatus::default()),
+                            cx.new(|_| ui_state::account::AccountStore::default()),
+                            "https://example.test/login".to_owned(),
+                            |_, _| Task::ready(()),
+                            |_, _| Task::ready(Ok(0)),
+                            |_, _| Task::ready(()),
+                            Rc::new(|_: Option<String>, _: &App| {
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
+                            }),
+                            entry_store,
+                            home_store,
+                            cx.new(|_| PlaybackStore::new(Arc::new(playback.clone()))),
+                            window,
+                            cx,
+                        )
+                    })
+                })
+            })
+            .expect("a test window");
+        let window = window.downcast::<Root>().expect("the root window");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            for section in [
+                HomeSection::AnimeContinueWatching,
+                HomeSection::AnimeLibrary,
+                HomeSection::LocalAnimeLibrary,
+                HomeSection::LocalAnimeLibraryStats,
+                HomeSection::LibraryUpcomingEpisodes,
+            ] {
+                assert!(
+                    window.find(section_id(section)).bounds().size.height > px(0.),
+                    "{section:?} is on Home"
+                );
+            }
+            assert!(
+                window.try_find("home-scan-library").is_some(),
+                "the toolbar offers a manual scan"
+            );
+            window.click("home-continue-episode-0", cx);
+        })
+        .expect("the rendered Home");
+        cx.run_until_parked();
+        let calls = playback_calls.calls();
+        assert!(
+            calls.iter().any(|call| matches!(
+                call,
+                PlaybackCall::Play(request)
+                    if request.episode == 3
+                        && request.source == StreamSource::local("/shows/ep3.mkv")
+            )),
+            "clicking the episode card plays its local file: {calls:?}"
         );
     }
 }

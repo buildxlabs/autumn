@@ -1307,6 +1307,8 @@ impl AppShell {
                     &self.home_store,
                     &self.home_carousels,
                     &self.banner_cache,
+                    &self.library_store,
+                    &self.playback_store,
                     cx,
                 ))
                 .into_any_element()

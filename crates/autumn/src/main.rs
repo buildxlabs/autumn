@@ -196,10 +196,12 @@ fn main() -> ExitCode {
                 let explorer = explorer.clone();
                 let playback = playback_store.clone();
                 let entry_library = entry_library.clone();
+                let home = home_store.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
                     account.update(cx, |store, cx| store.apply(event.clone(), cx));
                     library.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    home.update(cx, |store, cx| store.apply(&event, cx));
                     summaries.update(cx, |store, cx| store.apply(&event, cx));
                     explorer.update(cx, |store, cx| store.apply(&event, cx));
                     entry_library.update(cx, |store, cx| store.apply(&event, cx));
