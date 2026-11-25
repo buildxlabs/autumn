@@ -53,6 +53,30 @@ impl From<bool> for FillerPolicy {
     }
 }
 
+/// A media with local files, with what the screens need to link to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LibraryMediaInfo {
+    /// Autumn's media identity.
+    pub media: MediaId,
+    /// The AniList id behind the Entry route, when there is one.
+    pub anilist_id: Option<u32>,
+    /// The catalog title, when the media has been opened.
+    pub title: Option<String>,
+}
+
+impl LibraryMediaInfo {
+    /// Describes one media with local files.
+    #[must_use]
+    pub fn new(media: MediaId, anilist_id: Option<u32>, title: Option<String>) -> Self {
+        Self {
+            media,
+            anilist_id,
+            title,
+        }
+    }
+}
+
 /// A scan was refused because another one is still running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -496,6 +520,38 @@ pub(crate) fn matched_media(db: &Db) -> BoxFuture<Result<Vec<MediaId>, LibraryEr
         media.sort_by_key(|media| media.get());
         media.dedup();
         Ok(media)
+    })
+}
+
+/// The media with local files, with their AniList ids and cached titles.
+pub(crate) fn media_info(
+    db: &Db,
+    catalog: &CatalogCache,
+) -> BoxFuture<Result<Vec<LibraryMediaInfo>, LibraryError>> {
+    let (db, catalog) = (db.clone(), catalog.clone());
+    Box::pin(async move {
+        let mut info = Vec::new();
+        for media in matched_media(&db).await? {
+            let ids = db.media().external_ids(media).await?;
+            let anilist_id = ids.iter().find_map(|id| match id {
+                ExternalId::AniList(id) => Some(*id),
+                _ => None,
+            });
+            let title = if let Some(id) = anilist_id {
+                catalog.cached_media(id).await.and_then(|cached| {
+                    let title = cached.value.summary.title;
+                    title.romaji.or(title.english)
+                })
+            } else {
+                None
+            };
+            info.push(LibraryMediaInfo {
+                media,
+                anilist_id,
+                title,
+            });
+        }
+        Ok(info)
     })
 }
 

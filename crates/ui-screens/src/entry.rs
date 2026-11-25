@@ -809,6 +809,11 @@ mod tests {
                                     ui_state::test_support::pending_services(),
                                 )
                             }),
+                            cx.new(|_| {
+                                ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             cx.new(|_| ui_state::fetch_status::FetchStatus::default()),
                             cx.new(|_| ui_state::account::AccountStore::default()),
                             "https://example.test/login".to_owned(),

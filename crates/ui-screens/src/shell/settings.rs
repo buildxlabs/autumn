@@ -1046,6 +1046,7 @@ impl AppShell {
                 };
                 let folder_shell = shell.clone();
                 let scan_shell = shell;
+                let summaries_shell = cx.entity().downgrade();
                 let items = vec![
                     SettingItem::render(move |_, _, _| {
                         let shell = folder_shell.clone();
@@ -1172,6 +1173,16 @@ impl AppShell {
                                     ))
                                     .text_sm(),
                                 )
+                            })
+                    }),
+                    SettingItem::render(move |_, _, _| {
+                        let shell = summaries_shell.clone();
+                        Button::new("open-scan-summaries")
+                            .label("View scan summaries")
+                            .on_click(move |_, _, cx| {
+                                let _ = shell.update(cx, |shell, cx| {
+                                    shell.navigate(Route::ScanSummaries, cx);
+                                });
                             })
                     }),
                 ];

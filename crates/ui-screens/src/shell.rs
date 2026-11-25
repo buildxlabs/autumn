@@ -7,7 +7,7 @@ use domain::TransferDirection;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, Resource, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Task, TestSupportExt, Window,
+    StatefulInteractiveElement, Styled, Subscription, Task, TestSupportExt, WeakEntity, Window,
     assets::IconName,
     component::{
         ActiveTheme, Disableable, Icon, Sizable, TitleBar, WindowExt,
@@ -29,8 +29,8 @@ use ui_components::{
     },
 };
 use ui_state::{
-    LibraryStore, RailBadges, Route, RouterState, ScanOutcome, ScrollRestore, SearchFilters,
-    SettingsTab,
+    LibraryStore, RailBadges, Route, RouterState, ScanOutcome, ScanSummariesStore, ScrollRestore,
+    SearchFilters, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{
         GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, ScanLibrary,
@@ -64,6 +64,7 @@ use crate::{
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{episode_gallery, mock_media_views, placeholder},
+    scan_summaries::ScanSummariesScreen,
     search::{SearchEvent, SearchScreen},
 };
 
@@ -135,6 +136,7 @@ pub struct AppShell {
     /// `scroll.content_loaded()` so their saved offset survives the load.
     scroll: ScrollRestore,
     focus: FocusHandle,
+    shell_handle: WeakEntity<Self>,
     palette: Entity<CommandPalette>,
     _palette_events: Subscription,
     fetch_status: Entity<FetchStatus>,
@@ -187,6 +189,9 @@ pub struct AppShell {
     library_error: Option<String>,
     library_pick_task: Option<Task<()>>,
     save_library_task: Option<Task<()>>,
+    /// The scan log screen, built once startup has an AniList client (#134).
+    scan_summaries: Entity<ScanSummariesStore>,
+    scan_summaries_screen: Option<Entity<ScanSummariesScreen>>,
     /// The latest save, if it is still running.
     saving: Option<Task<()>>,
     /// Whether the rail is expanded, by hover or by the click-pin toggle.
@@ -240,6 +245,7 @@ impl AppShell {
         library: LibrarySettings,
         library_services: LibraryServices,
         library_store: Entity<LibraryStore>,
+        scan_summaries: Entity<ScanSummariesStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -360,6 +366,7 @@ impl AppShell {
             router: RouterState::new(Route::Home),
             scroll: ScrollRestore::new(),
             focus,
+            shell_handle: cx.entity().downgrade(),
             palette,
             _palette_events: palette_events,
             fetch_status,
@@ -402,6 +409,8 @@ impl AppShell {
             library_error: None,
             library_pick_task: None,
             save_library_task: None,
+            scan_summaries,
+            scan_summaries_screen: None,
             saving: None,
             rail_open: false,
             hover_open: None,
@@ -434,6 +443,7 @@ impl AppShell {
         library: LibrarySettings,
         library_services: LibraryServices,
         library_store: Entity<LibraryStore>,
+        scan_summaries: Entity<ScanSummariesStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -458,6 +468,7 @@ impl AppShell {
             library,
             library_services,
             library_store,
+            scan_summaries,
             fetch_status,
             account,
             login_url,
@@ -487,6 +498,30 @@ impl AppShell {
         cx.observe(&lists, |_, _, cx| cx.notify()).detach();
         shell.lists = Some(lists);
         shell.lists_events = Some(events);
+
+        let summaries_handle = cx.entity().downgrade();
+        let summaries = cx.new(|cx| {
+            ScanSummariesScreen::new(
+                shell.scan_summaries.clone(),
+                anilist.clone(),
+                shell.scroll.handle().clone(),
+                window,
+                cx,
+            )
+        });
+        summaries.update(cx, |screen, _| {
+            screen.set_on_open(move |id, _, cx| {
+                let _ = summaries_handle
+                    .update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+            });
+        });
+        shell.scan_summaries_screen = Some(summaries);
+        cx.observe_in(&shell.scan_summaries, window, |_, store, window, cx| {
+            if let Some(error) = store.update(cx, |store, _| store.take_error()) {
+                window.push_notification(Notification::error(error), cx);
+            }
+        })
+        .detach();
 
         let search = SearchScreen::new(SearchFilters::default(), anilist, window, cx);
         let shell_handle = cx.entity().downgrade();
@@ -609,12 +644,25 @@ impl AppShell {
                 outcome.files_unmatched
             )
         };
+        let shell = self.shell_handle.clone();
         let notification = if failed {
             Notification::error(message)
         } else {
             Notification::success(message)
         };
-        window.push_notification(notification, cx);
+        window.push_notification(
+            notification.action(move |_, _, _cx| {
+                let shell = shell.clone();
+                Button::new("scan-summaries-link")
+                    .label("Scan Summaries")
+                    .on_click(move |_, _, cx| {
+                        let _ = shell.update(cx, |shell, cx| {
+                            shell.navigate(Route::ScanSummaries, cx);
+                        });
+                    })
+            }),
+            cx,
+        );
     }
 
     fn go_back(&mut self, _: &GoBack, _: &mut Window, cx: &mut Context<'_, Self>) {
@@ -634,6 +682,11 @@ impl AppShell {
     /// [`ScrollRestore`] keeps the offset so an async screen's
     /// `ContentLoaded` can apply it again after layout clamps it.
     fn show(&mut self, restore: Option<Point<Pixels>>, cx: &mut Context<'_, Self>) {
+        // Back from an Entry keeps the selected summary; only a fresh visit
+        // reloads the log. The router restores the scroll offset separately.
+        if self.route() == Route::ScanSummaries && restore.is_none() {
+            self.scan_summaries.update(cx, ScanSummariesStore::open);
+        }
         match self.route() {
             Route::Entry { id } => {
                 self.entry_store.update(cx, |store, cx| store.open(id, cx));
@@ -1028,6 +1081,10 @@ impl AppShell {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one renderer lists every route's view and its fallback"
+    )]
     fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
@@ -1113,6 +1170,18 @@ impl AppShell {
                     cx,
                 ))
                 .into_any_element(),
+            Route::ScanSummaries => match &self.scan_summaries_screen {
+                Some(screen) => route_view.child(screen.clone()).into_any_element(),
+                None => route_view
+                    .overflow_y_scroll()
+                    .track_scroll(self.scroll.handle())
+                    .child(placeholder(
+                        title(&route),
+                        rows(&route),
+                        colors.muted_foreground,
+                    ))
+                    .into_any_element(),
+            },
             route => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
@@ -1389,6 +1458,7 @@ pub(crate) fn title(route: &Route) -> SharedString {
         Route::Lists { .. } => "My Lists",
         Route::Search(_) => "Advanced Search",
         Route::Schedule => "Schedule",
+        Route::ScanSummaries => "Scan Summaries",
         Route::Extensions => "Extensions",
         Route::Sync => "Offline / Sync",
         Route::Settings { .. } => "Settings",
@@ -1405,6 +1475,7 @@ fn rows(route: &Route) -> usize {
         | Route::Lists { .. }
         | Route::Search(_)
         | Route::Schedule
+        | Route::ScanSummaries
         | Route::Extensions
         | Route::Sync
         | Route::Settings { .. } => 0,
@@ -1419,8 +1490,8 @@ pub(crate) fn icon(route: &Route) -> IconName {
         Route::Lists { .. } => IconName::List,
         Route::Search(_) => IconName::Search,
         Route::Schedule => IconName::Calendar,
+        Route::ScanSummaries | Route::Sync => IconName::FolderSync,
         Route::Extensions => IconName::Puzzle,
-        Route::Sync => IconName::FolderSync,
         Route::Settings { .. } => IconName::Settings,
     }
 }
@@ -1571,6 +1642,11 @@ mod tests {
                             crate::shell::LibraryServices::inert(),
                             cx.new(|_| {
                                 ui_state::LibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::ScanSummariesStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),
@@ -3018,6 +3094,11 @@ mod tests {
                             crate::shell::LibraryServices::inert(),
                             cx.new(|_| {
                                 ui_state::LibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::ScanSummariesStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),

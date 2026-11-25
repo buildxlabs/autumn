@@ -29,7 +29,7 @@ use crate::{
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 5] = [
+const ROUTES: [Route; 6] = [
     Route::Home,
     Route::Discover,
     Route::Search(ui_state::SearchFilters::EMPTY),
@@ -37,6 +37,7 @@ const ROUTES: [Route; 5] = [
         status: ListTab::Status(ListStatus::Current),
     },
     Route::Schedule,
+    Route::ScanSummaries,
 ];
 
 /// What the palette lists, chosen by a slash command at the start of the query.

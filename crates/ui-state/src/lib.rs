@@ -16,6 +16,7 @@ pub mod platform;
 pub mod playback_store;
 mod route;
 mod router;
+pub mod scan_summaries;
 mod scroll;
 pub mod search;
 #[cfg(any(test, feature = "test-util"))]
@@ -23,6 +24,7 @@ pub mod test_support;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
+pub use engine::LibraryMediaInfo;
 pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use library_store::{LibraryStore, ScanOutcome, ScanState};
 pub use lists::{
@@ -32,6 +34,7 @@ pub use platform::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, Pl
 pub use playback_store::{PlaybackError, PlaybackStore};
 pub use route::{Route, SettingsTab};
 pub use router::RouterState;
+pub use scan_summaries::{PendingEdit, ScanSummariesStore};
 pub use scroll::{ContentLoaded, ScrollRestore};
 pub use search::{
     Catalog, CatalogError, MediaPreview, RestoredPage, SearchFilters, SearchFormat, SearchPage,

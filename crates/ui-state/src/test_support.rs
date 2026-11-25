@@ -3,14 +3,17 @@
 //! Screens reach the engine only through ui-state stores, so their test
 //! fakes live here with the stores rather than in `ui-screens`.
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use db::{LocalFile, ScanSummary};
 use domain::{ExternalId, ListEntry, MediaId, MediaKind, PlaybackControl};
-use engine::{BoxFuture, EngineError, EngineServices, ListedEntry, PlayRequest};
+use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry, PlayRequest};
 use metadata::{HomeLoad, Load, MediaDetail};
 
 /// An engine service whose calls never resolve, for tests that only need a
@@ -201,12 +204,32 @@ impl EngineServices for PendingServices {
     }
 }
 
+/// A library command recorded by [`LibraryServices`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LibraryCommand {
+    /// A manual match of one file to an AniList media.
+    Match {
+        /// The file to match.
+        path: PathBuf,
+        /// The AniList media chosen by the user.
+        anilist_id: u32,
+        /// The episode, when the dialog supplied one.
+        episode: Option<u32>,
+    },
+    /// A file marked as ignored.
+    Ignore(PathBuf),
+}
+
 /// An engine fake that records scans and serves a canned library.
 #[derive(Debug, Clone, Default)]
 pub struct LibraryServices {
     scans: Arc<AtomicUsize>,
     summary: Arc<Mutex<Option<ScanSummary>>>,
+    summaries: Arc<Mutex<Vec<ScanSummary>>>,
+    media_info: Arc<Mutex<Vec<LibraryMediaInfo>>>,
     files: Arc<Mutex<Vec<LocalFile>>>,
+    commands: Arc<Mutex<Vec<LibraryCommand>>>,
 }
 
 impl LibraryServices {
@@ -216,14 +239,46 @@ impl LibraryServices {
         Self {
             scans: Arc::new(AtomicUsize::new(0)),
             summary: Arc::new(Mutex::new(Some(summary))),
+            summaries: Arc::new(Mutex::new(Vec::new())),
+            media_info: Arc::new(Mutex::new(Vec::new())),
             files: Arc::new(Mutex::new(files)),
+            commands: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Serves `summaries` as the stored scan log.
+    #[must_use]
+    pub fn with_summaries(mut self, summaries: Vec<ScanSummary>) -> Self {
+        self.summaries = Arc::new(Mutex::new(summaries));
+        self
+    }
+
+    /// Replaces the canned log, for tests where a newer scan is inserted.
+    pub fn set_summaries(&self, summaries: Vec<ScanSummary>) {
+        if let Ok(mut slot) = self.summaries.lock() {
+            *slot = summaries;
+        }
+    }
+
+    /// Serves `media_info` for Entry links in the summaries screen.
+    #[must_use]
+    pub fn with_media(mut self, media_info: Vec<LibraryMediaInfo>) -> Self {
+        self.media_info = Arc::new(Mutex::new(media_info));
+        self
     }
 
     /// How many scans were requested.
     #[must_use]
     pub fn scan_count(&self) -> usize {
         self.scans.load(Ordering::SeqCst)
+    }
+
+    /// The match and ignore commands received, oldest first.
+    #[must_use]
+    pub fn commands(&self) -> Vec<LibraryCommand> {
+        self.commands
+            .lock()
+            .map_or_else(|_| Vec::new(), |commands| commands.clone())
     }
 }
 
@@ -317,6 +372,47 @@ impl EngineServices for LibraryServices {
             },
         );
         Box::pin(async move { Ok(files) })
+    }
+
+    fn summaries(&self) -> BoxFuture<Result<Vec<ScanSummary>, EngineError>> {
+        let summaries = self
+            .summaries
+            .lock()
+            .map_or_else(|_| Vec::new(), |summaries| summaries.clone());
+        Box::pin(async move { Ok(summaries) })
+    }
+
+    fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
+        let media = self
+            .media_info
+            .lock()
+            .map_or_else(|_| Vec::new(), |media| media.clone());
+        Box::pin(async move { Ok(media) })
+    }
+
+    fn manual_match(
+        &self,
+        paths: &[PathBuf],
+        anilist_id: u32,
+        episode: Option<u32>,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        if let Ok(mut commands) = self.commands.lock()
+            && let Some(path) = paths.first()
+        {
+            commands.push(LibraryCommand::Match {
+                path: path.clone(),
+                anilist_id,
+                episode,
+            });
+        }
+        Box::pin(async { Ok(1) })
+    }
+
+    fn ignore_file(&self, path: &std::path::Path) -> BoxFuture<Result<usize, EngineError>> {
+        if let Ok(mut commands) = self.commands.lock() {
+            commands.push(LibraryCommand::Ignore(path.to_path_buf()));
+        }
+        Box::pin(async { Ok(1) })
     }
 }
 
