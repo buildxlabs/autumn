@@ -14,6 +14,7 @@ mod settings_store;
 
 use std::{
     collections::HashSet,
+    ffi::OsStr,
     future::Future,
     path::{Path, PathBuf},
     pin::Pin,
@@ -21,7 +22,7 @@ use std::{
 };
 
 use ::library::{AutoScan, Library, ScanSummary};
-use db::{Db, LocalFile};
+use db::{Db, FileFlag, LocalFile};
 use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
 use flume::Sender;
 use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
@@ -67,6 +68,18 @@ pub enum EngineError {
     /// The active platform exposed by the composition root failed.
     #[error("the active platform call failed: {0}")]
     ActivePlatform(String),
+    /// A file operation failed.
+    #[error("the file operation failed: {0}")]
+    Io(#[from] std::io::Error),
+    /// Files could not be moved to the operating system's trash.
+    #[error("files could not be moved to the trash: {0}")]
+    Trash(String),
+    /// A new file name contained a path separator or `..`.
+    #[error("invalid file name: {0}")]
+    InvalidPath(String),
+    /// The destination of a rename already exists.
+    #[error("a file already exists at {}", .0.display())]
+    AlreadyExists(PathBuf),
     /// A library scan failed.
     #[error("the library scan failed: {0}")]
     Library(#[from] ::library::LibraryError),
@@ -200,6 +213,38 @@ pub trait EngineServices: Send + Sync + 'static {
 
     /// Marks a file as ignored. The default is a no-op for fakes.
     fn ignore_file(&self, _path: &Path) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
+    }
+
+    /// Sets or clears a file's lock (the default is a no-op).
+    fn set_library_lock(
+        &self,
+        _path: &Path,
+        _flag: FileFlag,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
+    }
+
+    /// Sets or clears a file's ignored flag (the default is a no-op).
+    fn set_library_ignored(
+        &self,
+        _path: &Path,
+        _flag: FileFlag,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
+    }
+
+    /// Renames a file on disk and in the library (the default is a no-op).
+    fn rename_library_file(
+        &self,
+        _from: &Path,
+        _to: &Path,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
+    }
+
+    /// Moves files to the OS trash and drops their rows (the default is a no-op).
+    fn trash_library_files(&self, _paths: &[PathBuf]) -> BoxFuture<Result<usize, EngineError>> {
         Box::pin(async { Ok(0) })
     }
 }
@@ -649,9 +694,116 @@ impl EngineServices for Engine {
             Ok(changed)
         })
     }
+
+    fn set_library_lock(
+        &self,
+        path: &Path,
+        flag: FileFlag,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        let library = self.library.clone();
+        let events = self.events_slot();
+        let path = path.to_path_buf();
+        Box::pin(async move {
+            let changed = match flag {
+                FileFlag::Set => library.lock_file(&path).await,
+                FileFlag::Clear => library.unlock_file(&path).await,
+                _ => Ok(0),
+            }?;
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
+    }
+
+    fn set_library_ignored(
+        &self,
+        path: &Path,
+        flag: FileFlag,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        let library = self.library.clone();
+        let events = self.events_slot();
+        let path = path.to_path_buf();
+        Box::pin(async move {
+            let changed = match flag {
+                FileFlag::Set => library.ignore_file(&path).await,
+                FileFlag::Clear => library.unignore_file(&path).await,
+                _ => Ok(0),
+            }?;
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
+    }
+
+    fn rename_library_file(&self, from: &Path, to: &Path) -> BoxFuture<Result<usize, EngineError>> {
+        let db = self.db.clone();
+        let events = self.events_slot();
+        let (from, to) = (from.to_path_buf(), to.to_path_buf());
+        Box::pin(async move {
+            let Some(name) = to.file_name().and_then(OsStr::to_str) else {
+                return Err(EngineError::InvalidPath(
+                    "the new name is missing".to_owned(),
+                ));
+            };
+            if to.parent() != from.parent() || !valid_file_name(name) {
+                return Err(EngineError::InvalidPath(
+                    "renames stay in the file's folder and reject separators or '..'".to_owned(),
+                ));
+            }
+            if tokio::fs::symlink_metadata(&to).await.is_ok() {
+                return Err(EngineError::AlreadyExists(to));
+            }
+            // Update the row first: a failed DB write must never be followed
+            // by a disk rename that loses the original file.
+            let changed = usize::try_from(db.local_file().rename(&from, &to).await?)
+                .map_err(|_| EngineError::Io(std::io::Error::other("row count overflow")))?;
+            if let Err(error) = tokio::fs::rename(&from, &to).await {
+                let _ = db.local_file().rename(&to, &from).await;
+                return Err(error.into());
+            }
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
+    }
+
+    fn trash_library_files(&self, paths: &[PathBuf]) -> BoxFuture<Result<usize, EngineError>> {
+        let db = self.db.clone();
+        let events = self.events_slot();
+        let paths = paths.to_vec();
+        Box::pin(async move {
+            let to_trash = paths.clone();
+            tokio::task::spawn_blocking(move || trash::delete_all(&to_trash))
+                .await
+                .map_err(|error| EngineError::Trash(error.to_string()))?
+                .map_err(|error| EngineError::Trash(error.to_string()))?;
+            let changed = usize::try_from(db.local_file().delete(&paths).await?)
+                .map_err(|_| EngineError::Io(std::io::Error::other("row count overflow")))?;
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
+    }
+}
+
+/// Whether `name` is a safe file name for an inline rename.
+#[must_use]
+pub(crate) fn valid_file_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\\')
 }
 
 impl Engine {
+    /// The current event sender, when the channel has been attached.
+    fn events_slot(&self) -> Option<Sender<AppEvent>> {
+        self.events
+            .lock()
+            .map_or_else(|_| None, |slot| slot.clone())
+    }
+
     /// The active platform's `kind` entries, most recently updated first.
     async fn entries(&self, kind: MediaKind) -> Result<Vec<ListEntry>, EngineError> {
         let collection = self.platform.collection(kind).await?;
@@ -676,14 +828,14 @@ impl Engine {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use std::{fs, path::PathBuf, time::SystemTime};
 
     use domain::{AdvancedScores, ExternalId, FuzzyDate, ListStatus, MediaKind, Score};
     use settings::{AppPaths, Settings};
     use tempfile::{TempDir, tempdir};
     use tokio::runtime::Builder;
 
-    use super::{Engine, EngineServices};
+    use super::{Engine, EngineError, EngineServices, valid_file_name};
 
     fn paths(dir: &TempDir) -> AppPaths {
         let paths = AppPaths::new(
@@ -794,5 +946,47 @@ mod tests {
             home.first().is_some_and(|(_, summary)| summary.is_none()),
             "never opened, so no summary is cached; the read made no request"
         );
+    }
+
+    #[test]
+    fn inline_rename_rejects_path_tricks() {
+        assert!(valid_file_name("episode 01.mkv"));
+        assert!(!valid_file_name(""));
+        assert!(!valid_file_name("."));
+        assert!(!valid_file_name(".."));
+        assert!(!valid_file_name("../ep.mkv"));
+        assert!(!valid_file_name("sub/ep.mkv"));
+        assert!(!valid_file_name("sub\\ep.mkv"));
+    }
+
+    #[test]
+    fn a_rename_never_overwrites_an_existing_file() {
+        let dir = tempdir().expect("a temp directory");
+        let paths = paths(&dir);
+        let folder = dir.path().join("shows");
+        fs::create_dir_all(&folder).expect("the library folder");
+        let from = folder.join("a.mkv");
+        let to = folder.join("b.mkv");
+        fs::write(&from, b"original").expect("the source file");
+        fs::write(&to, b"keep me").expect("the existing target");
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let (events, _receiver) = flume::unbounded();
+        let engine = Engine::new(&runtime, &paths, events).expect("the engine");
+
+        assert!(matches!(
+            runtime.block_on(engine.rename_library_file(&from, &to)),
+            Err(EngineError::AlreadyExists(_))
+        ));
+        assert_eq!(fs::read(&from).expect("the source survives"), b"original");
+        assert_eq!(fs::read(&to).expect("the target survives"), b"keep me");
+
+        assert!(matches!(
+            runtime.block_on(engine.rename_library_file(&from, &PathBuf::from("../escaped.mkv"))),
+            Err(EngineError::InvalidPath(_))
+        ));
     }
 }

@@ -17,6 +17,7 @@ use ui_components::{
 };
 use ui_state::{
     Route,
+    actions::OpenLibraryExplorer,
     fetch_status::cache_age,
     home_store::{HomeEntry, HomeSection, HomeStore, SectionData, SectionState},
 };
@@ -99,6 +100,15 @@ pub(crate) fn render(
         .flex_col()
         .gap_6()
         .p_6()
+        .child(
+            div().flex().justify_end().child(
+                Button::new("home-library-explorer")
+                    .label("Library Explorer")
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
+                    }),
+            ),
+        )
         .children(sections)
 }
 
@@ -507,6 +517,11 @@ mod tests {
                             }),
                             cx.new(|_| {
                                 ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::LibraryExplorerStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),

@@ -10,6 +10,7 @@ pub mod entry_store;
 pub mod events;
 pub mod fetch_status;
 pub mod home_store;
+pub mod library_explorer;
 pub mod library_store;
 pub mod lists;
 pub mod platform;
@@ -26,6 +27,7 @@ pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use engine::LibraryMediaInfo;
 pub use entry_store::{EntryDraft, EntryState, EntryStore};
+pub use library_explorer::{ExplorerFilter, ExplorerRow, LibraryExplorerStore};
 pub use library_store::{LibraryStore, ScanOutcome, ScanState};
 pub use lists::{
     ListCard, ListSort, ListSource, ListSourceError, ListTab, ListsSession, QuickEdit, STATUS_ORDER,

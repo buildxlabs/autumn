@@ -5,6 +5,7 @@
 mod discover;
 mod entry;
 mod home;
+mod library_explorer;
 mod lists;
 mod lists_source;
 mod palette;

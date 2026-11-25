@@ -1,6 +1,6 @@
 //! The window's root view: titlebar, rail and route view. See ARCHITECTURE §5.
 
-use std::{rc::Rc, time::Duration};
+use std::{path::PathBuf, rc::Rc, time::Duration};
 
 use db::Db;
 use domain::TransferDirection;
@@ -33,8 +33,8 @@ use ui_state::{
     SearchFilters, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{
-        GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, ScanLibrary,
-        SeekBack, SeekForward, SkipChapter, StopPlayback, WORKSPACE,
+        GoBack, GoForward, OpenCommandPalette, OpenLibraryExplorer, OpenSearch, PLAYER, PlayPause,
+        ScanLibrary, SeekBack, SeekForward, SkipChapter, StopPlayback, WORKSPACE,
     },
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
@@ -61,6 +61,7 @@ use crate::{
     discover::{DiscoverLoader, DiscoverView},
     entry::{EntryEditor, observe as observe_entry, render as render_entry},
     home::{HomeCarousels, observe as observe_home, render as render_home},
+    library_explorer::LibraryExplorerScreen,
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{episode_gallery, mock_media_views, placeholder},
@@ -192,6 +193,9 @@ pub struct AppShell {
     /// The scan log screen, built once startup has an AniList client (#134).
     scan_summaries: Entity<ScanSummariesStore>,
     scan_summaries_screen: Option<Entity<ScanSummariesScreen>>,
+    /// The Library Explorer sheet, built once startup has an AniList client.
+    explorer: Entity<ui_state::LibraryExplorerStore>,
+    explorer_screen: Option<Entity<LibraryExplorerScreen>>,
     /// The latest save, if it is still running.
     saving: Option<Task<()>>,
     /// Whether the rail is expanded, by hover or by the click-pin toggle.
@@ -246,6 +250,7 @@ impl AppShell {
         library_services: LibraryServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
+        explorer: Entity<ui_state::LibraryExplorerStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -273,6 +278,10 @@ impl AppShell {
                 PaletteEvent::ScanLibrary => {
                     window.close_dialog(cx);
                     shell.start_scan(cx);
+                }
+                PaletteEvent::OpenExplorer => {
+                    window.close_dialog(cx);
+                    shell.open_explorer(&OpenLibraryExplorer, window, cx);
                 }
             },
         );
@@ -411,6 +420,8 @@ impl AppShell {
             save_library_task: None,
             scan_summaries,
             scan_summaries_screen: None,
+            explorer,
+            explorer_screen: None,
             saving: None,
             rail_open: false,
             hover_open: None,
@@ -434,7 +445,8 @@ impl AppShell {
     /// entries and the AniList catalog. Startup supplies both sources.
     #[expect(
         clippy::too_many_arguments,
-        reason = "composition-root constructor: shell state plus the two palette sources"
+        clippy::too_many_lines,
+        reason = "composition-root constructor builds every store and screen once"
     )]
     pub fn new_with_palette_sources(
         prefs: RailPrefs,
@@ -444,6 +456,7 @@ impl AppShell {
         library_services: LibraryServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
+        explorer: Entity<ui_state::LibraryExplorerStore>,
         fetch_status: Entity<FetchStatus>,
         account: Entity<AccountStore>,
         login_url: impl Into<SharedString>,
@@ -461,6 +474,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
+        let explorer_folders = library.folders.clone();
         let mut shell = Self::new(
             prefs,
             playback,
@@ -469,6 +483,7 @@ impl AppShell {
             library_services,
             library_store,
             scan_summaries,
+            explorer,
             fetch_status,
             account,
             login_url,
@@ -517,6 +532,31 @@ impl AppShell {
         });
         shell.scan_summaries_screen = Some(summaries);
         cx.observe_in(&shell.scan_summaries, window, |_, store, window, cx| {
+            if let Some(error) = store.update(cx, |store, _| store.take_error()) {
+                window.push_notification(Notification::error(error), cx);
+            }
+        })
+        .detach();
+
+        let explorer = cx.new(|cx| {
+            LibraryExplorerScreen::new(
+                shell.explorer.clone(),
+                shell.scan_summaries.clone(),
+                anilist.clone(),
+                explorer_folders,
+                window,
+                cx,
+            )
+        });
+        let explorer_host = cx.entity().downgrade();
+        explorer.update(cx, |screen, _| {
+            screen.set_on_trash(move |paths, window, cx| {
+                let _ =
+                    explorer_host.update(cx, |shell, cx| shell.confirm_trash(paths, window, cx));
+            });
+        });
+        shell.explorer_screen = Some(explorer);
+        cx.observe_in(&shell.explorer, window, |_, store, window, cx| {
             if let Some(error) = store.update(cx, |store, _| store.take_error()) {
                 window.push_notification(Notification::error(error), cx);
             }
@@ -625,6 +665,69 @@ impl AppShell {
 
     fn scan_library(&mut self, _: &ScanLibrary, _: &mut Window, cx: &mut Context<'_, Self>) {
         self.start_scan(cx);
+    }
+
+    fn open_explorer(
+        &mut self,
+        _: &OpenLibraryExplorer,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let Some(screen) = self.explorer_screen.clone() else {
+            return;
+        };
+        let folders = self.library.folders.clone();
+        screen.update(cx, |screen, cx| {
+            screen.set_folders(folders, cx);
+            screen.open(window, cx);
+        });
+    }
+
+    /// The one sheet can only close after the user confirms the file count.
+    fn confirm_trash(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let count = paths.len();
+        let store = self.explorer.clone();
+        window.open_dialog(cx, move |dialog, _, _| {
+            let store = store.clone();
+            let confirm_paths = paths.clone();
+            dialog.title("Move to trash").child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(Label::new(format!(
+                        "Move {count} file(s) to the trash? They are not deleted permanently."
+                    )))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                Button::new("confirm-trash")
+                                    .label("Move to trash")
+                                    .on_click(move |_, window, cx| {
+                                        window.close_dialog(cx);
+                                        store.update(cx, |store, cx| {
+                                            store.trash(confirm_paths.clone(), cx);
+                                        });
+                                    }),
+                            )
+                            .child(Button::new("cancel-trash").label("Cancel").on_click(
+                                |_, window, cx| {
+                                    window.close_dialog(cx);
+                                },
+                            )),
+                    ),
+            )
+        });
     }
 
     /// Shows the scan summary once, when the store hands over its outcome.
@@ -1291,6 +1394,7 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::open_command_palette))
             .on_action(cx.listener(Self::open_search))
             .on_action(cx.listener(Self::scan_library))
+            .on_action(cx.listener(Self::open_explorer))
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|shell, _, window, cx| shell.go_back(&GoBack, window, cx)),
@@ -1647,6 +1751,11 @@ mod tests {
                             }),
                             cx.new(|_| {
                                 ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::LibraryExplorerStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),
@@ -3099,6 +3208,11 @@ mod tests {
                             }),
                             cx.new(|_| {
                                 ui_state::ScanSummariesStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
+                            cx.new(|_| {
+                                ui_state::LibraryExplorerStore::new(
                                     ui_state::test_support::pending_services(),
                                 )
                             }),
