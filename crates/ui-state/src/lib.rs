@@ -28,7 +28,8 @@ pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use engine::LibraryMediaInfo;
 pub use entry_library::{
-    EntryLibraryStore, EpisodeLayout, EpisodeRange, LibraryEpisode, LibrarySection,
+    EntryLibraryStore, EpisodeLayout, EpisodeRange, Gesture, LibraryEpisode, LibrarySection,
+    aired_episodes, missing_episodes, missing_label,
 };
 pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use library_explorer::{ExplorerFilter, ExplorerRow, LibraryExplorerStore};

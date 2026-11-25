@@ -27,6 +27,7 @@ use ui_state::{
     EntryLibraryStore, EntryTab, PlaybackStore, Route,
     actions::OpenLibraryExplorer,
     entry_store::{EntryDraft, EntryState, EntryStore},
+    missing_label,
 };
 
 use crate::{
@@ -267,10 +268,9 @@ fn render_ready(
     if tab == EntryTab::Library {
         return page
             .child(library_tab(
-                screen.library,
-                screen.playback,
-                cache,
+                screen,
                 &labels,
+                missing_banner(screen, summary, cx),
                 cx,
             ))
             .into_any_element();
@@ -332,6 +332,25 @@ fn hero(
         save,
     )
     .into_any_element()
+}
+
+/// The missing-episodes text, from AniList's status and episode count and
+/// `AniZip`'s air dates.
+fn missing_banner(
+    screen: &EntryScreen<'_>,
+    summary: &MediaSummary,
+    cx: &mut Context<'_, AppShell>,
+) -> Option<String> {
+    let today = today();
+    let iso = match (today.year(), today.month(), today.day()) {
+        (Some(year), Some(month), Some(day)) => format!("{year:04}-{month:02}-{day:02}"),
+        _ => return None,
+    };
+    let missing = screen
+        .library
+        .read(cx)
+        .missing(summary.status.as_ref(), summary.episodes, &iso);
+    missing_label(&missing)
 }
 
 /// Play next, Open local folder and Browse library files.
@@ -809,8 +828,10 @@ mod tests {
 
     use domain::{FuzzyDate, ListStatus, MediaKind};
     use gpui_kit::{
-        App, AppContext, Bounds, Task, TestAppContext, WindowBounds, WindowOptions, base::Root,
-        point, px, size, test::TestWindowExt,
+        App, AppContext, Bounds, Task, TestAppContext, WindowBounds, WindowOptions,
+        base::Root,
+        point, px, size,
+        test::{TestEventExt, TestWindowExt},
     };
     use metadata::{MediaDetail, MediaSummary, MediaTitle, Relation};
     use tokio::runtime::Builder;
@@ -820,8 +841,8 @@ mod tests {
         entry_store::EntryStore,
         home_store::HomeStore,
         test_support::{
-            CannedServices, EntryLibraryServices, PlaybackCall, PlaybackServices, library_file,
-            pending_services,
+            CannedServices, EntryLibraryCommand, EntryLibraryServices, PlaybackCall,
+            PlaybackServices, library_file, pending_services,
         },
     };
 
@@ -1040,35 +1061,15 @@ mod tests {
         );
     }
 
-    #[gpui_kit::test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one screen test builds the shell, then checks the tab, a click and the tab switch"
-    )]
-    async fn the_library_tab_lists_the_files_and_plays_a_clicked_episode(cx: &mut TestAppContext) {
-        let runtime = Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()
-            .expect("a test runtime");
-        let _guard = runtime.enter();
-        cx.executor().allow_parking();
-        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
-
-        let media = domain::MediaId::new(5);
-        let mut shelved = library_file("/shows/ep4.mkv", media, "episode", Some(4));
-        shelved.shelved = true;
-        let library = EntryLibraryServices::new(
-            media,
-            vec![
-                library_file("/shows/ep3.mkv", media, "episode", Some(3)),
-                shelved,
-            ],
-        )
-        .with_progress(2);
-        let playback = PlaybackServices::default();
-        let calls = playback.clone();
-        let services = Arc::new(CannedServices::new(detail()));
+    /// Opens a shell on the Entry of [`detail`] with these engine fakes for
+    /// the Library tab and playback.
+    fn library_shell(
+        cx: &mut TestAppContext,
+        detail: MediaDetail,
+        library: EntryLibraryServices,
+        playback: PlaybackServices,
+    ) -> (gpui_kit::WindowHandle<Root>, gpui_kit::Entity<AppShell>) {
+        let services = Arc::new(CannedServices::new(detail));
         let (window, view) = cx
             .update(|cx| {
                 gpui_kit::init(cx);
@@ -1115,6 +1116,34 @@ mod tests {
             })
             .expect("a test window");
         let window = window.downcast::<Root>().expect("the root window");
+        (window, view)
+    }
+
+    #[gpui_kit::test]
+    async fn the_library_tab_lists_the_files_and_plays_a_clicked_episode(cx: &mut TestAppContext) {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+
+        let media = domain::MediaId::new(5);
+        let mut shelved = library_file("/shows/ep4.mkv", media, "episode", Some(4));
+        shelved.shelved = true;
+        let library = EntryLibraryServices::new(
+            media,
+            vec![
+                library_file("/shows/ep3.mkv", media, "episode", Some(3)),
+                shelved,
+            ],
+        )
+        .with_progress(2);
+        let playback = PlaybackServices::default();
+        let calls = playback.clone();
+        let (window, view) = library_shell(cx, detail(), library, playback);
 
         cx.update_window(window.into(), |_, window, cx| {
             window.render_frame(cx);
@@ -1168,6 +1197,74 @@ mod tests {
                 tab: Some(EntryTab::Overview)
             },
             "the picked tab is part of the route"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn selected_cards_go_to_the_trash_after_the_confirm(cx: &mut TestAppContext) {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+
+        let media = domain::MediaId::new(6);
+        let files = [1, 2, 3, 4, 5, 6, 8]
+            .into_iter()
+            .map(|number| {
+                library_file(
+                    &format!("/s/{number:02}.mkv"),
+                    media,
+                    "episode",
+                    Some(number),
+                )
+            })
+            .collect();
+        let library = EntryLibraryServices::new(media, files);
+        let commands = library.clone();
+        let mut finished = detail();
+        finished.summary.status = Some(metadata::MediaStatus::Finished);
+        let (window, view) = library_shell(cx, finished, library, PlaybackServices::default());
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |shell, cx| {
+                shell.navigate(Route::Entry { id: 100, tab: None }, cx);
+            });
+        })
+        .expect("navigation");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("entry-library-missing").is_some(),
+                "a finished 12-episode media with 7 files shows the banner"
+            );
+            window.change_modifiers(gpui_kit::Modifiers::control(), cx);
+            window.click("entry-episode-Episodes-/s/02.mkv", cx);
+            window.click("entry-episode-Episodes-/s/05.mkv", cx);
+            window.change_modifiers(gpui_kit::Modifiers::none(), cx);
+            window.render_frame(cx);
+            window.click("entry-bulk-trash", cx);
+            window.render_frame(cx);
+            window.click("confirm-trash", cx);
+        })
+        .expect("the bulk trash");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        assert_eq!(
+            commands.commands(),
+            [EntryLibraryCommand::Trash(vec![
+                "/s/02.mkv".into(),
+                "/s/05.mkv".into()
+            ])],
+            "the confirm trashed exactly the two selected files"
         );
     }
 }

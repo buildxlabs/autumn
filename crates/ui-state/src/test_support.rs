@@ -593,9 +593,40 @@ pub struct EntryLibraryServices {
     metadata: Option<metadata::Media>,
     progress: Arc<Mutex<Option<u32>>>,
     continuity: Vec<(u32, Continuity)>,
+    commands: Arc<Mutex<Vec<EntryLibraryCommand>>>,
+}
+
+/// A bulk action recorded by [`EntryLibraryServices`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EntryLibraryCommand {
+    /// A file's lock set or cleared.
+    Lock(PathBuf, db::FileFlag),
+    /// Files matched to another AniList media.
+    Match(Vec<PathBuf>, u32),
+    /// Files moved to the trash, in one call.
+    Trash(Vec<PathBuf>),
 }
 
 impl EntryLibraryServices {
+    /// The bulk actions that reached the engine, oldest first.
+    #[must_use]
+    pub fn commands(&self) -> Vec<EntryLibraryCommand> {
+        self.commands
+            .lock()
+            .map_or_else(|_| Vec::new(), |commands| commands.clone())
+    }
+
+    fn record(&self, command: EntryLibraryCommand) -> BoxFuture<Result<usize, EngineError>> {
+        let commands = Arc::clone(&self.commands);
+        Box::pin(async move {
+            if let Ok(mut commands) = commands.lock() {
+                commands.push(command);
+            }
+            Ok(1)
+        })
+    }
+
     /// Serves `files` as the local files of `media`, the media behind every
     /// AniList id.
     #[must_use]
@@ -606,6 +637,7 @@ impl EntryLibraryServices {
             metadata: None,
             progress: Arc::new(Mutex::new(None)),
             continuity: Vec::new(),
+            commands: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -738,5 +770,26 @@ impl EngineServices for EntryLibraryServices {
     ) -> BoxFuture<Result<Vec<(u32, Continuity)>, EngineError>> {
         let continuity = self.continuity.clone();
         Box::pin(async move { Ok(continuity) })
+    }
+
+    fn set_library_lock(
+        &self,
+        path: &std::path::Path,
+        flag: db::FileFlag,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        self.record(EntryLibraryCommand::Lock(path.to_path_buf(), flag))
+    }
+
+    fn manual_match(
+        &self,
+        paths: &[PathBuf],
+        anilist_id: u32,
+        _episode: Option<u32>,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        self.record(EntryLibraryCommand::Match(paths.to_vec(), anilist_id))
+    }
+
+    fn trash_library_files(&self, paths: &[PathBuf]) -> BoxFuture<Result<usize, EngineError>> {
+        self.record(EntryLibraryCommand::Trash(paths.to_vec()))
     }
 }

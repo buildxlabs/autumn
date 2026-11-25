@@ -5,9 +5,9 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    App, Div, ElementId, Hsla, ImageSource, InteractiveElement, IntoElement, ObjectFit,
-    ParentElement, Pixels, RenderOnce, Resource, SharedString, StatefulInteractiveElement, Styled,
-    StyledImage, TestSupportExt, Window,
+    App, ClickEvent, Div, ElementId, Hsla, ImageSource, InteractiveElement, IntoElement, Modifiers,
+    ObjectFit, ParentElement, Pixels, RenderOnce, Resource, SharedString,
+    StatefulInteractiveElement, Styled, StyledImage, TestSupportExt, Window,
     component::{
         ActiveTheme, Sizable as _,
         menu::{ContextMenuExt, PopupMenu, PopupMenuItem},
@@ -38,6 +38,7 @@ const WATCHED: &str = "episode-card-watched";
 const PROGRESS_TRACK: &str = "episode-card-progress-track";
 const PROGRESS_FILL: &str = "episode-card-progress-fill";
 const UNAVAILABLE: &str = "episode-card-unavailable";
+const SELECTED: &str = "episode-card-selected";
 
 /// One episode as a card or row shows it: plain view-model data, no I/O.
 #[expect(
@@ -70,10 +71,14 @@ pub struct EpisodeCardView {
     /// Why the episode can't play, such as a disconnected drive. The card
     /// shows the reason and ignores clicks and Play.
     pub unavailable: Option<SharedString>,
+    /// Whether the card is part of the screen's selection.
+    pub selected: bool,
 }
 
 /// An action the card offers through a click or its context menu.
 type EpisodeAction = Rc<dyn Fn(&mut Window, &mut App)>;
+/// A click handler that sees the click's modifiers, for selection.
+type ClickAction = Rc<dyn Fn(Modifiers, &mut Window, &mut App)>;
 
 /// The four callbacks a card or row can offer. It holds no behavior of its
 /// own: a screen decides what play, watched, lock and open folder mean.
@@ -83,6 +88,7 @@ pub struct EpisodeActions {
     mark_watched: Option<EpisodeAction>,
     toggle_lock: Option<EpisodeAction>,
     open_folder: Option<EpisodeAction>,
+    click: Option<ClickAction>,
 }
 
 impl std::fmt::Debug for EpisodeActions {
@@ -92,6 +98,7 @@ impl std::fmt::Debug for EpisodeActions {
             .field("mark_watched", &self.mark_watched.is_some())
             .field("toggle_lock", &self.toggle_lock.is_some())
             .field("open_folder", &self.open_folder.is_some())
+            .field("click", &self.click.is_some())
             .finish()
     }
 }
@@ -121,6 +128,14 @@ impl EpisodeActions {
     #[must_use]
     pub fn on_toggle_lock(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.toggle_lock = Some(Rc::new(action));
+        self
+    }
+
+    /// The action run by a click instead of Play, given the click's
+    /// modifiers. Play stays in the menu.
+    #[must_use]
+    pub fn on_click(mut self, action: impl Fn(Modifiers, &mut Window, &mut App) + 'static) -> Self {
+        self.click = Some(Rc::new(action));
         self
     }
 
@@ -222,6 +237,7 @@ impl RenderOnce for EpisodeCard {
                     .child(number_pill(&self.view))
                     .children(overlay_badges(&self.view))
                     .children(self.view.unavailable.clone().map(unavailable_overlay))
+                    .children(self.view.selected.then(|| selection_ring(cx)))
                     .child(progress_track(
                         self.view.progress,
                         self.width,
@@ -246,8 +262,10 @@ impl RenderOnce for EpisodeCard {
         card.on_click({
             let actions = self.actions.clone();
             let available = self.view.unavailable.is_none();
-            move |_, window, cx| {
-                if let (true, Some(on_play)) = (available, &actions.play) {
+            move |event: &ClickEvent, window, cx| {
+                if let Some(on_click) = &actions.click {
+                    on_click(event.modifiers(), window, cx);
+                } else if let (true, Some(on_play)) = (available, &actions.play) {
                     on_play(window, cx);
                 }
             }
@@ -349,7 +367,8 @@ impl RenderOnce for EpisodeRow {
                     .overflow_hidden()
                     .rounded(px(6.))
                     .child(thumbnail)
-                    .child(number_pill(&self.view)),
+                    .child(number_pill(&self.view))
+                    .children(self.view.selected.then(|| selection_ring(cx))),
             )
             .child(
                 div()
@@ -382,8 +401,10 @@ impl RenderOnce for EpisodeRow {
         row.on_click({
             let actions = self.actions.clone();
             let available = self.view.unavailable.is_none();
-            move |_, window, cx| {
-                if let (true, Some(on_play)) = (available, &actions.play) {
+            move |event: &ClickEvent, window, cx| {
+                if let Some(on_click) = &actions.click {
+                    on_click(event.modifiers(), window, cx);
+                } else if let (true, Some(on_play)) = (available, &actions.play) {
                     on_play(window, cx);
                 }
             }
@@ -521,6 +542,17 @@ fn inline_badges(view: &EpisodeCardView) -> Vec<Div> {
     badges
 }
 
+/// The accent ring over a selected card's thumbnail.
+fn selection_ring(cx: &App) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .rounded(px(6.))
+        .border_2()
+        .border_color(cx.theme().colors.accent)
+        .debug_selector(|| SELECTED.into())
+}
+
 /// The dimmed cover over an unavailable card's thumbnail, with the reason.
 fn unavailable_overlay(reason: SharedString) -> Div {
     div()
@@ -620,6 +652,7 @@ mod tests {
             progress: Some(0.4),
             skeleton: false,
             unavailable: None,
+            selected: false,
         }
     }
 
@@ -702,6 +735,40 @@ mod tests {
         let reason = cx.debug_bounds(UNAVAILABLE).expect("the reason is shown");
         cx.simulate_click(reason.center(), gpui_kit::Modifiers::none());
         assert_eq!(*played.borrow(), 0, "an unavailable card never plays");
+    }
+
+    #[gpui_kit::test]
+    fn a_click_handler_sees_the_modifiers_and_a_selected_card_is_marked(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let clicks = Rc::new(RefCell::new(Vec::new()));
+        let played = Rc::new(RefCell::new(0));
+        let actions = EpisodeActions::new()
+            .on_play({
+                let played = Rc::clone(&played);
+                move |_, _| *played.borrow_mut() += 1
+            })
+            .on_click({
+                let clicks = Rc::clone(&clicks);
+                move |modifiers, _, _| clicks.borrow_mut().push(modifiers)
+            });
+        let (_root, cx) = cx.add_window_view(move |_, _| CardView {
+            view: EpisodeCardView {
+                selected: true,
+                ..view()
+            },
+            id: "episode-card-select-test",
+            actions,
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        assert!(
+            cx.debug_bounds(SELECTED).is_some(),
+            "the selection is shown"
+        );
+        let title = cx.debug_bounds(TITLE).expect("the title");
+        cx.simulate_click(title.center(), gpui_kit::Modifiers::shift());
+        assert_eq!(*clicks.borrow(), [gpui_kit::Modifiers::shift()]);
+        assert_eq!(*played.borrow(), 0, "the click handler replaces play");
     }
 
     #[gpui_kit::test]
