@@ -237,6 +237,7 @@ impl Engine {
         let scanner = Arc::new(LibraryScanner::with_hydration(
             db.clone(),
             candidates,
+            Arc::clone(&library_settings),
             client.clone(),
             poster_cache.clone(),
             Arc::clone(&events_slot),
@@ -325,34 +326,18 @@ impl Engine {
             }
             return Ok(());
         }
-        let engine = self.clone();
+        let scanner = Arc::clone(&self.scanner);
         let handle = self.handle.clone();
         // Build the replacement first: a failed restart must not leave the
-        // engine with no watcher at all.
-        let auto_scan = AutoScan::start(folders, &handle, move |changed| {
-            engine.run_auto_scan(&changed);
+        // engine with no watcher at all. A change in one folder still rescans
+        // every folder, because a partial scan would drop the others' rows.
+        let auto_scan = AutoScan::start(folders, &handle, move |_changed| {
+            scanner.request_rescan();
         })?;
         if let Some(previous) = watcher.replace(auto_scan) {
             previous.stop();
         }
         Ok(())
-    }
-
-    /// Runs one auto-scan. A manual scan in flight wins; the watcher simply
-    /// skips this change and the next one starts a fresh scan.
-    fn run_auto_scan(&self, folders: &[std::path::PathBuf]) {
-        let Ok(settings) = self.library_settings.read() else {
-            return;
-        };
-        if let Err(error) = self.scanner.start(
-            folders.to_vec(),
-            library::threshold(settings.matching_threshold),
-            library::FillerPolicy::from(settings.fetch_filler_episodes),
-        ) {
-            // The scanner queued the change; it starts when the current scan
-            // finishes, so no folder event is lost.
-            tracing::debug!(%error, "auto-scan queued behind a running scan");
-        }
     }
 
     /// Replaces the playback manager's progress sync with the active platform
@@ -547,18 +532,9 @@ impl EngineServices for Engine {
     }
 
     fn start_scan(&self) -> BoxFuture<Result<(), EngineError>> {
-        let engine = self.clone();
+        let scanner = Arc::clone(&self.scanner);
         Box::pin(async move {
-            let settings = engine
-                .library_settings
-                .read()
-                .map_err(|_| EngineError::SettingsLock)?
-                .clone();
-            engine.scanner.start(
-                settings.folders.clone(),
-                library::threshold(settings.matching_threshold),
-                library::FillerPolicy::from(settings.fetch_filler_episodes),
-            )?;
+            scanner.start()?;
             Ok(())
         })
     }

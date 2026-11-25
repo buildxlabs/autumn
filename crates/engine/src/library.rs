@@ -8,7 +8,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -23,6 +23,7 @@ use metadata::{
     OfflineAnime,
 };
 use net::{Client, PosterCache};
+use settings::LibrarySettings;
 use thiserror::Error;
 use tokio::runtime::Handle;
 use tracing::debug;
@@ -59,6 +60,9 @@ pub enum ScanError {
     /// Only one library scan may run at a time.
     #[error("a library scan is already running")]
     AlreadyScanning,
+    /// The Library settings lock was poisoned.
+    #[error("the library settings lock is poisoned")]
+    SettingsLock,
 }
 
 /// The active platform's anime list entries, as seen by the composition root.
@@ -231,15 +235,15 @@ impl Drop for ScanGuard {
 pub struct LibraryScanner {
     db: Db,
     candidates: Arc<Mutex<Arc<dyn CandidateSource>>>,
+    /// The Library tab's live values; every scan reads its folders here.
+    settings: Arc<RwLock<LibrarySettings>>,
     events: Arc<Mutex<Option<Sender<AppEvent>>>>,
     hydration: Option<(Client, PosterCache)>,
     handle: Handle,
     running: Arc<AtomicBool>,
-    /// The last scan requested while another was running, replayed on finish.
-    pending: Arc<Mutex<Option<PendingScan>>>,
+    /// A folder changed while a scan was running; one full rescan follows it.
+    rescan_pending: Arc<AtomicBool>,
 }
-
-type PendingScan = (Vec<PathBuf>, f64, FillerPolicy);
 
 impl LibraryScanner {
     /// A scanner without metadata hydration, for tests with a fake source.
@@ -247,17 +251,19 @@ impl LibraryScanner {
     pub fn new(
         db: Db,
         candidates: Arc<dyn CandidateSource>,
+        settings: Arc<RwLock<LibrarySettings>>,
         events: Arc<Mutex<Option<Sender<AppEvent>>>>,
         handle: Handle,
     ) -> Self {
         Self {
             db,
             candidates: Arc::new(Mutex::new(candidates)),
+            settings,
             events,
             hydration: None,
             handle,
             running: Arc::new(AtomicBool::new(false)),
-            pending: Arc::new(Mutex::new(None)),
+            rescan_pending: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -266,6 +272,7 @@ impl LibraryScanner {
     pub fn with_hydration(
         db: Db,
         candidates: Arc<dyn CandidateSource>,
+        settings: Arc<RwLock<LibrarySettings>>,
         client: Client,
         disk: PosterCache,
         events: Arc<Mutex<Option<Sender<AppEvent>>>>,
@@ -273,7 +280,7 @@ impl LibraryScanner {
     ) -> Self {
         Self {
             hydration: Some((client, disk)),
-            ..Self::new(db, candidates, events, handle)
+            ..Self::new(db, candidates, settings, events, handle)
         }
     }
 
@@ -284,53 +291,76 @@ impl LibraryScanner {
         }
     }
 
-    /// Schedules one scan. A second call while a scan runs is queued and
-    /// refused with [`ScanError::AlreadyScanning`].
+    /// Starts a full scan of the Library folders, as the Scan button does.
+    /// A call while a scan runs is refused and not queued.
     ///
     /// # Errors
     ///
     /// [`ScanError::AlreadyScanning`] when a scan is in flight.
-    pub fn start(
-        &self,
-        folders: Vec<PathBuf>,
-        threshold: f64,
-        filler: FillerPolicy,
-    ) -> Result<(), ScanError> {
+    pub fn start(&self) -> Result<(), ScanError> {
         if self
             .running
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            // Keep the newest folder change: the watcher can fire many times
-            // while one scan is in flight, and only the last state matters.
-            if let Ok(mut pending) = self.pending.lock() {
-                *pending = Some((folders, threshold, filler));
-            }
             return Err(ScanError::AlreadyScanning);
         }
+        self.spawn_scan();
+        Ok(())
+    }
+
+    /// Asks for a full scan after a folder change. If a scan is running, one
+    /// rescan follows it however many changes arrive in the meantime.
+    pub fn request_rescan(&self) {
+        self.rescan_pending.store(true, Ordering::SeqCst);
+        self.start_pending();
+    }
+
+    /// Starts the pending rescan unless a scan holds the slot; that scan
+    /// calls this again when it frees the slot, so no request is lost.
+    fn start_pending(&self) {
+        while self.rescan_pending.load(Ordering::SeqCst) {
+            if self
+                .running
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
+                return;
+            }
+            if self.rescan_pending.swap(false, Ordering::SeqCst) {
+                self.spawn_scan();
+                return;
+            }
+            // Another caller took the request between the load and the swap.
+            self.running.store(false, Ordering::SeqCst);
+        }
+    }
+
+    /// Runs one full scan on the runtime. The caller holds the slot.
+    fn spawn_scan(&self) {
         let scanner = self.clone();
         self.handle.spawn(async move {
             let result = {
                 let _slot = ScanGuard(Arc::clone(&scanner.running));
-                scanner.run(&folders, threshold, filler).await
+                scanner.run_full().await
             };
             scanner.publish_result(result);
             scanner.start_pending();
         });
-        Ok(())
     }
 
-    /// Starts the scan queued while the previous one was running, if any.
-    fn start_pending(&self) {
-        let pending = self
-            .pending
-            .lock()
-            .map_or_else(|_| None, |mut slot| slot.take());
-        if let Some((folders, threshold, filler)) = pending
-            && let Err(error) = self.start(folders, threshold, filler)
-        {
-            debug!(%error, "queued scan could not start");
-        }
+    /// Scans every Library folder with the settings as they are now. A scan
+    /// must cover all folders: the sync drops rows the walk didn't see.
+    async fn run_full(&self) -> Result<ScanSummary, EngineError> {
+        let (folders, cutoff, filler) = {
+            let settings = self.settings.read().map_err(|_| ScanError::SettingsLock)?;
+            (
+                settings.folders.clone(),
+                threshold(settings.matching_threshold),
+                FillerPolicy::from(settings.fetch_filler_episodes),
+            )
+        };
+        self.run(&folders, cutoff, filler).await
     }
 
     /// Runs one scan in the caller's future, without the one-at-a-time slot.
@@ -471,7 +501,7 @@ pub(crate) fn matched_media(db: &Db) -> BoxFuture<Result<Vec<MediaId>, LibraryEr
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::mpsc};
+    use std::fs;
 
     use tempfile::tempdir;
     use tokio::time::timeout;
@@ -481,7 +511,7 @@ mod tests {
     #[derive(Debug)]
     struct FakeCandidates {
         titles: Vec<Candidate>,
-        gate: Arc<Mutex<Option<mpsc::Receiver<()>>>>,
+        gate: Arc<Mutex<Option<flume::Receiver<()>>>>,
     }
 
     impl CandidateSource for FakeCandidates {
@@ -489,10 +519,9 @@ mod tests {
             let titles = self.titles.clone();
             let gate = Arc::clone(&self.gate);
             Box::pin(async move {
-                if let Ok(mut slot) = gate.lock()
-                    && let Some(receiver) = slot.take()
-                {
-                    let _ = receiver.recv();
+                let receiver = gate.lock().ok().and_then(|mut slot| slot.take());
+                if let Some(receiver) = receiver {
+                    let _ = receiver.recv_async().await;
                 }
                 Ok(titles)
             })
@@ -501,19 +530,59 @@ mod tests {
 
     fn scanner(
         db: Db,
+        folders: Vec<PathBuf>,
         titles: Vec<Candidate>,
-        gate: Option<mpsc::Receiver<()>>,
+        gate: Option<flume::Receiver<()>>,
         events: Option<Sender<AppEvent>>,
     ) -> LibraryScanner {
+        let settings = LibrarySettings {
+            folders,
+            matching_threshold: 50,
+            fetch_filler_episodes: false,
+            ..LibrarySettings::default()
+        };
         LibraryScanner::new(
             db,
             Arc::new(FakeCandidates {
                 titles,
                 gate: Arc::new(Mutex::new(gate)),
             }),
+            Arc::new(RwLock::new(settings)),
             Arc::new(Mutex::new(events)),
             Handle::current(),
         )
+    }
+
+    /// Waits for the next finished scan, skipping progress events.
+    async fn next_finish(
+        receiver: &flume::Receiver<AppEvent>,
+        wait: Duration,
+    ) -> Option<(usize, usize, usize, Option<String>)> {
+        timeout(wait, async {
+            loop {
+                let event = receiver.recv_async().await.ok()?;
+                if let AppEvent::LibraryScanFinished {
+                    files_walked,
+                    files_matched,
+                    files_unmatched,
+                    error,
+                    ..
+                } = event
+                {
+                    return Some((files_walked, files_matched, files_unmatched, error));
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    fn alpha() -> Vec<Candidate> {
+        vec![
+            Candidate::new("Series Alpha", vec![ExternalId::AniList(42)]),
+            Candidate::new("Series Beta", vec![ExternalId::AniList(43)]),
+        ]
     }
 
     #[tokio::test]
@@ -529,6 +598,7 @@ mod tests {
         let (events, receiver) = flume::unbounded();
         let scanner = scanner(
             db.clone(),
+            vec![folder],
             vec![Candidate::new(
                 "Series Alpha",
                 vec![ExternalId::AniList(42)],
@@ -537,27 +607,11 @@ mod tests {
             Some(events),
         );
 
-        scanner
-            .start(vec![folder], 0.5, FillerPolicy::Disabled)
-            .expect("the first scan starts");
+        scanner.start().expect("the first scan starts");
         let (files_walked, files_matched, files_unmatched, error) =
-            timeout(Duration::from_secs(5), async {
-                loop {
-                    let event = receiver.recv_async().await.expect("the channel stays open");
-                    if let AppEvent::LibraryScanFinished {
-                        files_walked,
-                        files_matched,
-                        files_unmatched,
-                        error,
-                        ..
-                    } = event
-                    {
-                        return (files_walked, files_matched, files_unmatched, error);
-                    }
-                }
-            })
-            .await
-            .expect("the scan finishes");
+            next_finish(&receiver, Duration::from_secs(5))
+                .await
+                .expect("the scan finishes");
         assert_eq!(files_walked, 2);
         assert_eq!(files_matched, 1);
         assert_eq!(files_unmatched, 1);
@@ -576,24 +630,116 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_second_scan_is_refused_while_one_is_running() {
+    async fn a_manual_scan_during_a_scan_is_refused_and_not_queued() {
         let dir = tempdir().expect("a temp directory");
         let folder = dir.path().join("shows");
         fs::create_dir_all(&folder).expect("the library folder");
         let db = Db::open(&dir.path().join("autumn.db"))
             .await
             .expect("a temp database");
-        let (release, gate) = mpsc::channel();
-        let scanner = scanner(db, Vec::new(), Some(gate), None);
+        let (release, gate) = flume::bounded(1);
+        let (events, receiver) = flume::unbounded();
+        let scanner = scanner(db, vec![folder], Vec::new(), Some(gate), Some(events));
 
-        scanner
-            .start(vec![folder.clone()], 0.5, FillerPolicy::Disabled)
-            .expect("the first scan starts");
-        assert_eq!(
-            scanner.start(vec![folder], 0.5, FillerPolicy::Disabled),
-            Err(ScanError::AlreadyScanning)
+        scanner.start().expect("the first scan starts");
+        assert_eq!(scanner.start(), Err(ScanError::AlreadyScanning));
+        release.send(()).expect("the gate is open");
+
+        assert!(
+            next_finish(&receiver, Duration::from_secs(5))
+                .await
+                .is_some(),
+            "the first scan finishes"
         );
+        assert_eq!(
+            next_finish(&receiver, Duration::from_millis(500)).await,
+            None,
+            "the refused scan never runs"
+        );
+    }
 
-        let _ = release.send(());
+    #[tokio::test]
+    async fn a_change_in_one_folder_keeps_the_other_folders_matches() {
+        let dir = tempdir().expect("a temp directory");
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        fs::create_dir_all(&first).expect("the first folder");
+        fs::create_dir_all(&second).expect("the second folder");
+        fs::write(first.join("[Group] Series Alpha - 01 [1080p].mkv"), b"").expect("a release");
+        fs::write(second.join("[Group] Series Beta - 01 [1080p].mkv"), b"").expect("a release");
+        let db = Db::open(&dir.path().join("autumn.db"))
+            .await
+            .expect("a temp database");
+        let (events, receiver) = flume::unbounded();
+        let scanner = scanner(
+            db.clone(),
+            vec![first.clone(), second],
+            alpha(),
+            None,
+            Some(events),
+        );
+        scanner.start().expect("the first scan starts");
+        next_finish(&receiver, Duration::from_secs(5))
+            .await
+            .expect("the first scan finishes");
+
+        // The watcher saw a new file in the first folder only.
+        fs::write(first.join("[Group] Series Alpha - 02 [1080p].mkv"), b"").expect("a release");
+        scanner.request_rescan();
+        let (files_walked, files_matched, _, error) =
+            next_finish(&receiver, Duration::from_secs(5))
+                .await
+                .expect("the auto-scan finishes");
+
+        assert_eq!(error, None);
+        assert_eq!(files_walked, 3, "the auto-scan walked both folders");
+        assert_eq!(files_matched, 3);
+        let matched = db
+            .local_file()
+            .all()
+            .await
+            .expect("the files read")
+            .into_iter()
+            .filter(|file| file.media_id.is_some())
+            .count();
+        assert_eq!(matched, 3, "the second folder kept its match");
+    }
+
+    #[tokio::test]
+    async fn two_changes_during_a_scan_give_one_full_rescan() {
+        let dir = tempdir().expect("a temp directory");
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        fs::create_dir_all(&first).expect("the first folder");
+        fs::create_dir_all(&second).expect("the second folder");
+        fs::write(first.join("[Group] Series Alpha - 01 [1080p].mkv"), b"").expect("a release");
+        fs::write(second.join("[Group] Series Beta - 01 [1080p].mkv"), b"").expect("a release");
+        let db = Db::open(&dir.path().join("autumn.db"))
+            .await
+            .expect("a temp database");
+        let (release, gate) = flume::bounded(1);
+        let (events, receiver) = flume::unbounded();
+        let scanner = scanner(db, vec![first, second], alpha(), Some(gate), Some(events));
+
+        scanner.start().expect("the first scan starts");
+        scanner.request_rescan();
+        scanner.request_rescan();
+        release.send(()).expect("the gate is open");
+
+        assert!(
+            next_finish(&receiver, Duration::from_secs(5))
+                .await
+                .is_some(),
+            "the first scan finishes"
+        );
+        let (files_walked, ..) = next_finish(&receiver, Duration::from_secs(5))
+            .await
+            .expect("one rescan follows");
+        assert_eq!(files_walked, 2, "the rescan covers every folder");
+        assert_eq!(
+            next_finish(&receiver, Duration::from_millis(500)).await,
+            None,
+            "the two changes collapse into one rescan"
+        );
     }
 }
