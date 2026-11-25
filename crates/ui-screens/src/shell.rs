@@ -49,12 +49,14 @@ use ui_state::{
 };
 
 use ::settings::PlayerChoice;
-pub use ::settings::{LibrarySettings, PlaybackSettings};
+pub use ::settings::{GeneralSettings, LibrarySettings, PlaybackSettings};
 pub use settings::{
-    LibraryServices, PlaybackServices, PlaybackTestError, PlayerOption, PosterCacheAction,
+    GeneralServices, LibraryServices, PlaybackServices, PlaybackTestError, PlayerOption,
+    PosterCacheAction,
 };
 use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus};
 
+mod onboarding;
 mod settings;
 
 use crate::{
@@ -134,6 +136,10 @@ type AccountRequest = Box<dyn Fn(AccountCommand, &mut App) -> Task<()>>;
 /// It owns the navigation history and the route view's scroll handle, so
 /// leaving a route saves its offset and coming back restores it. It also
 /// hosts the command palette.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the wizard's keychain availability and flags are independent shell inputs"
+)]
 pub struct AppShell {
     router: RouterState<Route>,
     /// Async screens emit `ContentLoaded`; subscribe the shell to call
@@ -180,6 +186,13 @@ pub struct AppShell {
     /// The Playback tab's current values and its composition-root callbacks.
     playback: PlaybackSettings,
     playback_services: PlaybackServices,
+    /// The General tab's flag and save callback (#138).
+    general: GeneralSettings,
+    general_services: GeneralServices,
+    /// The wizard's current step: navigation only, never a settings copy.
+    onboarding_step: usize,
+    /// Whether AniList login can store a token in the OS keychain (ADR 0002).
+    keychain_available: bool,
     players: Vec<PlayerOption>,
     players_task: Option<Task<()>>,
     player_pick_task: Option<Task<()>>,
@@ -248,6 +261,7 @@ impl AppShell {
     #[expect(
         clippy::too_many_arguments,
         clippy::too_many_lines,
+        clippy::fn_params_excessive_bools,
         reason = "the shell receives its engine-side collaborators and builds every store and subscription at construction"
     )]
     pub fn new(
@@ -270,6 +284,9 @@ impl AppShell {
         entry_library: Entity<EntryLibraryStore>,
         home_store: Entity<HomeStore>,
         playback_store: Entity<PlaybackStore>,
+        general: GeneralSettings,
+        general_services: GeneralServices,
+        keychain_available: bool,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -390,7 +407,11 @@ impl AppShell {
         })
         .detach();
         let mut shell = Self {
-            router: RouterState::new(Route::Home),
+            router: RouterState::new(if general.onboarding_completed {
+                Route::Home
+            } else {
+                Route::Onboarding
+            }),
             scroll: ScrollRestore::new(),
             focus,
             shell_handle: cx.entity().downgrade(),
@@ -421,6 +442,10 @@ impl AppShell {
             storage_task: None,
             playback,
             playback_services,
+            general,
+            general_services,
+            onboarding_step: 0,
+            keychain_available,
             players: Vec::new(),
             players_task: None,
             player_pick_task: None,
@@ -466,6 +491,7 @@ impl AppShell {
     #[expect(
         clippy::too_many_arguments,
         clippy::too_many_lines,
+        clippy::fn_params_excessive_bools,
         reason = "composition-root constructor builds every store and screen once"
     )]
     pub fn new_with_palette_sources(
@@ -488,6 +514,9 @@ impl AppShell {
         entry_library: Entity<EntryLibraryStore>,
         home_store: Entity<HomeStore>,
         playback_store: Entity<PlaybackStore>,
+        general: GeneralSettings,
+        general_services: GeneralServices,
+        keychain_available: bool,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -516,6 +545,9 @@ impl AppShell {
             entry_library,
             home_store,
             playback_store,
+            general,
+            general_services,
+            keychain_available,
             window,
             cx,
         );
@@ -1287,6 +1319,11 @@ impl AppShell {
                 .track_scroll(self.scroll.handle())
                 .child(self.render_settings(*tab, cx))
                 .into_any_element(),
+            Route::Onboarding => route_view
+                .overflow_y_scroll()
+                .track_scroll(self.scroll.handle())
+                .child(onboarding::render(self, cx))
+                .into_any_element(),
             Route::Home => {
                 let mut home = route_view
                     .flex()
@@ -1646,6 +1683,7 @@ fn rail_id(route: &Route) -> String {
 
 pub(crate) fn title(route: &Route) -> SharedString {
     match route {
+        Route::Onboarding => "Setup",
         Route::Home => "Home",
         Route::Entry { .. } => "Entry",
         Route::Discover => "Discover",
@@ -1664,7 +1702,8 @@ pub(crate) fn title(route: &Route) -> SharedString {
 fn rows(route: &Route) -> usize {
     match route {
         Route::Discover => 100,
-        Route::Entry { .. }
+        Route::Onboarding
+        | Route::Entry { .. }
         | Route::Home
         | Route::Lists { .. }
         | Route::Search(_)
@@ -1678,7 +1717,7 @@ fn rows(route: &Route) -> usize {
 
 pub(crate) fn icon(route: &Route) -> IconName {
     match route {
-        Route::Home => IconName::House,
+        Route::Onboarding | Route::Home => IconName::House,
         Route::Entry { .. } => IconName::Clapperboard,
         Route::Discover => IconName::Compass,
         Route::Lists { .. } => IconName::List,
@@ -1886,6 +1925,11 @@ mod tests {
                             }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(std::sync::Arc::new(playback_services))),
+                            settings::GeneralSettings {
+                                onboarding_completed: true,
+                            },
+                            crate::shell::GeneralServices::inert(),
+                            true,
                             window,
                             cx,
                         )
@@ -3328,6 +3372,11 @@ mod tests {
                             }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(pending_services())),
+                            settings::GeneralSettings {
+                                onboarding_completed: true,
+                            },
+                            crate::shell::GeneralServices::inert(),
+                            true,
                             db.clone(),
                             anilist,
                             catalog,

@@ -12,6 +12,8 @@ use crate::search::SearchFilters;
     reason = "the settings screen handles every tab"
 )]
 pub enum SettingsTab {
+    /// First-run setup and the flag that controls it.
+    General,
     /// Appearance and rail interaction.
     Appearance,
     /// AniList connection, avatar and token expiry.
@@ -49,6 +51,8 @@ pub enum EntryTab {
     reason = "screens match every route, so a new route must not compile until it has a screen"
 )]
 pub enum Route {
+    /// The first-run wizard, shown before Home until setup is completed.
+    Onboarding,
     /// The landing screen.
     Home,
     /// The Anime Entry page of one anime (#58).
@@ -118,6 +122,7 @@ impl Route {
     /// saved settings refer to it.
     pub fn key(&self) -> &'static str {
         match self {
+            Self::Onboarding => "onboarding",
             Self::Home => "home",
             Self::Entry { .. } => "entry",
             Self::Discover => "discover",

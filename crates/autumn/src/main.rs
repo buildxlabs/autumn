@@ -2,6 +2,7 @@
 
 mod account;
 mod fetch_status;
+mod general;
 mod http_client;
 mod library;
 mod logging;
@@ -12,7 +13,7 @@ mod startup;
 
 use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 
-use auth::{AniListAuth, SystemKeychain, login_url};
+use auth::{AniListAuth, Keychain as _, SystemKeychain, login_url};
 use db::Db;
 use domain::{AniListAccountState, AppEvent};
 use engine::{Engine, EngineServices};
@@ -97,6 +98,15 @@ fn main() -> ExitCode {
     // switching platforms changes where watched episodes are recorded.
     engine.set_progress_sync(Arc::new(playback_sync::GatewaySync::new(gateway.clone())));
     let session = AniListAuth::new(client.clone(), Arc::new(SystemKeychain));
+    // The wizard explains why AniList login is unavailable when there is no
+    // usable keychain (ADR 0002). Never log the stored token itself.
+    let keychain_available = match SystemKeychain.get() {
+        Ok(_) => true,
+        Err(error) => {
+            tracing::warn!(%error, "the OS keychain is unavailable; AniList login stays hidden");
+            false
+        }
+    };
     // Restore before the pump starts, so the first account event is seen.
     let mut restored = handle.block_on(session.restore(SystemTime::now()));
     let mut keychain_error = None;
@@ -143,6 +153,7 @@ fn main() -> ExitCode {
     });
     let prefs = rail_prefs::from_settings(engine.settings());
     let playback = engine.settings().playback.clone();
+    let general = engine.settings().general.clone();
     let library_settings = engine.settings().library.clone();
     let library_services = library::saver(
         engine.db().clone(),
@@ -154,6 +165,7 @@ fn main() -> ExitCode {
         engine.settings().clone(),
         started.paths.cache_dir(),
     );
+    let general_services = general::saver(engine.db().clone(), engine.settings().clone());
     let storage_request = poster_cache_request(engine.poster_cache());
     let save_prefs = rail_prefs::saver(engine.db().clone(), engine.settings().clone());
     let discover_catalog = RealDiscoverCatalog::new(
@@ -214,6 +226,9 @@ fn main() -> ExitCode {
                 prefs,
                 playback,
                 playback_services,
+                general,
+                general_services,
+                keychain_available,
                 library_settings,
                 library_services,
                 library_store,
@@ -274,12 +289,16 @@ fn main_window_decorations() -> Option<WindowDecorations> {
 /// with `prefs` and calls `save_prefs` when the user changes them.
 #[expect(
     clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
     reason = "the window receives its engine collaborators once, at construction"
 )]
 fn open_main_window(
     prefs: RailPrefs,
     playback: ui_screens::PlaybackSettings,
     playback_services: ui_screens::PlaybackServices,
+    general: ui_screens::GeneralSettings,
+    general_services: ui_screens::GeneralServices,
+    keychain_available: bool,
     library_settings: ui_screens::LibrarySettings,
     library_services: ui_screens::LibraryServices,
     library_store: Entity<LibraryStore>,
@@ -326,6 +345,9 @@ fn open_main_window(
                 entry_library,
                 home_store,
                 playback_store,
+                general,
+                general_services,
+                keychain_available,
                 db,
                 anilist,
                 catalog,
@@ -415,6 +437,11 @@ mod tests {
                 RailPrefs::default(),
                 settings::PlaybackSettings::default(),
                 ui_screens::PlaybackServices::inert(),
+                settings::GeneralSettings {
+                    onboarding_completed: true,
+                },
+                ui_screens::GeneralServices::inert(),
+                true,
                 settings::LibrarySettings::default(),
                 ui_screens::LibraryServices::inert(),
                 library_store,

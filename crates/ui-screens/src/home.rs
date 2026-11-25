@@ -863,6 +863,11 @@ mod tests {
                                     ui_state::test_support::pending_services(),
                                 )
                             }),
+                            settings::GeneralSettings {
+                                onboarding_completed: true,
+                            },
+                            crate::shell::GeneralServices::inert(),
+                            true,
                             window,
                             cx,
                         )
