@@ -41,6 +41,8 @@ pub struct LaunchOptions {
     pub ipc_retry: Retry,
     /// The media this session plays, for the engine's event routing.
     pub media: Option<MediaId>,
+    /// Sidecar subtitle files to load alongside the video (#128).
+    pub subtitles: Vec<PathBuf>,
 }
 
 impl LaunchOptions {
@@ -50,6 +52,7 @@ impl LaunchOptions {
             cache_dir: cache_dir.into(),
             ipc_retry: Retry::mpv(),
             media: None,
+            subtitles: Vec::new(),
         }
     }
 
@@ -245,7 +248,7 @@ pub fn launch_mpv(
 ) -> Result<Session> {
     launch(
         executable,
-        |endpoint| mpv_args(endpoint, file),
+        |endpoint| mpv_args(endpoint, file, &options.subtitles),
         options,
         ChildPolicy::KillOnIpcClose,
     )
@@ -307,13 +310,17 @@ pub(crate) fn launch(
 }
 
 /// The exact arguments mpv is launched with, kept pure for testing.
-fn mpv_args(endpoint: &Endpoint, file: &str) -> Vec<String> {
-    vec![
+fn mpv_args(endpoint: &Endpoint, file: &str, subtitles: &[PathBuf]) -> Vec<String> {
+    let mut args = vec![
         "--force-window=immediate".to_owned(),
         "--keep-open=yes".to_owned(),
         format!("--input-ipc-server={endpoint}"),
-        file.to_owned(),
-    ]
+    ];
+    for subtitle in subtitles {
+        args.push(format!("--sub-file={}", subtitle.display()));
+    }
+    args.push(file.to_owned());
+    args
 }
 
 #[cfg(unix)]
@@ -522,7 +529,7 @@ mod tests {
     fn mpv_launch_arguments_are_minimal_and_have_no_resume_position() {
         let cache = tempfile::tempdir().unwrap();
         let endpoint = fresh_endpoint(cache.path()).unwrap();
-        let args = mpv_args(&endpoint, "file:///media/ep.mkv");
+        let args = mpv_args(&endpoint, "file:///media/ep.mkv", &[]);
 
         assert_eq!(
             args,
@@ -542,8 +549,31 @@ mod tests {
     #[test]
     fn two_launches_use_different_ipc_arguments() {
         let cache = tempfile::tempdir().unwrap();
-        let a = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "a.mkv");
-        let b = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "b.mkv");
+        let a = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "a.mkv", &[]);
+        let b = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "b.mkv", &[]);
         assert_ne!(a.get(2), b.get(2), "each launch needs its own IPC endpoint");
+    }
+
+    #[test]
+    fn sidecar_subtitles_are_passed_before_the_video() {
+        let cache = tempfile::tempdir().unwrap();
+        let endpoint = fresh_endpoint(cache.path()).unwrap();
+        let subs = [
+            PathBuf::from("/media/Subs/ep.ass"),
+            PathBuf::from("/media/ep.srt"),
+        ];
+        let args = mpv_args(&endpoint, "/media/ep.mkv", &subs);
+
+        assert_eq!(
+            args,
+            vec![
+                "--force-window=immediate",
+                "--keep-open=yes",
+                &format!("--input-ipc-server={endpoint}"),
+                "--sub-file=/media/Subs/ep.ass",
+                "--sub-file=/media/ep.srt",
+                "/media/ep.mkv",
+            ]
+        );
     }
 }

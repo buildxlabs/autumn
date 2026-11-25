@@ -74,6 +74,21 @@ impl ActivePlatform {
     pub fn anilist(&self) -> Option<AniListPlatform> {
         self.anilist.clone()
     }
+
+    /// The active platform's entry for `media`, if it has one.
+    ///
+    /// # Errors
+    ///
+    /// [`PlatformError`] when the active platform cannot be read.
+    pub async fn entry(&self, media: MediaId) -> Result<Option<ListEntry>, PlatformError> {
+        match self.active {
+            ActiveKind::Local => self.local.entry(media).await,
+            ActiveKind::AniList => match &self.anilist {
+                Some(anilist) => anilist.entry(media).await,
+                None => Err(PlatformError::NotConnected),
+            },
+        }
+    }
 }
 
 impl Platform for ActivePlatform {

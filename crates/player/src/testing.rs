@@ -149,6 +149,27 @@ mod pump_tests {
     }
 
     #[tokio::test]
+    async fn a_late_duration_property_reaches_the_typed_stream() {
+        let (_client, mut events, _pump, mut fake) = FakeMpv::spawn();
+        fake.drain_observations().await;
+
+        fake.property("duration", &json!(1440.0)).await;
+        fake.send(json!({ "event": "file-loaded" })).await;
+
+        assert_eq!(
+            events.next().await,
+            Some(PlayerEvent::Duration { seconds: 1440.0 })
+        );
+        assert_eq!(
+            events.next().await,
+            Some(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(1440.0),
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn command_replies_are_matched_back_to_the_caller() {
         let (client, _events, _pump, mut fake) = FakeMpv::spawn();
         fake.drain_observations().await;

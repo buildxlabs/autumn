@@ -308,6 +308,17 @@ impl PlatformGateway {
         Ok(entries)
     }
 
+    /// The active platform's entry for `media`, if it has one. A targeted
+    /// lookup, so playback sync never downloads a whole AniList collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns a gateway error when the platform cannot be read.
+    pub async fn entry(&self, media: MediaId) -> Result<Option<ListEntry>, GatewayError> {
+        let platform = self.platform()?;
+        self.classify(platform.entry(media).await)
+    }
+
     /// Saves a full list entry and returns it as stored, so a screen can patch
     /// one card without reloading the whole collection.
     ///

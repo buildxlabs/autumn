@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 use domain::{ExternalId, ListEntry, MediaId, MediaKind};
-use engine::{BoxFuture, EngineError, EngineServices, ListedEntry};
+use engine::{BoxFuture, EngineError, EngineServices, ListedEntry, PlayRequest};
 use metadata::{HomeLoad, Load, MediaDetail};
 
 /// An engine service whose calls never resolve, for tests that only need a
@@ -194,5 +194,99 @@ impl EngineServices for PendingServices {
         _kind: MediaKind,
     ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
         Box::pin(std::future::pending())
+    }
+}
+
+/// One playback command sent through a store, recorded for command tests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PlaybackCall {
+    /// A play request.
+    Play(PlayRequest),
+    /// A stop request.
+    Stop,
+    /// A retry of a failed progress sync.
+    Retry(MediaId, u32),
+}
+
+/// An engine fake that records playback commands; other calls stay pending.
+#[derive(Debug, Default, Clone)]
+pub struct PlaybackServices {
+    calls: Arc<Mutex<Vec<PlaybackCall>>>,
+}
+
+impl PlaybackServices {
+    /// The commands received, oldest first.
+    #[must_use]
+    pub fn calls(&self) -> Vec<PlaybackCall> {
+        self.calls
+            .lock()
+            .map_or_else(|_| Vec::new(), |calls| calls.clone())
+    }
+}
+
+impl EngineServices for PlaybackServices {
+    fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn local_media(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn local_entry(&self, _media: MediaId) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn save_entry(&self, _entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn mint(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<MediaId, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn missed_sequels(
+        &self,
+        _kind: MediaKind,
+    ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn play(&self, request: &PlayRequest) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::Play(request.clone()));
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn stop(&self) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::Stop);
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn retry_sync(&self, media: MediaId, episode: u32) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::Retry(media, episode));
+        }
+        Box::pin(async { Ok(()) })
     }
 }

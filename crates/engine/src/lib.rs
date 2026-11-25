@@ -7,6 +7,7 @@
 //! call its services through [`bridge::run`] (ARCHITECTURE §4). It grows
 //! into ARCHITECTURE's engine in Phase 2.
 
+mod playback;
 mod settings_store;
 
 use std::{
@@ -26,6 +27,11 @@ use net::{Client, PosterCache};
 use settings::{AppPaths, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
+
+pub use playback::{
+    LocalProgressSync, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager, PlaybackSession,
+    PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
+};
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
@@ -59,6 +65,9 @@ pub enum EngineError {
     /// The watcher state lock was poisoned.
     #[error("the library watcher lock was poisoned")]
     WatcherLock,
+    /// A play request could not start.
+    #[error("playback could not start: {0}")]
+    Playback(#[from] PlaybackError),
 }
 
 /// The engine's services: what the Anime Entry and Home screens call through
@@ -89,6 +98,22 @@ pub trait EngineServices: Send + Sync + 'static {
     /// their list, from the cached Entry relations. Reads the cache only:
     /// no network request.
     fn missed_sequels(&self, kind: MediaKind) -> BoxFuture<Result<Vec<MediaSummary>, EngineError>>;
+
+    /// Starts `request`, stopping the previous session first. The default is
+    /// a no-op so stores that only mirror playback events need no fake.
+    fn play(&self, _request: &PlayRequest) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Stops the active session. The default is a no-op for mirroring fakes.
+    fn stop(&self) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Retries a failed progress sync. The default is a no-op for fakes.
+    fn retry_sync(&self, _media: MediaId, _episode: u32) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
 }
 
 /// The engine: owns the database, the shared client, the catalog cache and
@@ -105,6 +130,7 @@ pub struct Engine {
     handle: tokio::runtime::Handle,
     events: Option<Sender<AppEvent>>,
     watcher: Arc<Mutex<Option<AutoScan>>>,
+    playback: Arc<PlaybackManager>,
 }
 
 /// The loopback host of debug fetches; `fetch_status::observe` watches its rate limits.
@@ -120,7 +146,11 @@ impl Engine {
     /// - [`EngineError::Db`] when the database can't be opened.
     /// - [`EngineError::Settings`] when the settings can't be loaded or a row is invalid.
     /// - [`EngineError::Client`] when the client can't be built.
-    pub fn new(runtime: &Runtime, paths: &AppPaths) -> Result<Self, EngineError> {
+    pub fn new(
+        runtime: &Runtime,
+        paths: &AppPaths,
+        events: Sender<AppEvent>,
+    ) -> Result<Self, EngineError> {
         let db = runtime.block_on(Db::open(&paths.database_file()))?;
         let settings = runtime.block_on(settings_store::load(&db, &paths.settings_file()))?;
         let builder = Client::builder().anilist();
@@ -131,6 +161,14 @@ impl Engine {
         let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());
         let platform = Local::new(db.clone());
         let library = Library::new(db.clone());
+        let playback = Arc::new(PlaybackManager::new(
+            db.clone(),
+            catalog.clone(),
+            Arc::new(LocalProgressSync::new(db.clone())),
+            events,
+            &settings.playback,
+            paths.cache_dir().to_path_buf(),
+        ));
         Ok(Self {
             db,
             client,
@@ -142,6 +180,7 @@ impl Engine {
             handle: runtime.handle().clone(),
             events: None,
             watcher: Arc::new(Mutex::new(None)),
+            playback,
         })
     }
 
@@ -249,6 +288,12 @@ impl Engine {
         }
     }
 
+    /// Replaces the playback manager's progress sync with the active platform
+    /// gateway, so watched episodes reach whichever platform is in use.
+    pub fn set_progress_sync(&self, sync: Arc<dyn ProgressSync>) {
+        self.playback.set_sync(sync);
+    }
+
     /// The app database.
     #[must_use]
     pub fn db(&self) -> &Db {
@@ -271,6 +316,12 @@ impl Engine {
     #[must_use]
     pub fn poster_cache(&self) -> PosterCache {
         self.poster_cache.clone()
+    }
+
+    /// The playback manager that owns the one active session.
+    #[must_use]
+    pub fn playback(&self) -> &Arc<PlaybackManager> {
+        &self.playback
     }
 }
 
@@ -372,6 +423,28 @@ impl EngineServices for Engine {
             Ok(sequels)
         })
     }
+
+    fn play(&self, request: &PlayRequest) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        let request = request.clone();
+        Box::pin(async move { playback.play(request).await.map_err(EngineError::from) })
+    }
+
+    fn stop(&self) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            playback.stop().await;
+            Ok(())
+        })
+    }
+
+    fn retry_sync(&self, media: MediaId, episode: u32) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            playback.retry_sync(media, episode).await;
+            Ok(())
+        })
+    }
 }
 
 impl Engine {
@@ -450,7 +523,8 @@ mod tests {
             .enable_all()
             .build()
             .expect("a test runtime");
-        let engine = Engine::new(&runtime, &paths).expect("the engine");
+        let (events, _receiver) = flume::unbounded();
+        let engine = Engine::new(&runtime, &paths, events).expect("the engine");
         let mut settings = Settings::default();
         settings.library.folders = vec![folder];
         settings.library.auto_scan = true;
@@ -478,8 +552,9 @@ mod tests {
             .expect("a test runtime");
         let ids = [ExternalId::AniList(154_587)];
 
+        let (events, _receiver) = flume::unbounded();
         {
-            let engine = Engine::new(&runtime, &paths).expect("the first engine");
+            let engine = Engine::new(&runtime, &paths, events.clone()).expect("the first engine");
             let media = runtime
                 .block_on(engine.mint(MediaKind::Anime, &ids))
                 .expect("the media identity");
@@ -488,7 +563,7 @@ mod tests {
                 .expect("the Local list save");
         } // Drop the engine: the next one opens the same database afresh.
 
-        let reopened = Engine::new(&runtime, &paths).expect("the restarted engine");
+        let reopened = Engine::new(&runtime, &paths, events).expect("the restarted engine");
         let media = runtime
             .block_on(reopened.local_media(MediaKind::Anime, &ids))
             .expect("the cross-reference lookup")

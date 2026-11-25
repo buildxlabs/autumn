@@ -1,6 +1,6 @@
 //! Settings as one JSON row per tab, the shape `db` stores.
 
-use settings::{AppearanceSettings, LibrarySettings, Settings};
+use settings::{AppearanceSettings, LibrarySettings, PlaybackSettings, PlayerChoice, Settings};
 
 fn pinned() -> Settings {
     Settings {
@@ -9,7 +9,10 @@ fn pinned() -> Settings {
             ..AppearanceSettings::default()
         },
         library: LibrarySettings::default(),
-        playback: settings::PlaybackSettings::default(),
+        playback: PlaybackSettings {
+            watched_threshold: 90,
+            ..PlaybackSettings::default()
+        },
     }
 }
 
@@ -35,6 +38,15 @@ fn there_is_one_row_per_tab() {
 #[test]
 fn the_library_filler_setting_is_on_by_default() {
     assert!(Settings::default().library.fetch_filler_episodes);
+}
+
+#[test]
+fn playback_defaults_follow_od_5() {
+    let playback = PlaybackSettings::default();
+    assert_eq!(playback.player, PlayerChoice::Auto);
+    assert_eq!(playback.watched_threshold, 80);
+    assert!(playback.auto_sync_progress);
+    assert!(playback.resume);
 }
 
 #[test]
