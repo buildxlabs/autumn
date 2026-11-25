@@ -44,8 +44,9 @@ use tracing::{debug, warn};
 
 use crate::{BoxFuture, chapters, library};
 
-/// How long a saved position is worth resuming.
-const MIN_RESUME: f64 = 30.0;
+/// How long a saved position is worth resuming. Home uses the same cutoff
+/// when it puts an in-progress episode first.
+pub const MIN_RESUME: f64 = 30.0;
 /// The lowest and highest accepted watched threshold, in percent (OD-5).
 const THRESHOLD_MIN: u8 = 50;
 const THRESHOLD_MAX: u8 = 100;

@@ -22,12 +22,12 @@ use std::{
 };
 
 use ::library::{AutoScan, Library, ScanSummary};
-use db::{Continuity, Db, FileFlag, LocalFile};
+use db::{Continuity, Db, FileFlag, LocalFile, ResumePoint};
 use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
 use flume::Sender;
 use metadata::{
-    Aging, AniList, AniZip, CatalogCache, HomeLoad, Load, Media as EpisodeMetadata, MediaDetail,
-    MediaRelation, MediaSummary,
+    Aging, AiringEpisode, AniList, AniZip, CatalogCache, HomeLoad, Load, Media as EpisodeMetadata,
+    MediaDetail, MediaRelation, MediaSummary,
 };
 use net::{Client, PosterCache};
 use settings::{AppPaths, LibrarySettings, Settings};
@@ -38,8 +38,8 @@ pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
 };
 pub use playback::{
-    LocalProgressSync, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager, PlaybackSession,
-    PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
+    LocalProgressSync, MIN_RESUME, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager,
+    PlaybackSession, PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
 };
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.
@@ -210,6 +210,27 @@ pub trait EngineServices: Send + Sync + 'static {
     /// Stored scan summaries, newest first. The default is empty for fakes.
     fn summaries(&self) -> BoxFuture<Result<Vec<ScanSummary>, EngineError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Every saved resume position, newest first. The default is empty for
+    /// fakes that don't exercise continuity.
+    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// The airing schedule, stale-first. This is the only AniList request a
+    /// Home library widget makes; the default is empty for fakes.
+    fn airing_schedule(&self) -> BoxFuture<Result<Load<Vec<AiringEpisode>>, EngineError>> {
+        Box::pin(async {
+            Ok(Load {
+                cached: metadata::Cached {
+                    value: Vec::new(),
+                    updated_at: std::time::SystemTime::UNIX_EPOCH,
+                    offline: false,
+                },
+                refresh: None,
+            })
+        })
     }
 
     /// Media with local files, with their Entry ids and titles.
@@ -697,6 +718,16 @@ impl EngineServices for Engine {
     fn summaries(&self) -> BoxFuture<Result<Vec<ScanSummary>, EngineError>> {
         let library = self.library.clone();
         Box::pin(async move { library.summaries().await.map_err(EngineError::from) })
+    }
+
+    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move { db.continuity().all().await.map_err(EngineError::from) })
+    }
+
+    fn airing_schedule(&self) -> BoxFuture<Result<Load<Vec<AiringEpisode>>, EngineError>> {
+        let catalog = self.catalog.clone();
+        Box::pin(async move { catalog.airing_schedule().await.map_err(EngineError::from) })
     }
 
     fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
