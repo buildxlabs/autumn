@@ -26,6 +26,19 @@ pub enum SettingsTab {
     About,
 }
 
+/// A tab of the Anime Entry page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the Entry screen renders every tab"
+)]
+pub enum EntryTab {
+    /// The details, relations and list editor, as in Phase 1.
+    Overview,
+    /// The local files as episode cards (#132).
+    Library,
+}
+
 /// One screen the route view can show.
 ///
 /// ARCHITECTURE §5 lists the full set; a variant is added when its screen
@@ -42,6 +55,9 @@ pub enum Route {
     Entry {
         /// The anime's AniList id.
         id: u32,
+        /// The tab the user picked; `None` opens Library when the media has
+        /// local files and Overview otherwise.
+        tab: Option<EntryTab>,
     },
     /// Browse the catalog.
     Discover,

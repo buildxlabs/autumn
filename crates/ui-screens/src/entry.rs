@@ -5,14 +5,15 @@ use std::rc::Rc;
 
 use domain::{FuzzyDate, ListStatus, Score};
 use gpui_kit::{
-    App, AppContext, Context, ElementId, Entity, Hsla, IntoElement, ParentElement, SharedString,
-    Styled, Subscription, Window,
+    AnyElement, App, AppContext, Context, ElementId, Entity, Hsla, InteractiveElement, IntoElement,
+    ParentElement, SharedString, Styled, Subscription, TestSupportExt, Window,
     component::{
         ActiveTheme,
-        button::Button,
+        button::{Button, ButtonVariants as _},
         carousel::CarouselState,
         input::{Input, InputState},
         label::Label,
+        tab::{Tab, TabBar},
     },
     div,
 };
@@ -23,12 +24,15 @@ use ui_components::{
     hero::{HeroBannerData, hero_banner},
 };
 use ui_state::{
-    Route,
+    EntryLibraryStore, EntryTab, PlaybackStore, Route,
     actions::OpenLibraryExplorer,
     entry_store::{EntryDraft, EntryState, EntryStore},
 };
 
-use crate::shell::AppShell;
+use crate::{
+    entry_library::{PlayLabels, play, render as library_tab},
+    shell::AppShell,
+};
 
 /// The statuses the editor offers, in AniList's order.
 const STATUSES: [ListStatus; 6] = [
@@ -132,14 +136,28 @@ pub(crate) fn observe(
     })
 }
 
+/// The shell's entities the Entry route draws from.
+pub(crate) struct EntryScreen<'a> {
+    /// The detail, list entry and editor draft.
+    pub(crate) store: &'a Entity<EntryStore>,
+    /// The editor's notes input and carousel state.
+    pub(crate) editor: &'a Entity<EntryEditor>,
+    /// The Library tab's files and selection.
+    pub(crate) library: &'a Entity<EntryLibraryStore>,
+    /// Where the Library tab sends play requests.
+    pub(crate) playback: &'a Entity<PlaybackStore>,
+    /// The bounded cache for the banner, carousels and thumbnails.
+    pub(crate) cache: &'a Entity<LruImageCache>,
+}
+
 /// Renders the Entry route from the store's current state.
 pub(crate) fn render(
-    entry_store: &Entity<EntryStore>,
-    editor: &Entity<EntryEditor>,
+    screen: &EntryScreen<'_>,
     id: u32,
-    cache: &Entity<LruImageCache>,
+    tab: Option<EntryTab>,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
+    let entry_store = screen.store;
     let state = entry_store.read(cx).state().clone();
     let save_error = entry_store.read(cx).save_error().map(str::to_owned);
     match state {
@@ -162,10 +180,9 @@ pub(crate) fn render(
             entry,
             draft,
         } => render_ready(
-            entry_store,
-            editor,
+            screen,
             id,
-            cache,
+            tab,
             &detail,
             if entry.is_some() {
                 "On your Local list"
@@ -186,16 +203,16 @@ pub(crate) fn render(
     reason = "the route view hands the shell's collaborators to one renderer"
 )]
 fn render_ready(
-    entry_store: &Entity<EntryStore>,
-    editor: &Entity<EntryEditor>,
+    screen: &EntryScreen<'_>,
     id: u32,
-    cache: &Entity<LruImageCache>,
+    tab: Option<EntryTab>,
     detail: &metadata::MediaDetail,
     list_label: &str,
     draft: &EntryDraft,
     save_error: Option<&str>,
     cx: &mut Context<'_, AppShell>,
 ) -> impl IntoElement {
+    let (entry_store, editor, cache) = (screen.store, screen.editor, screen.cache);
     let relations = detail
         .relations
         .iter()
@@ -205,31 +222,7 @@ fn render_ready(
     let colors = cx.theme().colors;
     let summary = &detail.summary;
     let title = title_of(summary).to_owned();
-    let store = entry_store.clone();
-    let editor_for_save = editor.clone();
-    let save = Button::new("entry-save")
-        .label("Save to Local list")
-        .on_click(move |_, _, cx| {
-            store.update(cx, |store, cx| {
-                if let Some(draft) = store.draft_mut() {
-                    draft.notes = editor_for_save.read(cx).notes(cx);
-                }
-                cx.notify();
-            });
-            store.update(cx, EntryStore::save);
-        });
-    let hero = hero_banner(
-        "entry-hero",
-        HeroBannerData {
-            title: title.clone().into(),
-            synopsis: detail.description.clone().unwrap_or_default().into(),
-            banner: summary.banner.clone(),
-        },
-        cache,
-        colors.accent,
-        colors.background,
-        save,
-    );
+    let hero = hero(screen, detail, cx);
     let info = info_box(
         summary,
         list_label,
@@ -252,24 +245,39 @@ fn render_ready(
         },
         format!("entry-card-{id}"),
     );
-    let [relations_carousel, recommendations_carousel] =
-        carousels(&relations, &recommendations, editor, cache, cx);
-    div()
+    let labels = PlayLabels {
+        title: title_of(summary).to_owned(),
+        poster: summary.poster.clone(),
+    };
+    let has_files = screen.library.read(cx).has_files();
+    // The Library tab leads once the media has files; Overview is Phase 1's page.
+    let tab = match tab {
+        Some(tab) if has_files => tab,
+        None if has_files => EntryTab::Library,
+        _ => EntryTab::Overview,
+    };
+    let page = div()
         .flex()
         .flex_col()
         .gap_6()
         .p_6()
         .child(hero)
-        .child(
-            div().flex().justify_end().child(
-                Button::new("entry-library-explorer")
-                    .label("Browse library files")
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
-                    }),
-            ),
-        )
-        .child(info)
+        .child(actions_bar(screen, &labels, cx))
+        .children(has_files.then(|| tab_bar(tab, cx)));
+    if tab == EntryTab::Library {
+        return page
+            .child(library_tab(
+                screen.library,
+                screen.playback,
+                cache,
+                &labels,
+                cx,
+            ))
+            .into_any_element();
+    }
+    let [relations_carousel, recommendations_carousel] =
+        carousels(&relations, &recommendations, editor, cache, cx);
+    page.child(info)
         .children((!detail.characters.is_empty()).then(|| characters_section(&detail.characters)))
         .child(div().flex().gap_6().child(card))
         .child(carousel_section("Relations", relations_carousel))
@@ -289,6 +297,112 @@ fn render_ready(
             ))
         }))
         .into_any_element()
+}
+
+/// The banner with the synopsis and the Save button.
+fn hero(
+    screen: &EntryScreen<'_>,
+    detail: &metadata::MediaDetail,
+    cx: &mut Context<'_, AppShell>,
+) -> AnyElement {
+    let colors = cx.theme().colors;
+    let store = screen.store.clone();
+    let editor = screen.editor.clone();
+    let save = Button::new("entry-save")
+        .label("Save to Local list")
+        .on_click(move |_, _, cx| {
+            store.update(cx, |store, cx| {
+                if let Some(draft) = store.draft_mut() {
+                    draft.notes = editor.read(cx).notes(cx);
+                }
+                cx.notify();
+            });
+            store.update(cx, EntryStore::save);
+        });
+    hero_banner(
+        "entry-hero",
+        HeroBannerData {
+            title: title_of(&detail.summary).to_owned().into(),
+            synopsis: detail.description.clone().unwrap_or_default().into(),
+            banner: detail.summary.banner.clone(),
+        },
+        screen.cache,
+        colors.accent,
+        colors.background,
+        save,
+    )
+    .into_any_element()
+}
+
+/// Play next, Open local folder and Browse library files.
+fn actions_bar(
+    screen: &EntryScreen<'_>,
+    labels: &PlayLabels,
+    cx: &mut Context<'_, AppShell>,
+) -> impl IntoElement {
+    let library = screen.library.read(cx);
+    let next = library.next_episode().cloned();
+    let folder = library.folder();
+    let play_next = next.map(|episode| {
+        let label = if episode.progress.is_some() {
+            format!("Resume episode {}", episode.number)
+        } else {
+            format!("Play episode {}", episode.number)
+        };
+        let (library, playback) = (screen.library.clone(), screen.playback.clone());
+        let labels = labels.clone();
+        Button::new("entry-play-next")
+            .primary()
+            .label(label)
+            .on_click(move |_, _, cx| play(&library, &playback, &episode, &labels, cx))
+    });
+    let open_folder = folder.map(|folder| {
+        Button::new("entry-open-folder")
+            .label("Open local folder")
+            .on_click(move |_, _, cx| cx.open_with_system(&folder))
+    });
+    div()
+        .flex()
+        .justify_end()
+        .gap_2()
+        .children(play_next)
+        .children(open_folder)
+        .child(
+            Button::new("entry-library-explorer")
+                .label("Browse library files")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(OpenLibraryExplorer), cx);
+                }),
+        )
+}
+
+/// The Overview and Library tabs, shown once the media has local files.
+fn tab_bar(tab: EntryTab, cx: &mut Context<'_, AppShell>) -> impl IntoElement {
+    let tabs = [EntryTab::Overview, EntryTab::Library];
+    TabBar::new("entry-tabs")
+        .underline()
+        .selected_index(usize::from(tab == EntryTab::Library))
+        .child(
+            Tab::new().child(
+                div()
+                    .id("entry-tab-overview")
+                    .test_support()
+                    .child("Overview"),
+            ),
+        )
+        .child(
+            Tab::new().child(
+                div()
+                    .id("entry-tab-library")
+                    .test_support()
+                    .child("Library"),
+            ),
+        )
+        .on_click(cx.listener(move |shell, index: &usize, _, cx| {
+            if let Some(&tab) = tabs.get(*index) {
+                shell.select_entry_tab(tab, cx);
+            }
+        }))
 }
 
 /// The Relations and Recommendations carousels. Clicking a card opens that
@@ -389,7 +503,7 @@ fn open_entry(
     move |index, _, cx| {
         if let Some(id) = ids.get(index).copied() {
             let _ = shell.update(cx, |shell, cx| {
-                shell.navigate(Route::Entry { id }, cx);
+                shell.navigate(Route::Entry { id, tab: None }, cx);
             });
         }
     }
@@ -701,11 +815,14 @@ mod tests {
     use metadata::{MediaDetail, MediaSummary, MediaTitle, Relation};
     use tokio::runtime::Builder;
     use ui_state::{
-        Route,
+        EntryTab, Route,
         bridge::{self, BridgeError},
         entry_store::EntryStore,
         home_store::HomeStore,
-        test_support::CannedServices,
+        test_support::{
+            CannedServices, EntryLibraryServices, PlaybackCall, PlaybackServices, library_file,
+            pending_services,
+        },
     };
 
     use crate::{
@@ -839,6 +956,11 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             entry_store,
+                            cx.new(|_| {
+                                ui_state::EntryLibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             home_store,
                             cx.new(|_| {
                                 ui_state::PlaybackStore::new(
@@ -856,7 +978,9 @@ mod tests {
 
         cx.update_window(window.into(), |_, window, cx| {
             window.render_frame(cx);
-            view.update(cx, |shell, cx| shell.navigate(Route::Entry { id: 100 }, cx));
+            view.update(cx, |shell, cx| {
+                shell.navigate(Route::Entry { id: 100, tab: None }, cx);
+            });
         })
         .expect("navigation");
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -911,8 +1035,139 @@ mod tests {
         .expect("the carousel Open action");
         assert_eq!(
             view.read_with(cx, |shell, _| shell.route()),
-            Route::Entry { id: 200 },
+            Route::Entry { id: 200, tab: None },
             "Open on a relation card navigated to its Entry"
+        );
+    }
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one screen test builds the shell, then checks the tab, a click and the tab switch"
+    )]
+    async fn the_library_tab_lists_the_files_and_plays_a_clicked_episode(cx: &mut TestAppContext) {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime");
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+
+        let media = domain::MediaId::new(5);
+        let mut shelved = library_file("/shows/ep4.mkv", media, "episode", Some(4));
+        shelved.shelved = true;
+        let library = EntryLibraryServices::new(
+            media,
+            vec![
+                library_file("/shows/ep3.mkv", media, "episode", Some(3)),
+                shelved,
+            ],
+        )
+        .with_progress(2);
+        let playback = PlaybackServices::default();
+        let calls = playback.clone();
+        let services = Arc::new(CannedServices::new(detail()));
+        let (window, view) = cx
+            .update(|cx| {
+                gpui_kit::init(cx);
+                ui_theme::init(cx);
+                cx.set_reduce_motion(true);
+                let options = WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: point(px(0.), px(0.)),
+                        size: size(px(1280.), px(2200.)),
+                    })),
+                    ..WindowOptions::default()
+                };
+                gpui_kit::open_window(options, cx, |window, cx| {
+                    let entry_store = cx.new(|_| EntryStore::new(services.clone()));
+                    let home_store = cx.new(|_| HomeStore::new(services.clone()));
+                    cx.new(|cx| {
+                        AppShell::new(
+                            RailPrefs::default(),
+                            settings::PlaybackSettings::default(),
+                            crate::shell::PlaybackServices::inert(),
+                            settings::LibrarySettings::default(),
+                            crate::shell::LibraryServices::inert(),
+                            cx.new(|_| ui_state::LibraryStore::new(pending_services())),
+                            cx.new(|_| ui_state::ScanSummariesStore::new(pending_services())),
+                            cx.new(|_| ui_state::LibraryExplorerStore::new(pending_services())),
+                            cx.new(|_| ui_state::fetch_status::FetchStatus::default()),
+                            cx.new(|_| ui_state::account::AccountStore::default()),
+                            "https://example.test/login".to_owned(),
+                            |_, _| Task::ready(()),
+                            |_, _| Task::ready(Ok(0)),
+                            |_, _| Task::ready(()),
+                            Rc::new(|_: Option<String>, _: &App| {
+                                Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
+                            }),
+                            entry_store,
+                            cx.new(|_| ui_state::EntryLibraryStore::new(Arc::new(library))),
+                            home_store,
+                            cx.new(|_| ui_state::PlaybackStore::new(Arc::new(playback))),
+                            window,
+                            cx,
+                        )
+                    })
+                })
+            })
+            .expect("a test window");
+        let window = window.downcast::<Root>().expect("the root window");
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |shell, cx| {
+                shell.navigate(Route::Entry { id: 100, tab: None }, cx);
+            });
+        })
+        .expect("navigation");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("entry-library").is_some(),
+                "a media with files opens on its Library tab"
+            );
+            window.click("entry-episode-Episodes-/shows/ep4.mkv", cx);
+            window.click("entry-episode-Episodes-/shows/ep3.mkv", cx);
+        })
+        .expect("the Library tab");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cx.run_until_parked();
+        let played: Vec<_> = calls
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                PlaybackCall::Play(request) => Some((request.episode, request.source)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            played,
+            [(3, domain::StreamSource::local("/shows/ep3.mkv"))],
+            "episode 3 played; the shelved episode 4 did not"
+        );
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.click("entry-tab-overview", cx);
+            window.render_frame(cx);
+            assert!(
+                window.try_find("entry-library").is_none(),
+                "Overview replaces the episode list"
+            );
+        })
+        .expect("the tab switch");
+        assert_eq!(
+            view.read_with(cx, |shell, _| shell.route()),
+            Route::Entry {
+                id: 100,
+                tab: Some(EntryTab::Overview)
+            },
+            "the picked tab is part of the route"
         );
     }
 }

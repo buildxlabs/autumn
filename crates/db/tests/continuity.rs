@@ -71,3 +71,23 @@ async fn an_invalid_position_is_rejected() {
     let result = db.continuity().save(show, 1, f64::NAN, None).await;
     assert!(result.is_err(), "a NaN position cannot be stored");
 }
+
+#[tokio::test]
+async fn a_media_lists_its_saved_positions_in_episode_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("autumn.db")).await.unwrap();
+    let show = media(&db, 1).await;
+    let other = media(&db, 2).await;
+    db.continuity().save(show, 4, 30.0, None).await.unwrap();
+    db.continuity()
+        .save(show, 2, 120.0, Some(1440.0))
+        .await
+        .unwrap();
+    db.continuity().save(other, 3, 10.0, None).await.unwrap();
+
+    let saved = db.continuity().for_media(show).await.unwrap();
+
+    let episodes: Vec<u32> = saved.iter().map(|(episode, _)| *episode).collect();
+    assert_eq!(episodes, [2, 4], "only this media's rows, by episode");
+    assert_eq!(saved.first().unwrap().1.duration, Some(1440.0));
+}

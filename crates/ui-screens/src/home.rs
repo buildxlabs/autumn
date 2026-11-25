@@ -345,7 +345,9 @@ fn open_entry(
     let shell = cx.entity().downgrade();
     move |index, _, cx| {
         if let Some(Some(id)) = ids.get(index).copied() {
-            let _ = shell.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+            let _ = shell.update(cx, |shell, cx| {
+                shell.navigate(Route::Entry { id, tab: None }, cx);
+            });
         }
     }
 }
@@ -535,6 +537,11 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             entry_store,
+                            cx.new(|_| {
+                                ui_state::EntryLibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             home_store,
                             cx.new(|_| {
                                 ui_state::PlaybackStore::new(
@@ -599,7 +606,10 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(
             view.read_with(cx, |shell, _| shell.route()),
-            Route::Entry { id: WATCHED },
+            Route::Entry {
+                id: WATCHED,
+                tab: None
+            },
             "Continue opens the watched show's Entry"
         );
     }

@@ -22,10 +22,13 @@ use std::{
 };
 
 use ::library::{AutoScan, Library, ScanSummary};
-use db::{Db, FileFlag, LocalFile};
+use db::{Continuity, Db, FileFlag, LocalFile};
 use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
 use flume::Sender;
-use metadata::{AniList, CatalogCache, HomeLoad, Load, MediaDetail, MediaRelation, MediaSummary};
+use metadata::{
+    Aging, AniList, AniZip, CatalogCache, HomeLoad, Load, Media as EpisodeMetadata, MediaDetail,
+    MediaRelation, MediaSummary,
+};
 use net::{Client, PosterCache};
 use settings::{AppPaths, LibrarySettings, Settings};
 use tokio::runtime::Runtime;
@@ -249,6 +252,24 @@ pub trait EngineServices: Send + Sync + 'static {
     /// Moves files to the OS trash and drops their rows (the default is a no-op).
     fn trash_library_files(&self, _paths: &[PathBuf]) -> BoxFuture<Result<usize, EngineError>> {
         Box::pin(async { Ok(0) })
+    }
+
+    /// `AniZip`'s episode titles and thumbnails for AniList `anilist_id`,
+    /// from the disk cache while fresh. The default has none, for fakes.
+    fn episode_metadata(
+        &self,
+        _anilist_id: u32,
+    ) -> BoxFuture<Result<Option<EpisodeMetadata>, EngineError>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    /// The saved resume positions of `media`, by episode. The default is
+    /// empty, for fakes.
+    fn continuity(
+        &self,
+        _media: MediaId,
+    ) -> BoxFuture<Result<Vec<(u32, Continuity)>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 
@@ -776,6 +797,31 @@ impl EngineServices for Engine {
                 let _ = events.send(AppEvent::LibraryChanged);
             }
             Ok(changed)
+        })
+    }
+
+    fn episode_metadata(
+        &self,
+        anilist_id: u32,
+    ) -> BoxFuture<Result<Option<EpisodeMetadata>, EngineError>> {
+        let anizip = AniZip::new(self.client.clone(), self.poster_cache.clone());
+        Box::pin(async move {
+            // Airing's shorter TTL keeps a new episode's title from lagging a
+            // week; a finished show costs one cached request a day.
+            anizip
+                .media(anilist_id, Aging::Airing)
+                .await
+                .map_err(EngineError::from)
+        })
+    }
+
+    fn continuity(&self, media: MediaId) -> BoxFuture<Result<Vec<(u32, Continuity)>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            db.continuity()
+                .for_media(media)
+                .await
+                .map_err(EngineError::from)
         })
     }
 }

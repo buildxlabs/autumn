@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use db::{LocalFile, ScanSummary};
+use db::{Continuity, LocalFile, ScanSummary};
 use domain::{ExternalId, ListEntry, MediaId, MediaKind, PlaybackControl};
 use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry, PlayRequest};
 use metadata::{HomeLoad, Load, MediaDetail};
@@ -560,5 +560,183 @@ impl EngineServices for PlaybackServices {
             calls.push(PlaybackCall::SkipChapter);
         }
         Box::pin(async { Ok(()) })
+    }
+}
+
+/// A library row for `path`, matched to `media` as `kind` episode `episode`.
+#[must_use]
+pub fn library_file(path: &str, media: MediaId, kind: &str, episode: Option<u32>) -> LocalFile {
+    LocalFile {
+        path: path.into(),
+        size: 0,
+        modified: 0,
+        title: None,
+        group: None,
+        season: None,
+        episode,
+        kind: kind.to_owned(),
+        media_id: Some(media),
+        confidence: Some(0.9),
+        locked: false,
+        ignored: false,
+        filler: false,
+        shelved: false,
+    }
+}
+
+/// An engine fake for the Entry Library tab: one media, its files, `AniZip`
+/// episode data, a list entry's progress and resume positions.
+#[derive(Debug, Clone)]
+pub struct EntryLibraryServices {
+    media: MediaId,
+    files: Arc<Mutex<Vec<LocalFile>>>,
+    metadata: Option<metadata::Media>,
+    progress: Arc<Mutex<Option<u32>>>,
+    continuity: Vec<(u32, Continuity)>,
+}
+
+impl EntryLibraryServices {
+    /// Serves `files` as the local files of `media`, the media behind every
+    /// AniList id.
+    #[must_use]
+    pub fn new(media: MediaId, files: Vec<LocalFile>) -> Self {
+        Self {
+            media,
+            files: Arc::new(Mutex::new(files)),
+            metadata: None,
+            progress: Arc::new(Mutex::new(None)),
+            continuity: Vec::new(),
+        }
+    }
+
+    /// Serves `metadata` as the media's `AniZip` episode data.
+    #[must_use]
+    pub fn with_metadata(mut self, metadata: metadata::Media) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Serves a list entry at `progress` episodes watched.
+    #[must_use]
+    pub fn with_progress(self, progress: u32) -> Self {
+        self.set_progress(progress);
+        self
+    }
+
+    /// Changes the list entry's progress, as a playback sync would.
+    pub fn set_progress(&self, progress: u32) {
+        if let Ok(mut slot) = self.progress.lock() {
+            *slot = Some(progress);
+        }
+    }
+
+    /// Serves `continuity` as the saved resume positions.
+    #[must_use]
+    pub fn with_continuity(mut self, continuity: Vec<(u32, Continuity)>) -> Self {
+        self.continuity = continuity;
+        self
+    }
+
+    /// Replaces the served files, as a scan or a library action would.
+    pub fn set_files(&self, files: Vec<LocalFile>) {
+        if let Ok(mut slot) = self.files.lock() {
+            *slot = files;
+        }
+    }
+}
+
+impl EngineServices for EntryLibraryServices {
+    fn detail(&self, _anilist_id: u32) -> BoxFuture<Result<Load<MediaDetail>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn local_media(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<Option<MediaId>, EngineError>> {
+        let media = self.media;
+        Box::pin(async move { Ok(Some(media)) })
+    }
+
+    fn local_entry(&self, media: MediaId) -> BoxFuture<Result<Option<ListEntry>, EngineError>> {
+        let progress = self.progress.lock().map_or(None, |slot| *slot);
+        Box::pin(async move {
+            Ok(progress.map(|progress| ListEntry {
+                media,
+                status: domain::ListStatus::Current,
+                score: domain::Score::UNSCORED,
+                progress,
+                progress_volumes: 0,
+                repeat: 0,
+                started_at: domain::FuzzyDate::UNKNOWN,
+                completed_at: domain::FuzzyDate::UNKNOWN,
+                notes: String::new(),
+                private: false,
+                priority: 0,
+                advanced_scores: domain::AdvancedScores::default(),
+                custom_lists: Vec::new(),
+                hidden_from_status_lists: false,
+                created_at: std::time::SystemTime::UNIX_EPOCH,
+                updated_at: std::time::SystemTime::UNIX_EPOCH,
+            }))
+        })
+    }
+
+    fn save_entry(&self, _entry: &ListEntry) -> BoxFuture<Result<ListEntry, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn mint(
+        &self,
+        _kind: MediaKind,
+        _ids: &[ExternalId],
+    ) -> BoxFuture<Result<MediaId, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn home(&self) -> BoxFuture<Result<Load<HomeLoad>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn collection(&self, _kind: MediaKind) -> BoxFuture<Result<Vec<ListedEntry>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn missed_sequels(
+        &self,
+        _kind: MediaKind,
+    ) -> BoxFuture<Result<Vec<metadata::MediaSummary>, EngineError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn library_files(&self, media: MediaId) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
+        let files: Vec<LocalFile> = self.files.lock().map_or_else(
+            |_| Vec::new(),
+            |files| {
+                files
+                    .iter()
+                    .filter(|file| file.media_id == Some(media))
+                    .cloned()
+                    .collect()
+            },
+        );
+        Box::pin(async move { Ok(files) })
+    }
+
+    fn episode_metadata(
+        &self,
+        _anilist_id: u32,
+    ) -> BoxFuture<Result<Option<metadata::Media>, EngineError>> {
+        let metadata = self.metadata.clone();
+        Box::pin(async move { Ok(metadata) })
+    }
+
+    fn continuity(
+        &self,
+        _media: MediaId,
+    ) -> BoxFuture<Result<Vec<(u32, Continuity)>, EngineError>> {
+        let continuity = self.continuity.clone();
+        Box::pin(async move { Ok(continuity) })
     }
 }

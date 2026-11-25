@@ -25,7 +25,8 @@ use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
 use ui_state::{
-    AniListHandle, LibraryExplorerStore, LibraryStore, PlatformGateway, ScanSummariesStore,
+    AniListHandle, EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlatformGateway,
+    ScanSummariesStore,
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
@@ -180,6 +181,7 @@ fn main() -> ExitCode {
             let services: Arc<dyn EngineServices> = Arc::new(engine.clone());
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
+            let entry_library = cx.new(|_| EntryLibraryStore::new(Arc::clone(&services)));
             let library_store = cx.new(|_| LibraryStore::new(Arc::clone(&services)));
             let scan_summaries = cx.new(|_| ScanSummariesStore::new(Arc::clone(&services)));
             let explorer = cx.new(|_| LibraryExplorerStore::new(Arc::clone(&services)));
@@ -193,12 +195,14 @@ fn main() -> ExitCode {
                 let summaries = scan_summaries.clone();
                 let explorer = explorer.clone();
                 let playback = playback_store.clone();
+                let entry_library = entry_library.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
                     account.update(cx, |store, cx| store.apply(event.clone(), cx));
                     library.update(cx, |store, cx| store.apply(event.clone(), cx));
                     summaries.update(cx, |store, cx| store.apply(&event, cx));
                     explorer.update(cx, |store, cx| store.apply(&event, cx));
+                    entry_library.update(cx, |store, cx| store.apply(&event, cx));
                     playback.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
@@ -221,6 +225,7 @@ fn main() -> ExitCode {
                 account_request,
                 discover_loader,
                 entry_store,
+                entry_library,
                 home_store,
                 playback_store,
                 engine.db().clone(),
@@ -286,6 +291,7 @@ fn open_main_window(
     account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
     discover_loader: DiscoverLoader,
     entry_store: Entity<EntryStore>,
+    entry_library: Entity<EntryLibraryStore>,
     home_store: Entity<HomeStore>,
     playback_store: Entity<PlaybackStore>,
     db: Db,
@@ -315,6 +321,7 @@ fn open_main_window(
                 account_request,
                 discover_loader,
                 entry_store,
+                entry_library,
                 home_store,
                 playback_store,
                 db,
@@ -370,7 +377,7 @@ mod tests {
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::PlatformGateway;
     use ui_state::{
-        LibraryExplorerStore, LibraryStore, PlaybackStore, ScanSummariesStore,
+        EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlaybackStore, ScanSummariesStore,
         account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
         test_support::pending_services,
     };
@@ -421,6 +428,7 @@ mod tests {
                     Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                 }),
                 entry_store,
+                cx.new(|_| EntryLibraryStore::new(pending_services())),
                 home_store,
                 cx.new(|_| PlaybackStore::new(ui_state::test_support::pending_services())),
                 db.clone(),

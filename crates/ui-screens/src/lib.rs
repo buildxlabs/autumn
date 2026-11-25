@@ -4,6 +4,7 @@
 
 mod discover;
 mod entry;
+mod entry_library;
 mod home;
 mod library_explorer;
 mod lists;

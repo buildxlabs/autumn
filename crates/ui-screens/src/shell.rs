@@ -29,8 +29,8 @@ use ui_components::{
     },
 };
 use ui_state::{
-    LibraryStore, RailBadges, Route, RouterState, ScanOutcome, ScanSummariesStore, ScrollRestore,
-    SearchFilters, SettingsTab,
+    EntryLibraryStore, EntryTab, LibraryStore, RailBadges, Route, RouterState, ScanOutcome,
+    ScanSummariesStore, ScrollRestore, SearchFilters, SettingsTab,
     account::{AccountCommand, AccountStore},
     actions::{
         GoBack, GoForward, OpenCommandPalette, OpenLibraryExplorer, OpenSearch, PLAYER, PlayPause,
@@ -59,7 +59,7 @@ mod settings;
 
 use crate::{
     discover::{DiscoverLoader, DiscoverView},
-    entry::{EntryEditor, observe as observe_entry, render as render_entry},
+    entry::{EntryEditor, EntryScreen, observe as observe_entry, render as render_entry},
     home::{HomeCarousels, observe as observe_home, render as render_home},
     library_explorer::LibraryExplorerScreen,
     lists::{ListsEvent, ListsScreen},
@@ -147,6 +147,8 @@ pub struct AppShell {
     entry_editor: Entity<EntryEditor>,
     /// Keeps the editor sync subscribed to Entry store notifications.
     _entry_events: Subscription,
+    /// The Entry's Library tab: local files as episode cards (#132).
+    entry_library: Entity<EntryLibraryStore>,
     /// The Home screen's store; `show` opens Home's sections.
     home_store: Entity<HomeStore>,
     /// The one playback session, mirrored from the engine for the HUD.
@@ -259,6 +261,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        entry_library: Entity<EntryLibraryStore>,
         home_store: Entity<HomeStore>,
         playback_store: Entity<PlaybackStore>,
         window: &mut Window,
@@ -346,6 +349,7 @@ impl AppShell {
             }
         })
         .detach();
+        cx.observe(&entry_library, |_, _, cx| cx.notify()).detach();
         // The HUD is drawn from the playback store; engine events notify it
         // at most four times a second.
         cx.observe(&playback_store, |_, _, cx| cx.notify()).detach();
@@ -356,7 +360,9 @@ impl AppShell {
         let shell = cx.entity().downgrade();
         discover_view.update(cx, |view, _| {
             view.set_on_open(move |id, _, cx| {
-                let _ = shell.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                let _ = shell.update(cx, |shell, cx| {
+                    shell.navigate(Route::Entry { id, tab: None }, cx);
+                });
             });
         });
         // Missed Sequels reads the signed-in account's collection, so a new
@@ -382,6 +388,7 @@ impl AppShell {
             entry_store,
             entry_editor,
             _entry_events: entry_events,
+            entry_library,
             home_store,
             playback_store,
             hud_focus: cx.focus_handle(),
@@ -465,6 +472,7 @@ impl AppShell {
         account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
+        entry_library: Entity<EntryLibraryStore>,
         home_store: Entity<HomeStore>,
         playback_store: Entity<PlaybackStore>,
         db: Db,
@@ -492,6 +500,7 @@ impl AppShell {
             account_request,
             discover_loader,
             entry_store,
+            entry_library,
             home_store,
             playback_store,
             window,
@@ -526,8 +535,9 @@ impl AppShell {
         });
         summaries.update(cx, |screen, _| {
             screen.set_on_open(move |id, _, cx| {
-                let _ = summaries_handle
-                    .update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                let _ = summaries_handle.update(cx, |shell, cx| {
+                    shell.navigate(Route::Entry { id, tab: None }, cx);
+                });
             });
         });
         shell.scan_summaries_screen = Some(summaries);
@@ -567,8 +577,9 @@ impl AppShell {
         let shell_handle = cx.entity().downgrade();
         search.update(cx, |search, _cx| {
             search.set_on_open(move |id, _, cx| {
-                let _ =
-                    shell_handle.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                let _ = shell_handle.update(cx, |shell, cx| {
+                    shell.navigate(Route::Entry { id, tab: None }, cx);
+                });
             });
         });
         let events = cx.subscribe(&search, |shell, _, event: &SearchEvent, cx| match event {
@@ -604,6 +615,15 @@ impl AppShell {
         let offset = self.leaving_scroll(cx);
         let restore = self.router.push(route, offset);
         self.show(restore, cx);
+    }
+
+    /// Shows `tab` of the Entry on screen. A tab switch replaces the route,
+    /// so Back leaves the Entry instead of stepping through its tabs.
+    pub(crate) fn select_entry_tab(&mut self, tab: EntryTab, cx: &mut Context<'_, Self>) {
+        if let Route::Entry { id, .. } = self.route() {
+            self.router.replace(Route::Entry { id, tab: Some(tab) });
+            cx.notify();
+        }
     }
 
     /// The offset to save for the route being left. Search scrolls inside its
@@ -791,8 +811,10 @@ impl AppShell {
             self.scan_summaries.update(cx, ScanSummariesStore::open);
         }
         match self.route() {
-            Route::Entry { id } => {
+            Route::Entry { id, .. } => {
                 self.entry_store.update(cx, |store, cx| store.open(id, cx));
+                self.entry_library
+                    .update(cx, |store, cx| store.open(id, cx));
             }
             Route::Home => {
                 self.home_store.update(cx, HomeStore::open);
@@ -1262,14 +1284,19 @@ impl AppShell {
                 .track_scroll(self.scroll.handle())
                 .child(episode_gallery(&self.banner_cache))
                 .into_any_element(),
-            Route::Entry { id } => route_view
+            Route::Entry { id, tab } => route_view
                 .overflow_y_scroll()
                 .track_scroll(self.scroll.handle())
                 .child(render_entry(
-                    &self.entry_store,
-                    &self.entry_editor,
+                    &EntryScreen {
+                        store: &self.entry_store,
+                        editor: &self.entry_editor,
+                        library: &self.entry_library,
+                        playback: &self.playback_store,
+                        cache: &self.banner_cache,
+                    },
                     *id,
-                    &self.banner_cache,
+                    *tab,
                     cx,
                 ))
                 .into_any_element(),
@@ -1789,6 +1816,11 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
                             entry_store,
+                            cx.new(|_| {
+                                ui_state::EntryLibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(std::sync::Arc::new(playback_services))),
                             window,
@@ -3226,6 +3258,11 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             entry_store,
+                            cx.new(|_| {
+                                ui_state::EntryLibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(pending_services())),
                             db.clone(),
@@ -3616,7 +3653,10 @@ mod tests {
 
         assert_eq!(
             shell.view.read_with(cx, |shell, _| shell.route()),
-            Route::Entry { id: 10_014 },
+            Route::Entry {
+                id: 10_014,
+                tab: None
+            },
             "a result opens Entry with its AniList id"
         );
 
