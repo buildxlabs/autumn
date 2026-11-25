@@ -18,6 +18,18 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
 File issues only into the user's own repo. Never file into `mattpocock/skills` (the repo these skills come from) unless the user owns it. In a fork, `gh` can default to the upstream parent, so before the first `gh issue create` of a session, check the target with `gh repo view --json nameWithOwner` and confirm it with the user if it is not their repo.
 
+## Phases: milestones, tracking issues and the board
+
+Build work is grouped by ROADMAP phase in three linked places, so progress shows at a glance:
+
+- **Milestone** `Phase N` on every build issue of that phase (`gh issue create --milestone "Phase N"`). The milestone page shows percent complete.
+- **Tracking issue** `Phase N: <name>`, also in the milestone. Every build issue of the phase is its sub-issue (`gh issue create --parent <tracking>`), so GitHub draws a progress bar. Current ones: [Phase 2: Local library and external playback](https://github.com/buildxlabs/autumn/issues/174), [Phase 3: Torrent streaming and search](https://github.com/buildxlabs/autumn/issues/175).
+- **Project board** `Autumn` (org project): every build issue, with a `Status` field (Todo / In progress / In review / Done) and a `Phase` field.
+
+A `wayfinder:map` that locks a phase's decisions carries the same milestone. Its decision tickets are its sub-issues, not the tracking issue's, and they stay off the board.
+
+Feature PRs target `dev`. `Closes #N` only fires on merges into `main`, so **close the issue by hand right after its PR is squash-merged into `dev`**, with a comment naming the PR, and move its board card to Done.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

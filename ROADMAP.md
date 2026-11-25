@@ -6,6 +6,10 @@ Scope: **native desktop only** (macOS, Linux, Windows). No web app, no server mo
 
 Last reviewed: 2026-11-25.
 
+**Manga is not planned for now.** The former Phase 7 sits in the [Backlog](#backlog-ideas-from-the-other-references); the app is anime-only. Phase numbers are unchanged.
+
+**Tracking.** Each phase has a GitHub milestone, a tracking issue whose sub-issues are its build issues, and a column on the project board. Decisions a phase needs before it is ticketed are worked on a `wayfinder:map` issue. See [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+
 ## 1. Decisions
 
 ### Made
@@ -59,6 +63,8 @@ Each phase ends on an **exit criterion**: something you can run or observe. A ph
 
 Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then the Phase 0 shell and the Phase 1 back-end crates (`net`, `db`, `metadata`, `tracker`) proceed in parallel. Phase 1 screens wait for the shell.
 
+Phases 2 and 3 also overlap: the remaining Phase 2 screens are built while the Phase 3 decisions are locked on the map [Autumn: Phase 3 ready to build](https://github.com/buildxlabs/autumn/issues/176), and Phase 3 build issues start as soon as it closes.
+
 ### Phase 0: Foundation and window shell
 
 - [x] Resolve O3 (MSRV); record it in this file (D11: Rust 1.100).
@@ -78,7 +84,7 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 - [x] AniList login (token paste + PIN URL), avatar (animated-GIF upgrade), sign out, rate-limit indicator (countdown). Token in keychain; login refused without one (ADR 0002). Re-login prompt before the one-year token expires.
 - [x] Components: media card (badges, hover popup, context menu, skeleton), carousel (drag, arrows, Alt+wheel), hero banner, virtualized poster grid.
 - [x] Screens: Home (fixed default widgets: continue-watching header, discover header, my lists, missed sequels, aired recently, anime carousel, centered title), Discover, Advanced Search, My Lists (status tabs, quick editor), basic Anime Entry (header, synopsis, characters, relations, recommendations, list editor).
-- [x] Command palette: open/close, `/search`, `/anime`, `/manga`.
+- [x] Command palette: open/close, `/search`, `/anime`, `/manga` (`/manga` removed again with the manga UI in Phase 2).
 - [x] Top indefinite loader during background fetches.
 - [x] Settings screen with a Storage tab holding a "Clear poster cache" button.
 - **Exit:** with no account, a user can browse, search, add a show to a local list and see it on Home after restart. With AniList, the same edits round-trip to AniList.
@@ -91,13 +97,13 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 - [ ] `engine` v1: playback manager, continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next with countdown, OP/ED chapter skip. (Core landed in #172; auto-next with countdown and OP/ED chapter skip remain in #131.)
 - [ ] Screens: Entry Library tab (episode cards, range pagination, missing banner, bulk actions), Scan Summaries, Library Explorer (tree), Playback HUD. Home widgets that depend on the library.
 - [ ] First-run onboarding: library path, account choice, player choice.
+- [ ] Hide manga from the UI (rail item, `/manga`, Trending Manga carousel); keep the manga data model so AniList manga list entries survive sync and transfer.
 - **Exit:** point at a folder of fansub releases. Matched shows appear, play in mpv, resume where they stopped, and progress updates on the active platform at the threshold.
 
 ### Phase 3: Torrent streaming and search
 
 - [ ] `torrent` (librqbit session, head+tail priority, batch file pick, disk handoff, cleanup on drop) and `relay` torrent endpoint (token-gated `Range`).
 - [ ] `search`: Nyaa (+ mirror base URL, proxy) and AnimeTosho, analyzer, batch detection, auto-select profiles, availability badges.
-- [ ] External clients: qBittorrent (re-auth), Transmission, rqbit. Custom shell-command dispatch.
 - [ ] Screens: Entry Torrent tab (auto-select, manual search sheet with sortable table), buffer overlay (peers, speeds, readiness), Torrent List with live badges.
 - [ ] Magnet paste interception + `/magnet` and `/droptorrent` palette commands. Next-episode preload.
 - **Exit:** pick an airing episode, press auto-select, and playback starts in mpv while downloading. Seeking near the end works before the download finishes.
@@ -105,7 +111,7 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 ### Phase 4: Extensions
 
 - [ ] `extensions`: Luau sandbox (one VM per extension, ADR 0003), declarative sources, limits, outbound guard, manifest, repository URLs, install/update/remove, settings per extension, error surfacing.
-- [ ] Provider adapters: torrent provider (feeds `search`), online stream, manga, custom source, tracker.
+- [ ] Provider adapters: torrent provider (feeds `search`), online stream, custom source, tracker.
 - [ ] Screens: Extensions (installed, marketplace, update diff review), extension playground (editor + run).
 - [ ] Sidebar badge for updates/errors.
 - **Exit:** install a torrent-provider extension from a repository URL; its results show in the manual search alongside Nyaa. A crashing or looping extension is killed and reported without freezing the app.
@@ -121,15 +127,14 @@ Phases 0 and 1 overlap. Workspace setup and the Tokio bridge come first. Then th
 ### Phase 6: Automation and schedule
 
 - [ ] `autodownloader`: rules, profiles, delay timers, multi-indexer comparison, approve/reject queue, history.
+- [ ] External torrent clients: qBittorrent (re-auth), Transmission, rqbit. Custom shell-command dispatch. (Moved from Phase 3.)
 - [ ] Engine: cron jobs (collection refresh, auto-downloader, availability), OS notifications, Discord Rich Presence, playlists.
 - [ ] Screens: Auto-Downloader (rules, profiles, queue/history), Schedule (calendar + missing episodes with one-click actions), Playlists sheet. Badges for missing/queue.
 - **Exit:** a rule for an airing show downloads the new episode after its delay window, preferring the higher-ranked group, and a notification fires.
 
-### Phase 7: Manga
+### Phase 7: (moved to Backlog)
 
-- [ ] `manga`: provider chapters, compare all providers, source refresh, chapter downloads (AVIF handling), local manga (CBZ, folders, PDF). MangaUpdates metadata.
-- [ ] Screens: Manga hub, Manga entry, Reader (long strip, single, double, RTL/LTR, fit modes, zoom, keyboard, auto-hide HUD, progress sync).
-- **Exit:** read a chapter from an extension and a local CBZ. Chapter progress syncs to the active platform.
+Manga was Phase 7. It is not planned for now; see the Backlog.
 
 ### Phase 8: Customization, offline, and polish
 
@@ -180,7 +185,8 @@ Every feature from the research documents and the reference code is listed here 
 |                     | Subtitle translation of embedded tracks                                                                                                               | Backlog                                            |
 | Torrents            | Search drawer: indexers, resolution/codec/group/seeders/size/date, batch badge, availability                                                          | 3                                                  |
 |                     | Auto-select scoring profiles                                                                                                                          | 3                                                  |
-|                     | qBittorrent (re-auth), Transmission, rqbit, built-in client, torrent list with live badges                                                            | 3                                                  |
+|                     | Built-in client, torrent list with live badges                                                                                                        | 3                                                  |
+|                     | qBittorrent (re-auth), Transmission, rqbit, custom shell command                                                                                      | 6                                                  |
 |                     | Mirror base URL + proxy per indexer; infohash-only magnet copy                                                                                        | 3                                                  |
 |                     | Auto-downloader: rules, profiles, delay timers, multi-indexer, queue approve/reject, history                                                          | 6                                                  |
 | Metadata & tracking | AniList: login, avatar, collection sync, full list editor, manual refresh                                                                             | 1                                                  |
@@ -189,12 +195,12 @@ Every feature from the research documents and the reference code is listed here 
 |                     | MyAnimeList platform                                                                                                                                  | 8                                                  |
 |                     | Tracker extensions (sync to other services)                                                                                                           | 4                                                  |
 |                     | Custom sources (non-AniList entries)                                                                                                                  | 8                                                  |
-| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, manga, by country)                                                 | 1                                                  |
+| Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, by country); the manga carousel is removed                         | 1                                                  |
 |                     | Advanced search with all filters + scroll restore                                                                                                     | 1                                                  |
 |                     | My Lists with status tabs, custom lists, quick edit                                                                                                   | 1                                                  |
 |                     | Schedule calendar + missing episodes                                                                                                                  | 6                                                  |
 |                     | Playlists (cross-series queues)                                                                                                                       | 6                                                  |
-| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync                                                    | 7                                                  |
+| Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync, MangaUpdates, manga Home widgets                  | Backlog                                            |
 | Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                                                                      | 4                                                  |
 |                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                                                                           | Backlog (after 4; needs a stable UI-injection API) |
 | Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                                                               | 0                                                  |
@@ -242,6 +248,7 @@ Not committed. Pull an item into a phase only when the core phases ship.
 - Library insights / stats dashboard (dango, BookOrbit).
 - IPTV / M3U playlists (VortX, MovieBox-TUI).
 - Light novels (Mangayomi, Zangetsu).
+- Manga, the former Phase 7: `manga` crate (provider chapters, compare, refresh, chapter downloads with AVIF, local CBZ/folders/PDF), MangaUpdates metadata, Manga hub and entry screens, the Reader (long strip, single, double, RTL/LTR, fit modes, zoom, keyboard, auto-hide HUD, progress sync), manga Discover carousel and Home widgets, `/manga` palette mode. The manga data model (`MediaKind::Manga`, AniList manga lists) stays in the code.
 
 ## 5. Research documents
 
