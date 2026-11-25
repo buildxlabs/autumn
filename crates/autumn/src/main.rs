@@ -25,7 +25,7 @@ use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
 };
 use ui_state::{
-    AniListHandle, LibraryStore, PlatformGateway,
+    AniListHandle, LibraryStore, PlatformGateway, ScanSummariesStore,
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
@@ -181,6 +181,7 @@ fn main() -> ExitCode {
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
             let library_store = cx.new(|_| LibraryStore::new(Arc::clone(&services)));
+            let scan_summaries = cx.new(|_| ScanSummariesStore::new(Arc::clone(&services)));
             let playback_store = cx.new(|_| PlaybackStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
@@ -188,11 +189,13 @@ fn main() -> ExitCode {
                 let store = fetch_status.clone();
                 let account = account.clone();
                 let library = library_store.clone();
+                let summaries = scan_summaries.clone();
                 let playback = playback_store.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
                     account.update(cx, |store, cx| store.apply(event.clone(), cx));
                     library.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    summaries.update(cx, |store, cx| store.apply(&event, cx));
                     playback.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
@@ -205,6 +208,7 @@ fn main() -> ExitCode {
                 library_settings,
                 library_services,
                 library_store,
+                scan_summaries,
                 fetch_status,
                 account,
                 login_url(),
@@ -268,6 +272,7 @@ fn open_main_window(
     library_settings: ui_screens::LibrarySettings,
     library_services: ui_screens::LibraryServices,
     library_store: Entity<LibraryStore>,
+    scan_summaries: Entity<ScanSummariesStore>,
     fetch_status: Entity<FetchStatus>,
     account: Entity<AccountStore>,
     login_url: String,
@@ -295,6 +300,7 @@ fn open_main_window(
                 library_settings,
                 library_services,
                 library_store,
+                scan_summaries,
                 fetch_status,
                 account,
                 login_url,
@@ -358,8 +364,9 @@ mod tests {
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::PlatformGateway;
     use ui_state::{
-        LibraryStore, PlaybackStore, account::AccountStore, bridge::BridgeError,
-        entry_store::EntryStore, home_store::HomeStore, test_support::pending_services,
+        LibraryStore, PlaybackStore, ScanSummariesStore, account::AccountStore,
+        bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
+        test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
@@ -386,7 +393,8 @@ mod tests {
             let account = cx.new(|_| AccountStore::default());
             let home_store = cx.new(|_| HomeStore::new(Arc::clone(&services)));
             let entry_store = cx.new(|_| EntryStore::new(Arc::clone(&services)));
-            let library_store = cx.new(|_| LibraryStore::new(services));
+            let library_store = cx.new(|_| LibraryStore::new(Arc::clone(&services)));
+            let scan_summaries = cx.new(|_| ScanSummariesStore::new(services));
             open_main_window(
                 RailPrefs::default(),
                 settings::PlaybackSettings::default(),
@@ -394,6 +402,7 @@ mod tests {
                 settings::LibrarySettings::default(),
                 ui_screens::LibraryServices::inert(),
                 library_store,
+                scan_summaries,
                 fetch_status,
                 account,
                 "https://example.test/login".to_owned(),

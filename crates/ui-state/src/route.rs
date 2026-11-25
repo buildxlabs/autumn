@@ -54,6 +54,8 @@ pub enum Route {
     Search(SearchFilters),
     /// The airing schedule.
     Schedule,
+    /// The audit log of recent library scans (#134); not a rail item.
+    ScanSummaries,
     /// Installed and available extensions.
     Extensions,
     /// Offline snapshots and sync.
@@ -80,7 +82,7 @@ impl Route {
 
     /// Every route that has a stable settings key, including screens that
     /// are not rail items. [`Self::ALL`] stays the rail's default set.
-    pub const ALL_KEYED: [Self; 8] = [
+    pub const ALL_KEYED: [Self; 9] = [
         Self::Home,
         Self::Discover,
         Self::Lists {
@@ -88,6 +90,7 @@ impl Route {
         },
         Self::Search(SearchFilters::EMPTY),
         Self::Schedule,
+        Self::ScanSummaries,
         Self::Extensions,
         Self::Sync,
         Self::Settings {
@@ -105,6 +108,7 @@ impl Route {
             Self::Lists { .. } => "lists",
             Self::Search(_) => "search",
             Self::Schedule => "schedule",
+            Self::ScanSummaries => "scan_summaries",
             Self::Extensions => "extensions",
             Self::Sync => "sync",
             Self::Settings { .. } => "settings",

@@ -15,6 +15,7 @@ mod settings_store;
 use std::{
     collections::HashSet,
     future::Future,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
 };
@@ -29,7 +30,9 @@ use settings::{AppPaths, LibrarySettings, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
 
-pub use library::{AnimeList, FillerPolicy, LibraryScanner, PlatformCandidates, ScanError};
+pub use library::{
+    AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
+};
 pub use playback::{
     LocalProgressSync, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager, PlaybackSession,
     PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
@@ -172,6 +175,32 @@ pub trait EngineServices: Send + Sync + 'static {
     /// Every local file, so stores can load the library in one call.
     fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Stored scan summaries, newest first. The default is empty for fakes.
+    fn summaries(&self) -> BoxFuture<Result<Vec<ScanSummary>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Media with local files, with their Entry ids and titles.
+    fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Assigns files to AniList media, minting it if needed. The default is a
+    /// no-op for fakes.
+    fn manual_match(
+        &self,
+        _paths: &[PathBuf],
+        _anilist_id: u32,
+        _episode: Option<u32>,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
+    }
+
+    /// Marks a file as ignored. The default is a no-op for fakes.
+    fn ignore_file(&self, _path: &Path) -> BoxFuture<Result<usize, EngineError>> {
+        Box::pin(async { Ok(0) })
     }
 }
 
@@ -561,6 +590,64 @@ impl EngineServices for Engine {
     fn all_library_files(&self) -> BoxFuture<Result<Vec<LocalFile>, EngineError>> {
         let db = self.db.clone();
         Box::pin(async move { db.local_file().all().await.map_err(EngineError::from) })
+    }
+
+    fn summaries(&self) -> BoxFuture<Result<Vec<ScanSummary>, EngineError>> {
+        let library = self.library.clone();
+        Box::pin(async move { library.summaries().await.map_err(EngineError::from) })
+    }
+
+    fn library_media_info(&self) -> BoxFuture<Result<Vec<LibraryMediaInfo>, EngineError>> {
+        let (db, catalog) = (self.db.clone(), self.catalog.clone());
+        Box::pin(async move {
+            library::media_info(&db, &catalog)
+                .await
+                .map_err(EngineError::from)
+        })
+    }
+
+    fn manual_match(
+        &self,
+        paths: &[PathBuf],
+        anilist_id: u32,
+        episode: Option<u32>,
+    ) -> BoxFuture<Result<usize, EngineError>> {
+        let library = self.library.clone();
+        let paths = paths.to_vec();
+        let events = self
+            .events
+            .lock()
+            .map_or_else(|_| None, |slot| slot.clone());
+        Box::pin(async move {
+            let changed = library
+                .manual_match(&paths, anilist_id, episode)
+                .await
+                .map_err(EngineError::from)?;
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
+    }
+
+    fn ignore_file(&self, path: &Path) -> BoxFuture<Result<usize, EngineError>> {
+        let library = self.library.clone();
+        let path = path.to_path_buf();
+        let events = self
+            .events
+            .lock()
+            .map_or_else(|_| None, |slot| slot.clone());
+        Box::pin(async move {
+            let changed = library
+                .ignore_file(&path)
+                .await
+                .map_err(EngineError::from)?;
+            // Other views (Library, Entry) drop the file, as after a match.
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
     }
 }
 
