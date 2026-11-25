@@ -633,7 +633,21 @@ impl EngineServices for Engine {
     fn ignore_file(&self, path: &Path) -> BoxFuture<Result<usize, EngineError>> {
         let library = self.library.clone();
         let path = path.to_path_buf();
-        Box::pin(async move { library.ignore_file(&path).await.map_err(EngineError::from) })
+        let events = self
+            .events
+            .lock()
+            .map_or_else(|_| None, |slot| slot.clone());
+        Box::pin(async move {
+            let changed = library
+                .ignore_file(&path)
+                .await
+                .map_err(EngineError::from)?;
+            // Other views (Library, Entry) drop the file, as after a match.
+            if let Some(events) = events {
+                let _ = events.send(AppEvent::LibraryChanged);
+            }
+            Ok(changed)
+        })
     }
 }
 
