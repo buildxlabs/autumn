@@ -104,7 +104,7 @@ mod tests {
         cx.update(|cx| ui_state::bridge::init(cx, runtime.handle().clone()));
         let save = saver(db.clone(), Settings::default());
 
-        let prefs = RailPrefs::new(RailMode::ClickPin, vec![Route::Manga, Route::Discover]);
+        let prefs = RailPrefs::new(RailMode::ClickPin, vec![Route::Schedule, Route::Discover]);
         cx.update(|cx| save(&prefs, cx)).await;
         drop(db);
 
@@ -122,11 +122,16 @@ mod tests {
     #[test]
     fn unknown_unpinned_keys_are_skipped() {
         let mut settings = Settings::default();
-        settings.appearance.sidebar_unpinned = vec!["retired".to_owned(), "manga".to_owned()];
+        settings.appearance.sidebar_unpinned = vec![
+            "retired".to_owned(),
+            "manga".to_owned(),
+            "discover".to_owned(),
+        ];
 
         assert_eq!(
             from_settings(&settings),
-            RailPrefs::new(RailMode::Hover, vec![Route::Manga])
+            RailPrefs::new(RailMode::Hover, vec![Route::Discover]),
+            "a retired manga key is dropped without blocking a known one"
         );
     }
 
@@ -143,8 +148,8 @@ mod tests {
 
         assert_eq!(
             from_settings(&settings),
-            RailPrefs::new(RailMode::Hover, vec![Route::Discover, Route::Manga]),
-            "duplicates and system routes must not block re-pinning"
+            RailPrefs::new(RailMode::Hover, vec![Route::Discover]),
+            "duplicates, system routes and the retired manga key must not block re-pinning"
         );
     }
 }

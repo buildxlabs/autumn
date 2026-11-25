@@ -66,7 +66,7 @@ const PALETTE_WIDTH: f32 = 560.;
 pub(crate) const HOVER_OPEN_DELAY: Duration = Duration::from_millis(150);
 
 /// Rail entries from the top, top to bottom.
-const RAIL_ROUTES: [Route; 4] = [Route::Home, Route::Discover, Route::Schedule, Route::Manga];
+const RAIL_ROUTES: [Route; 3] = [Route::Home, Route::Discover, Route::Schedule];
 /// The system group at the rail's bottom, top to bottom.
 /// The rail's system group, which never folds into "More".
 pub const SYSTEM_ROUTES: [Route; 3] = [
@@ -1129,7 +1129,6 @@ pub(crate) fn title(route: &Route) -> SharedString {
         Route::Lists { .. } => "My Lists",
         Route::Search(_) => "Advanced Search",
         Route::Schedule => "Schedule",
-        Route::Manga => "Manga",
         Route::Extensions => "Extensions",
         Route::Sync => "Offline / Sync",
         Route::Settings { .. } => "Settings",
@@ -1146,7 +1145,6 @@ fn rows(route: &Route) -> usize {
         | Route::Lists { .. }
         | Route::Search(_)
         | Route::Schedule
-        | Route::Manga
         | Route::Extensions
         | Route::Sync
         | Route::Settings { .. } => 0,
@@ -1161,7 +1159,6 @@ pub(crate) fn icon(route: &Route) -> IconName {
         Route::Lists { .. } => IconName::List,
         Route::Search(_) => IconName::Search,
         Route::Schedule => IconName::Calendar,
-        Route::Manga => IconName::BookOpen,
         Route::Extensions => IconName::Puzzle,
         Route::Sync => IconName::FolderSync,
         Route::Settings { .. } => IconName::Settings,
@@ -2163,15 +2160,15 @@ mod tests {
     #[gpui_kit::test]
     fn a_short_window_folds_the_bottom_items_into_more(cx: &mut TestAppContext) {
         let shell = Shell::open(cx);
-        assert!(shell.shows(cx, "rail-manga"), "everything fits at 800px");
+        assert!(shell.shows(cx, "rail-schedule"), "everything fits at 800px");
         assert!(
             !shell.shows(cx, "rail-more"),
             "no More while everything fits"
         );
 
-        shell.resize(cx, 400.);
+        shell.resize(cx, 360.);
         assert!(shell.shows(cx, "rail-home"), "the top item stays");
-        assert!(!shell.shows(cx, "rail-manga"), "the bottom item folds");
+        assert!(!shell.shows(cx, "rail-schedule"), "the bottom item folds");
         assert!(shell.shows(cx, "rail-more"), "More holds it");
         assert!(
             shell.shows(cx, "rail-settings"),
@@ -2179,7 +2176,7 @@ mod tests {
         );
 
         shell.resize(cx, 800.);
-        assert!(shell.shows(cx, "rail-manga"), "growing brings it back");
+        assert!(shell.shows(cx, "rail-schedule"), "growing brings it back");
         assert!(!shell.shows(cx, "rail-more"), "and More goes away");
     }
 
@@ -2442,11 +2439,8 @@ mod tests {
         assert!(shell.palette_open(cx), "still open");
         assert_eq!(shell.query(cx), "", "query cleared");
 
-        shell.input(cx, "/ma");
-        shell.press(cx, "enter");
-        cx.run_until_parked();
-        assert_eq!(shell.query(cx), "/manga ", "picking /manga fills it in");
-        assert_eq!(shell.mode(cx), Mode::Manga, "in manga mode");
+        shell.input(cx, "/manga");
+        assert_eq!(shell.mode(cx), Mode::Navigate, "/manga is not a mode");
         assert_eq!(shell.route(cx), Route::Home, "no navigation");
     }
 

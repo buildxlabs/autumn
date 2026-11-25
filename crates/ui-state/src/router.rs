@@ -163,7 +163,7 @@ mod tests {
         router.back(at(0.));
         assert!(router.can_go_forward(), "discover is ahead");
 
-        router.push(Route::Manga, at(0.));
+        router.push(Route::Schedule, at(0.));
 
         assert!(!router.can_go_forward(), "a new push drops discover");
         router.back(at(0.));
