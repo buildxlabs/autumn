@@ -4,7 +4,7 @@
 //! pump and sends commands through the bridge, so `render()` stays pure
 //! (ARCHITECTURE §4).
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use db::{LocalFile, ScanSummary};
 use domain::{AppEvent, MediaId};
@@ -210,7 +210,13 @@ impl LibraryStore {
                 return;
             };
             files.sort_by(|left, right| left.path.cmp(&right.path));
-            let media: Vec<MediaId> = files.iter().filter_map(|file| file.media_id).collect();
+            // A media with several episodes appears once, at its first path.
+            let mut seen = HashSet::new();
+            let media: Vec<MediaId> = files
+                .iter()
+                .filter_map(|file| file.media_id)
+                .filter(|media| seen.insert(*media))
+                .collect();
             let _ = store.update(cx, |store, cx| {
                 if summary.is_some() {
                     store.summary = summary;
@@ -279,7 +285,10 @@ mod tests {
             .expect("a test runtime");
         cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
         let media = MediaId::new(3);
-        let services = LibraryServices::new(summary(), vec![file("/shows/ep.mkv", media)]);
+        let services = LibraryServices::new(
+            summary(),
+            vec![file("/shows/ep1.mkv", media), file("/shows/ep2.mkv", media)],
+        );
         let calls = services.clone();
         let store = cx.new(|_| LibraryStore::new(Arc::new(services)));
 
@@ -362,7 +371,7 @@ mod tests {
             store.read_with(cx, |store, _| store.media().to_vec()),
             [media]
         );
-        assert_eq!(store.read_with(cx, |store, _| store.files(media).len()), 1);
+        assert_eq!(store.read_with(cx, |store, _| store.files(media).len()), 2);
         assert_eq!(
             cx.update(|cx| store.update(cx, |store, _| store.take_finish())),
             None,
