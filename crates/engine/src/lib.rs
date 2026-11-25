@@ -7,6 +7,7 @@
 //! call its services through [`bridge::run`] (ARCHITECTURE §4). It grows
 //! into ARCHITECTURE's engine in Phase 2.
 
+mod chapters;
 mod playback;
 mod settings_store;
 
@@ -125,6 +126,11 @@ pub trait EngineServices: Send + Sync + 'static {
 
     /// Seeks the active session to `seconds`. The default is a no-op for fakes.
     fn seek(&self, _seconds: f64) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Skips the chapter currently playing. The default is a no-op for fakes.
+    fn skip_chapter(&self) -> BoxFuture<Result<(), EngineError>> {
         Box::pin(async { Ok(()) })
     }
 }
@@ -474,6 +480,17 @@ impl EngineServices for Engine {
         let playback = Arc::clone(&self.playback);
         Box::pin(async move {
             if playback.seek(seconds) {
+                Ok(())
+            } else {
+                Err(EngineError::NoSession)
+            }
+        })
+    }
+
+    fn skip_chapter(&self) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            if playback.skip_chapter() {
                 Ok(())
             } else {
                 Err(EngineError::NoSession)

@@ -6,7 +6,10 @@
 
 use std::{sync::Arc, time::Duration};
 
-use domain::{AppEvent, MediaId, PlaybackControl, PlaybackDetails, PlaybackState};
+use domain::{
+    AppEvent, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
+    PlaybackState,
+};
 use engine::{EngineServices, PlayRequest};
 use gpui_kit::{Context, Task, WeakEntity};
 
@@ -34,6 +37,8 @@ pub struct PlaybackStore {
     services: Arc<dyn EngineServices>,
     state: Option<PlaybackState>,
     details: Option<PlaybackDetails>,
+    chapters: Vec<PlaybackChapter>,
+    current_chapter: Option<usize>,
     error: Option<PlaybackError>,
     request: Option<Task<()>>,
     control: Option<Task<()>>,
@@ -60,6 +65,8 @@ impl PlaybackStore {
             services,
             state: None,
             details: None,
+            chapters: Vec::new(),
+            current_chapter: None,
             error: None,
             request: None,
             control: None,
@@ -78,6 +85,20 @@ impl PlaybackStore {
     #[must_use]
     pub fn details(&self) -> Option<&PlaybackDetails> {
         self.details.as_ref()
+    }
+
+    /// The chapter marks of the playing file.
+    #[must_use]
+    pub fn chapters(&self) -> &[PlaybackChapter] {
+        &self.chapters
+    }
+
+    /// The kind of the chapter currently playing, when it is skippable.
+    #[must_use]
+    pub fn skip_kind(&self) -> Option<ChapterKind> {
+        self.current_chapter
+            .and_then(|index| self.chapters.get(index))
+            .and_then(|chapter| chapter.kind)
     }
 
     /// The last failure, until it is dismissed or retried.
@@ -99,9 +120,16 @@ impl PlaybackStore {
                 self.state = Some(state);
                 cx.notify();
             }
+            AppEvent::PlaybackChapters { chapters, current } => {
+                self.chapters = chapters;
+                self.current_chapter = current;
+                cx.notify();
+            }
             AppEvent::PlaybackStopped { unexpected } => {
                 self.state = None;
                 self.details = None;
+                self.chapters.clear();
+                self.current_chapter = None;
                 self.closed_task = None;
                 self.closed = unexpected;
                 if unexpected {
@@ -214,6 +242,11 @@ impl PlaybackStore {
         self.seek_to(seconds, cx);
     }
 
+    /// Skips the opening or ending currently playing, when there is one.
+    pub fn skip_chapter(&mut self, cx: &mut Context<'_, Self>) {
+        self.command(cx, |services| services.skip_chapter());
+    }
+
     /// Runs one HUD command, cancelling the previous one still in flight.
     fn command(
         &mut self,
@@ -268,7 +301,8 @@ mod tests {
     use std::time::Duration;
 
     use domain::{
-        AppEvent, MediaId, PlaybackControl, PlaybackDetails, PlaybackState, StreamSource,
+        AppEvent, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
+        PlaybackState, StreamSource,
     };
     use engine::PlayRequest;
     use gpui_kit::{AppContext, TestAppContext};
@@ -405,6 +439,58 @@ mod tests {
         });
         cx.run_until_parked();
         assert_eq!(calls.calls().get(2), Some(&PlaybackCall::Stop));
+    }
+
+    #[gpui_kit::test]
+    fn chapter_events_offer_a_skip_command(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .unwrap();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = PlaybackServices::default();
+        let calls = services.clone();
+        let store = cx.new(|_| PlaybackStore::new(std::sync::Arc::new(services)));
+        let chapter = PlaybackChapter::new(
+            Some("Opening".to_owned()),
+            Duration::from_secs(10),
+            Some(Duration::from_secs(90)),
+            Some(ChapterKind::Opening),
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(
+                    AppEvent::PlaybackChapters {
+                        chapters: vec![chapter.clone()],
+                        current: Some(0),
+                    },
+                    cx,
+                );
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.chapters().to_vec()),
+            vec![chapter]
+        );
+        assert_eq!(
+            store.read_with(cx, |store, _| store.skip_kind()),
+            Some(ChapterKind::Opening)
+        );
+
+        cx.update(|cx| {
+            store.update(cx, PlaybackStore::skip_chapter);
+        });
+        cx.run_until_parked();
+        assert_eq!(calls.calls(), [PlaybackCall::SkipChapter]);
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackStopped { unexpected: false }, cx);
+            });
+        });
+        assert!(store.read_with(cx, |store, _| store.chapters().is_empty()));
     }
 
     #[gpui_kit::test]

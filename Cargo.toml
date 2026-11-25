@@ -32,6 +32,7 @@ notify = "9"
 nucleo-matcher = "0.3"
 player = { path = "crates/player" }
 rand = "0.10"
+regex = "1"
 release-parser = { path = "crates/release-parser" }
 reqwest = { default-features = false, features = [ "rustls-no-provider" ], version = "0.13" }
 rmp-serde = "1.3"

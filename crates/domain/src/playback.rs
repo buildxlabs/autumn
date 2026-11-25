@@ -42,6 +42,48 @@ pub struct PlaybackDetails {
     pub poster: Option<String>,
 }
 
+/// A chapter that can be skipped automatically or from the HUD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ChapterKind {
+    /// The opening, matched by an opening pattern.
+    Opening,
+    /// The ending, matched by an ending pattern.
+    Ending,
+}
+
+/// One chapter of the playing file, as the HUD shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PlaybackChapter {
+    /// The chapter title, when it has one.
+    pub title: Option<String>,
+    /// Where the chapter starts.
+    pub start: Duration,
+    /// Where it ends, when known.
+    pub end: Option<Duration>,
+    /// Whether it matched a skip pattern.
+    pub kind: Option<ChapterKind>,
+}
+
+impl PlaybackChapter {
+    /// A chapter mark with its optional title, bounds and skip kind.
+    #[must_use]
+    pub fn new(
+        title: Option<String>,
+        start: Duration,
+        end: Option<Duration>,
+        kind: Option<ChapterKind>,
+    ) -> Self {
+        Self {
+            title,
+            start,
+            end,
+            kind,
+        }
+    }
+}
+
 /// Whether to pause or resume the active player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

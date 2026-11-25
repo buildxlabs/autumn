@@ -23,7 +23,7 @@ pub use media_card::{
     MEDIA_CARD_HEIGHT, MEDIA_POSTER_HEIGHT, MediaCard, MediaCardView, MediaFormat,
 };
 pub use playback_hud::{
-    ChapterMark, PLAYBACK_HUD_HEIGHT, PlaybackHud, PlaybackHudActions, PlaybackHudView,
+    ChapterMark, PLAYBACK_HUD_HEIGHT, PlaybackHud, PlaybackHudActions, PlaybackHudView, SkipKind,
 };
 pub use poster_grid::{POSTER_GAP, POSTER_WIDTH, PosterGrid, poster_columns};
 pub use rail::{ACCOUNT_ID, RAIL_EXPANDED_WIDTH, RAIL_WIDTH, Rail, RailExpansion, RailItem};

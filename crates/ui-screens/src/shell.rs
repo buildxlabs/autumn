@@ -19,8 +19,9 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, LruImageCache, PLAYBACK_HUD_HEIGHT, POSTER_IMAGE_CAPACITY, PlaybackHud,
-    PlaybackHudActions, PlaybackHudView, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
+    ACCOUNT_ID, ChapterMark, LruImageCache, PLAYBACK_HUD_HEIGHT, POSTER_IMAGE_CAPACITY,
+    PlaybackHud, PlaybackHudActions, PlaybackHudView, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
+    RailItem, SkipKind,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -30,7 +31,7 @@ use ui_state::{
     account::{AccountCommand, AccountStore},
     actions::{
         GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, SeekBack,
-        SeekForward, StopPlayback, WORKSPACE,
+        SeekForward, SkipChapter, StopPlayback, WORKSPACE,
     },
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
@@ -678,11 +679,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Option<gpui_kit::AnyElement> {
-        let (state, details, closed) = {
+        let (state, details, chapters, skip, closed) = {
             let playback = self.playback_store.read(cx);
             (
                 playback.state(),
                 playback.details().cloned(),
+                playback.chapters().to_vec(),
+                playback.skip_kind(),
                 playback.closed(),
             )
         };
@@ -726,7 +729,16 @@ impl AppShell {
             position: state.position,
             duration: state.duration,
             paused: state.paused,
-            chapters: Vec::new(),
+            chapters: chapters
+                .iter()
+                .map(|chapter| ChapterMark {
+                    start: chapter.start,
+                })
+                .collect(),
+            skip: skip.map(|kind| match kind {
+                domain::ChapterKind::Ending => SkipKind::Ending,
+                _ => SkipKind::Opening,
+            }),
         };
         let store = self.playback_store.clone();
         let actions = PlaybackHudActions::new()
@@ -746,7 +758,11 @@ impl AppShell {
                 let store = store.clone();
                 move |_, cx| store.update(cx, |store, cx| store.seek_by(10., cx))
             })
-            .on_stop(move |_, cx| store.update(cx, PlaybackStore::stop));
+            .on_stop({
+                let store = store.clone();
+                move |_, cx| store.update(cx, PlaybackStore::stop)
+            })
+            .on_skip(move |_, cx| store.update(cx, PlaybackStore::skip_chapter));
 
         Some(
             div()
@@ -755,9 +771,7 @@ impl AppShell {
                 .track_focus(&self.hud_focus)
                 .key_context(PLAYER)
                 .on_action(cx.listener(|shell, _: &PlayPause, _, cx| {
-                    shell
-                        .playback_store
-                        .update(cx, PlaybackStore::toggle_pause);
+                    shell.playback_store.update(cx, PlaybackStore::toggle_pause);
                 }))
                 .on_action(cx.listener(|shell, _: &SeekBack, _, cx| {
                     shell
@@ -771,6 +785,9 @@ impl AppShell {
                 }))
                 .on_action(cx.listener(|shell, _: &StopPlayback, _, cx| {
                     shell.playback_store.update(cx, PlaybackStore::stop);
+                }))
+                .on_action(cx.listener(|shell, _: &SkipChapter, _, cx| {
+                    shell.playback_store.update(cx, PlaybackStore::skip_chapter);
                 }))
                 .on_click(cx.listener(|shell, _, window, cx| {
                     window.focus(&shell.hud_focus.clone(), cx);
