@@ -129,6 +129,19 @@ fn next_season(current: Option<SearchSeason>) -> Option<SearchSeason> {
     }
 }
 
+/// Drops the manga parts of a restored filter set: Advanced Search is
+/// anime-only while manga is on the ROADMAP Backlog (#185).
+pub(crate) fn anime_only(mut filters: SearchFilters) -> SearchFilters {
+    filters.kind = None;
+    if matches!(
+        filters.format,
+        Some(SearchFormat::Manga | SearchFormat::Novel | SearchFormat::OneShot)
+    ) {
+        filters.format = None;
+    }
+    filters
+}
+
 fn label<T: std::fmt::Debug>(name: &str, value: Option<&T>) -> String {
     value.map_or_else(
         || format!("{name}: any"),
@@ -268,6 +281,7 @@ impl SearchScreen {
 
     /// Applies filters from a restored route without navigating again.
     pub(crate) fn set_filters(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
+        let filters = anime_only(filters);
         let first_show = self.session.page() == 0;
         if self.session.filters() == &filters && !first_show {
             return;
@@ -379,6 +393,12 @@ impl SearchScreen {
     #[cfg(test)]
     pub(crate) fn grid_entity(&self) -> Entity<PosterGrid> {
         self.grid.clone()
+    }
+
+    /// Test seam: the filters the session last committed.
+    #[cfg(test)]
+    pub(crate) fn filters(&self) -> &SearchFilters {
+        self.session.filters()
     }
 
     /// Test seam: the error currently shown, if any.
@@ -740,9 +760,31 @@ impl Render for SearchScreen {
 
 #[cfg(test)]
 mod tests {
-    use ui_state::SearchFormat;
+    use domain::MediaKind;
+    use ui_state::{SearchFilters, SearchFormat};
 
-    use super::next_format;
+    use super::{anime_only, next_format};
+
+    #[test]
+    fn a_restored_manga_filter_set_becomes_anime_only() {
+        for format in [
+            SearchFormat::Manga,
+            SearchFormat::Novel,
+            SearchFormat::OneShot,
+        ] {
+            let restored = SearchFilters {
+                kind: Some(MediaKind::Manga),
+                format: Some(format),
+                ..SearchFilters::EMPTY
+            };
+            assert_eq!(anime_only(restored), SearchFilters::EMPTY, "{format:?}");
+        }
+        let anime = SearchFilters {
+            format: Some(SearchFormat::Movie),
+            ..SearchFilters::EMPTY
+        };
+        assert_eq!(anime_only(anime.clone()), anime, "anime formats stay");
+    }
 
     #[test]
     fn format_cycles_anime_formats_only() {

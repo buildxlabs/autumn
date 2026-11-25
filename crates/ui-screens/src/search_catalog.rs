@@ -241,4 +241,19 @@ mod tests {
             assert_eq!(variables["type"], "ANIME", "kind {kind:?}");
         }
     }
+
+    #[tokio::test]
+    async fn a_restored_manga_format_sends_no_format() {
+        let restored = SearchFilters {
+            format: Some(SearchFormat::Manga),
+            ..SearchFilters::EMPTY
+        };
+        let variables = sent_variables(&crate::search::anime_only(restored)).await;
+        assert!(
+            variables["format"].is_null(),
+            "format was {}",
+            variables["format"]
+        );
+        assert_eq!(variables["type"], "ANIME");
+    }
 }

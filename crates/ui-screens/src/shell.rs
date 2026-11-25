@@ -3339,4 +3339,30 @@ mod tests {
             "Back restores cached results without another request"
         );
     }
+
+    #[gpui_kit::test]
+    fn a_restored_manga_format_is_cleared(cx: &mut TestAppContext) {
+        let shell = SearchShell::open(cx);
+        let restored = SearchFilters {
+            kind: Some(domain::MediaKind::Manga),
+            format: Some(ui_state::SearchFormat::Manga),
+            ..SearchFilters::EMPTY
+        };
+        shell.view.update(cx, |shell, cx| {
+            shell.navigate(Route::Search(restored), cx);
+        });
+        shell.settle(cx);
+
+        let committed = shell.view.read_with(cx, |shell, cx| {
+            shell
+                .search
+                .as_ref()
+                .map(|search| search.read(cx).filters().clone())
+        });
+        assert_eq!(
+            committed,
+            Some(SearchFilters::EMPTY),
+            "the manga kind and format are dropped before the query is sent"
+        );
+    }
 }
