@@ -14,6 +14,10 @@ use crate::DbError;
 /// `locked` and `ignored` are user overrides; a scan keeps them. `filler` comes
 /// from the metadata lookup and is refreshed on each scan.
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a local file's lock, ignore, filler and shelved flags are independent columns"
+)]
 pub struct LocalFile {
     /// The file's path, which identifies the row across scans.
     pub path: PathBuf,
@@ -41,6 +45,8 @@ pub struct LocalFile {
     pub ignored: bool,
     /// Whether this numbered episode is listed as filler.
     pub filler: bool,
+    /// Whether the file's drive is disconnected.
+    pub shelved: bool,
 }
 
 /// Whether a library file flag is being set or cleared.
@@ -82,7 +88,7 @@ impl<'a> LocalFileRepo<'a> {
     pub async fn all(&self) -> Result<Vec<LocalFile>, DbError> {
         let rows: Vec<LocalFileRow> = sqlx::query_as(
             "SELECT path, size, modified, title, group_name, season, episode,
-                    kind, media_id, confidence, locked, ignored, filler
+                    kind, media_id, confidence, locked, ignored, filler, shelved
              FROM local_file ORDER BY path",
         )
         .fetch_all(self.pool)
@@ -130,8 +136,8 @@ impl<'a> LocalFileRepo<'a> {
             sqlx::query(
                 "INSERT INTO local_file (
                     path, size, modified, title, group_name, season, episode,
-                    kind, media_id, confidence, locked, ignored, filler
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    kind, media_id, confidence, locked, ignored, filler, shelved
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT (path) DO UPDATE SET
                     size = excluded.size,
                     modified = excluded.modified,
@@ -142,7 +148,8 @@ impl<'a> LocalFileRepo<'a> {
                     kind = excluded.kind,
                     media_id = excluded.media_id,
                     confidence = excluded.confidence,
-                    filler = excluded.filler",
+                    filler = excluded.filler,
+                    shelved = excluded.shelved",
             )
             .bind(path)
             .bind(file.size)
@@ -157,6 +164,7 @@ impl<'a> LocalFileRepo<'a> {
             .bind(i64::from(file.locked))
             .bind(i64::from(file.ignored))
             .bind(i64::from(file.filler))
+            .bind(i64::from(file.shelved))
             .execute(&mut *tx)
             .await?;
         }
@@ -252,6 +260,7 @@ struct LocalFileRow {
     locked: i64,
     ignored: i64,
     filler: i64,
+    shelved: i64,
 }
 
 impl LocalFileRow {
@@ -275,6 +284,7 @@ impl LocalFileRow {
             locked: self.locked != 0,
             ignored: self.ignored != 0,
             filler: self.filler != 0,
+            shelved: self.shelved != 0,
         })
     }
 }

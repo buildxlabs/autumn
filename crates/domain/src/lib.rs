@@ -40,6 +40,15 @@ pub enum AppEvent {
     AccountChanged(AniListAccountState),
     /// An account action failed. The message is suitable for display.
     AccountError(String),
+    /// A library scan made progress; the engine throttles these to 4 Hz.
+    LibraryScanProgress {
+        /// Files walked so far.
+        files_walked: usize,
+        /// Files matched so far.
+        files_matched: usize,
+    },
+    /// A library scan finished and the local files may have changed.
+    LibraryChanged,
 }
 
 /// The next opportunity to start an AniList request.
