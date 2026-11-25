@@ -4,7 +4,6 @@
 
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
-use domain::MediaKind;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, Context, Entity, EventEmitter, InteractiveElement,
     IntoElement, ParentElement, Pixels, Point, Render, Resource, Styled, Subscription, Task,
@@ -82,14 +81,6 @@ impl std::fmt::Debug for SearchScreen {
 
 impl EventEmitter<SearchEvent> for SearchScreen {}
 
-fn next_kind(current: Option<MediaKind>) -> Option<MediaKind> {
-    match current {
-        None => Some(MediaKind::Anime),
-        Some(MediaKind::Anime) => Some(MediaKind::Manga),
-        _ => None,
-    }
-}
-
 fn next_sort(current: Option<SearchSort>) -> Option<SearchSort> {
     match current {
         None => Some(SearchSort::Match),
@@ -103,6 +94,7 @@ fn next_sort(current: Option<SearchSort>) -> Option<SearchSort> {
     }
 }
 
+/// Cycles the anime formats only: manga is on the ROADMAP Backlog (#185).
 fn next_format(current: Option<SearchFormat>) -> Option<SearchFormat> {
     match current {
         None => Some(SearchFormat::Tv),
@@ -112,9 +104,6 @@ fn next_format(current: Option<SearchFormat>) -> Option<SearchFormat> {
         Some(SearchFormat::Special) => Some(SearchFormat::Ova),
         Some(SearchFormat::Ova) => Some(SearchFormat::Ona),
         Some(SearchFormat::Ona) => Some(SearchFormat::Music),
-        Some(SearchFormat::Music) => Some(SearchFormat::Manga),
-        Some(SearchFormat::Manga) => Some(SearchFormat::Novel),
-        Some(SearchFormat::Novel) => Some(SearchFormat::OneShot),
         _ => None,
     }
 }
@@ -140,6 +129,19 @@ fn next_season(current: Option<SearchSeason>) -> Option<SearchSeason> {
     }
 }
 
+/// Drops the manga parts of a restored filter set: Advanced Search is
+/// anime-only while manga is on the ROADMAP Backlog (#185).
+pub(crate) fn anime_only(mut filters: SearchFilters) -> SearchFilters {
+    filters.kind = None;
+    if matches!(
+        filters.format,
+        Some(SearchFormat::Manga | SearchFormat::Novel | SearchFormat::OneShot)
+    ) {
+        filters.format = None;
+    }
+    filters
+}
+
 fn label<T: std::fmt::Debug>(name: &str, value: Option<&T>) -> String {
     value.map_or_else(
         || format!("{name}: any"),
@@ -154,13 +156,8 @@ fn card_view(media: &ui_state::MediaPreview) -> MediaCardView {
             .as_ref()
             .map(|url| Resource::Uri(url.clone().into())),
         title: media.title.clone().into(),
-        format: match media.format {
-            Some(SearchFormat::Manga | SearchFormat::Novel | SearchFormat::OneShot) => {
-                Some(MediaFormat::Manga)
-            }
-            Some(_) => Some(MediaFormat::Anime),
-            None => None,
-        },
+        // The catalog asks AniList for anime only.
+        format: media.format.map(|_| MediaFormat::Anime),
         score: media.score.map(f32::from),
         progress: 0,
         total: None,
@@ -284,6 +281,7 @@ impl SearchScreen {
 
     /// Applies filters from a restored route without navigating again.
     pub(crate) fn set_filters(&mut self, filters: SearchFilters, cx: &mut Context<'_, Self>) {
+        let filters = anime_only(filters);
         let first_show = self.session.page() == 0;
         if self.session.filters() == &filters && !first_show {
             return;
@@ -395,6 +393,12 @@ impl SearchScreen {
     #[cfg(test)]
     pub(crate) fn grid_entity(&self) -> Entity<PosterGrid> {
         self.grid.clone()
+    }
+
+    /// Test seam: the filters the session last committed.
+    #[cfg(test)]
+    pub(crate) fn filters(&self) -> &SearchFilters {
+        self.session.filters()
     }
 
     /// Test seam: the error currently shown, if any.
@@ -693,13 +697,6 @@ impl Render for SearchScreen {
                     .items_center()
                     .child(Input::new(&self.query).aria_label("Search query"))
                     .child(
-                        Button::new("search-kind")
-                            .label(label("Type", filters.kind.as_ref()))
-                            .on_click(cx.listener(|screen: &mut Self, _, _, cx| {
-                                screen.change(cx, |f| f.kind = next_kind(f.kind));
-                            })),
-                    )
-                    .child(
                         Button::new("search-sort")
                             .label(label("Sort", filters.sort.as_ref()))
                             .on_click(cx.listener(|screen: &mut Self, _, _, cx| {
@@ -758,5 +755,56 @@ impl Render for SearchScreen {
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
             .test_support()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::MediaKind;
+    use ui_state::{SearchFilters, SearchFormat};
+
+    use super::{anime_only, next_format};
+
+    #[test]
+    fn a_restored_manga_filter_set_becomes_anime_only() {
+        for format in [
+            SearchFormat::Manga,
+            SearchFormat::Novel,
+            SearchFormat::OneShot,
+        ] {
+            let restored = SearchFilters {
+                kind: Some(MediaKind::Manga),
+                format: Some(format),
+                ..SearchFilters::EMPTY
+            };
+            assert_eq!(anime_only(restored), SearchFilters::EMPTY, "{format:?}");
+        }
+        let anime = SearchFilters {
+            format: Some(SearchFormat::Movie),
+            ..SearchFilters::EMPTY
+        };
+        assert_eq!(anime_only(anime.clone()), anime, "anime formats stay");
+    }
+
+    #[test]
+    fn format_cycles_anime_formats_only() {
+        let mut seen = Vec::new();
+        let mut current = next_format(None);
+        while let Some(format) = current {
+            seen.push(format);
+            current = next_format(current);
+        }
+        assert_eq!(
+            seen,
+            [
+                SearchFormat::Tv,
+                SearchFormat::TvShort,
+                SearchFormat::Movie,
+                SearchFormat::Special,
+                SearchFormat::Ova,
+                SearchFormat::Ona,
+                SearchFormat::Music,
+            ]
+        );
     }
 }

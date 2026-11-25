@@ -4,6 +4,7 @@
 //! AniList types; this adapter maps the UI filter set onto the GraphQL
 //! client's filters and its results back into plain view models.
 
+use domain::MediaKind;
 use metadata::{
     AniList, MediaFormat, MediaSeason, MediaSort, MediaStatus, MediaSummary, PageRequest,
 };
@@ -100,7 +101,9 @@ impl Catalog for AniListCatalog {
     async fn search(&self, filters: &SearchFilters, page: u32) -> Result<SearchPage, CatalogError> {
         let request = metadata::SearchFilters {
             search: filters.query.clone(),
-            kind: filters.kind,
+            // Advanced Search is anime-only while manga is on the ROADMAP
+            // Backlog (#185), whatever kind a restored route carries.
+            kind: Some(MediaKind::Anime),
             sort: filters.sort.map(sort),
             format: filters.format.map(format),
             status: filters.status.map(status),
@@ -139,8 +142,9 @@ mod tests {
     use super::AniListCatalog;
     use ui_state::{Catalog, SearchFilters, SearchFormat, SearchSeason, SearchSort, SearchStatus};
 
-    #[tokio::test]
-    async fn every_decision_23_filter_reaches_anilist() {
+    /// Runs one search against a local AniList stand-in and returns the
+    /// GraphQL variables it received.
+    async fn sent_variables(filters: &SearchFilters) -> Value {
         let body: Value = serde_json::from_str(
             &std::fs::read_to_string(format!(
                 "{}/../metadata/tests/fixtures/search_frieren.json",
@@ -178,6 +182,13 @@ mod tests {
             .expect("client");
         let anilist = metadata::AniList::with_endpoint(http, format!("http://{address}/"));
         let catalog = AniListCatalog::new(anilist);
+        // The response is irrelevant here; only the request is inspected.
+        let _ = catalog.search(filters, 1).await;
+        seen.lock().expect("unpoisoned")["variables"].clone()
+    }
+
+    #[tokio::test]
+    async fn every_decision_23_filter_reaches_anilist() {
         let filters = SearchFilters {
             query: Some("frieren".to_owned()),
             kind: Some(MediaKind::Anime),
@@ -191,10 +202,8 @@ mod tests {
             adult: true,
         };
 
-        // The response is irrelevant to this test; every filter must be in
-        // the variables AniList receives.
-        let _ = catalog.search(&filters, 1).await;
-        let variables = seen.lock().expect("unpoisoned")["variables"].clone();
+        // Every filter must be in the variables AniList receives.
+        let variables = sent_variables(&filters).await;
         for key in [
             "search",
             "type",
@@ -219,5 +228,32 @@ mod tests {
         assert_eq!(variables["genreIn"][0], "Fantasy");
         assert_eq!(variables["countryOfOrigin"], "JP");
         assert_eq!(variables["isAdult"], true);
+    }
+
+    #[tokio::test]
+    async fn search_asks_for_anime_whatever_the_kind_filter() {
+        for kind in [None, Some(MediaKind::Manga)] {
+            let filters = SearchFilters {
+                kind,
+                ..SearchFilters::EMPTY
+            };
+            let variables = sent_variables(&filters).await;
+            assert_eq!(variables["type"], "ANIME", "kind {kind:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_restored_manga_format_sends_no_format() {
+        let restored = SearchFilters {
+            format: Some(SearchFormat::Manga),
+            ..SearchFilters::EMPTY
+        };
+        let variables = sent_variables(&crate::search::anime_only(restored)).await;
+        assert!(
+            variables["format"].is_null(),
+            "format was {}",
+            variables["format"]
+        );
+        assert_eq!(variables["type"], "ANIME");
     }
 }
