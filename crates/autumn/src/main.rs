@@ -177,7 +177,7 @@ fn main() -> ExitCode {
             ui_state::events::start_pump(cx, ui_events, {
                 let store = fetch_status.clone();
                 let account = account.clone();
-                let playback = playback_store;
+                let playback = playback_store.clone();
                 move |event, cx| {
                     store.update(cx, |store, cx| store.apply(event.clone(), cx));
                     account.update(cx, |store, cx| store.apply(event.clone(), cx));
@@ -199,6 +199,7 @@ fn main() -> ExitCode {
                 discover_loader,
                 entry_store,
                 home_store,
+                playback_store,
                 engine.db().clone(),
                 anilist,
                 catalog,
@@ -258,6 +259,7 @@ fn open_main_window(
     discover_loader: DiscoverLoader,
     entry_store: Entity<EntryStore>,
     home_store: Entity<HomeStore>,
+    playback_store: Entity<PlaybackStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -281,6 +283,7 @@ fn open_main_window(
                 discover_loader,
                 entry_store,
                 home_store,
+                playback_store,
                 db,
                 anilist,
                 catalog,
@@ -334,8 +337,8 @@ mod tests {
     use ui_screens::{DiscoverUpdate, RailPrefs};
     use ui_state::PlatformGateway;
     use ui_state::{
-        account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
-        test_support::pending_services,
+        PlaybackStore, account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
+        home_store::HomeStore, test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
@@ -377,6 +380,7 @@ mod tests {
                 }),
                 entry_store,
                 home_store,
+                cx.new(|_| PlaybackStore::new(ui_state::test_support::pending_services())),
                 db.clone(),
                 anilist,
                 catalog,

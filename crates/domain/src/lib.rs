@@ -16,7 +16,7 @@ pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
-pub use playback::{PlaybackState, StreamSource};
+pub use playback::{PlaybackControl, PlaybackDetails, PlaybackState, StreamSource};
 pub use score::{Score, ScoreError};
 pub use transfer::{
     TransferChoice, TransferDirection, TransferItem, TransferPreview, TransferProgress,
@@ -63,7 +63,10 @@ pub enum AppEvent {
     /// The one active session's position changed.
     PlaybackState(PlaybackState),
     /// The session ended, so the HUD has nothing to show.
-    PlaybackStopped,
+    PlaybackStopped {
+        /// Whether the player quit on its own rather than through a command.
+        unexpected: bool,
+    },
     /// Progress sync failed; the UI can offer Retry when it is transient.
     PlaybackError {
         /// The media whose progress was not saved.

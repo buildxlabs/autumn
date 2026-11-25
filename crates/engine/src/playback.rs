@@ -22,8 +22,8 @@ use std::{
 
 use db::Db;
 use domain::{
-    AdvancedScores, AppEvent, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId, PlaybackState,
-    Score, StreamSource,
+    AdvancedScores, AppEvent, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId,
+    PlaybackControl, PlaybackDetails, PlaybackState, Score, StreamSource,
 };
 use flume::Sender;
 use metadata::CatalogCache;
@@ -34,7 +34,7 @@ use player::{
 };
 use settings::{PlaybackKind, PlaybackSettings, PlayerChoice};
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
 use crate::BoxFuture;
@@ -55,17 +55,27 @@ pub struct PlayRequest {
     pub episode: u32,
     /// What the player should open.
     pub source: StreamSource,
+    /// Labels for the HUD, supplied by the screen that requested play.
+    pub details: Option<PlaybackDetails>,
 }
 
 impl PlayRequest {
-    /// Plays `episode` of `media` from `source`.
+    /// Plays `episode` of `media` from `source`, without HUD details.
     #[must_use]
     pub fn new(media: MediaId, episode: u32, source: StreamSource) -> Self {
         Self {
             media,
             episode,
             source,
+            details: None,
         }
+    }
+
+    /// Attaches the labels the HUD shows while this episode plays.
+    #[must_use]
+    pub fn with_details(mut self, details: PlaybackDetails) -> Self {
+        self.details = Some(details);
+        self
     }
 }
 
@@ -196,6 +206,12 @@ pub trait PlaybackSession: Debug + Send + Sync {
     /// Seeks to an absolute position in seconds.
     fn seek(&self, seconds: f64) -> SessionFuture<'_, Result<(), PlayerError>>;
 
+    /// Pauses or resumes the player.
+    fn set_playback_state(
+        &self,
+        state: PlaybackControl,
+    ) -> SessionFuture<'_, Result<(), PlayerError>>;
+
     /// Asks the player to quit.
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>>;
 }
@@ -207,6 +223,19 @@ impl PlaybackSession for MpvSession {
 
     fn seek(&self, seconds: f64) -> SessionFuture<'_, Result<(), PlayerError>> {
         Box::pin(async move { MpvSession::seek(self, seconds).await })
+    }
+
+    fn set_playback_state(
+        &self,
+        state: PlaybackControl,
+    ) -> SessionFuture<'_, Result<(), PlayerError>> {
+        Box::pin(async move {
+            if state == PlaybackControl::Pause {
+                MpvSession::pause(self).await
+            } else {
+                MpvSession::resume(self).await
+            }
+        })
     }
 
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
@@ -390,6 +419,15 @@ pub fn sidecar_subtitles(video: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// A HUD command forwarded to the running session's event loop.
+#[derive(Debug)]
+enum Control {
+    /// Play or pause.
+    SetPlaybackState(PlaybackControl),
+    /// Seek to an absolute position in seconds.
+    Seek(f64),
+}
+
 /// The one slot a play request reserves before it awaits the launcher, so a
 /// concurrent `stop()` waits for the launch instead of being lost.
 #[derive(Debug)]
@@ -404,6 +442,7 @@ enum SessionControl {
         id: u64,
         stop: oneshot::Sender<()>,
         done: oneshot::Receiver<()>,
+        control: mpsc::UnboundedSender<Control>,
     },
 }
 
@@ -422,6 +461,8 @@ struct SessionState {
     position: f64,
     paused: bool,
     watched: bool,
+    /// EOF was seen, so a following player exit is not an unexpected quit.
+    eof: bool,
 }
 
 impl SessionState {
@@ -432,6 +473,7 @@ impl SessionState {
             position: 0.0,
             paused: false,
             watched: false,
+            eof: false,
         }
     }
 }
@@ -559,16 +601,18 @@ impl PlaybackManager {
         };
         let (stop, stopped) = oneshot::channel();
         let (done, finished) = oneshot::channel();
+        let (control, controls) = mpsc::unbounded_channel();
         *lock(&self.current) = Some(SessionControl::Running {
             id,
             stop,
             done: finished,
+            control,
         });
         let _ = settle.send(());
         let manager = Arc::clone(self);
         tokio::spawn(async move {
             manager
-                .drive(id, session, request, resume, stopped, done)
+                .drive(id, session, request, resume, stopped, controls, done)
                 .await;
         });
         Ok(())
@@ -595,11 +639,36 @@ impl PlaybackManager {
         }
     }
 
+    /// Forwards one HUD command to the running session. Returns `false` when
+    /// no session is running, so callers can report a stale command.
+    fn send_control(&self, control: Control) -> bool {
+        match lock(&self.current).as_ref() {
+            Some(SessionControl::Running {
+                control: sender, ..
+            }) => sender.send(control).is_ok(),
+            _ => false,
+        }
+    }
+
+    /// Pauses or resumes the running player.
+    pub fn set_playback_state(&self, state: PlaybackControl) -> bool {
+        self.send_control(Control::SetPlaybackState(state))
+    }
+
+    /// Seeks the running player to `seconds`.
+    pub fn seek(&self, seconds: f64) -> bool {
+        self.send_control(Control::Seek(seconds))
+    }
+
     /// Retries a failed progress sync for `episode`.
     pub async fn retry_sync(&self, media: MediaId, episode: u32) {
         self.sync_progress(media, episode).await;
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the session loop owns its player, stop signal, HUD commands and completion signal"
+    )]
     async fn drive(
         self: &Arc<Self>,
         id: u64,
@@ -607,15 +676,18 @@ impl PlaybackManager {
         request: PlayRequest,
         resume: Option<db::Continuity>,
         mut stopped: oneshot::Receiver<()>,
+        mut controls: mpsc::UnboundedReceiver<Control>,
         done: oneshot::Sender<()>,
     ) {
         let mut state = SessionState::new(resume);
         let mut tick = tokio::time::interval(self.save_interval);
         tick.tick().await; // The first tick is immediate; nothing to save yet.
+        let mut unexpected = false;
         loop {
             enum Step {
                 Event(Option<PlayerEvent>),
                 Stop,
+                Control(Control),
                 Tick,
             }
             let step = tokio::select! {
@@ -624,11 +696,39 @@ impl PlaybackManager {
                     let _ = result;
                     Step::Stop
                 }
+                control = controls.recv() => match control {
+                    Some(control) => Step::Control(control),
+                    None => Step::Tick,
+                },
                 _ = tick.tick() => Step::Tick,
             };
             match step {
-                Step::Event(None) | Step::Stop => break,
+                Step::Event(None) => {
+                    unexpected = !state.eof;
+                    break;
+                }
+                Step::Stop => break,
+                Step::Control(control) => {
+                    let result = match control {
+                        Control::SetPlaybackState(state) => {
+                            session.set_playback_state(state).await
+                        }
+                        Control::Seek(seconds) => {
+                            if seconds.is_finite() && seconds >= 0.0 {
+                                state.position = seconds;
+                                self.publish(&state, &request);
+                            }
+                            session.seek(seconds).await
+                        }
+                    };
+                    if let Err(error) = result {
+                        debug!(%error, "player rejected a HUD command");
+                    }
+                }
                 Step::Event(Some(event)) => {
+                    if matches!(event, PlayerEvent::Exited) {
+                        unexpected = !state.eof;
+                    }
                     if !self
                         .handle(session.as_ref(), &mut state, &request, event)
                         .await
@@ -653,7 +753,7 @@ impl PlaybackManager {
             .is_some_and(|control| control.id() == id);
         if is_current {
             lock(&self.current).take();
-            let _ = self.events.send(AppEvent::PlaybackStopped);
+            let _ = self.events.send(AppEvent::PlaybackStopped { unexpected });
         }
         let _ = done.send(());
     }
@@ -693,7 +793,10 @@ impl PlaybackManager {
                 state.paused = paused;
                 self.publish(state, request);
             }
-            PlayerEvent::Eof => self.mark_watched(state, request).await,
+            PlayerEvent::Eof => {
+                state.eof = true;
+                self.mark_watched(state, request).await;
+            }
             PlayerEvent::Exited => return false,
             _ => {}
         }
@@ -964,17 +1067,22 @@ mod tests {
     #[derive(Debug, Default, Clone)]
     struct FakeLauncher {
         seeks: Arc<Mutex<Vec<f64>>>,
+        pauses: Arc<Mutex<Vec<PlaybackControl>>>,
         quits: Arc<AtomicUsize>,
         launches: Arc<AtomicUsize>,
         gate: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
+        /// Keeps each session's event sender alive until its test ends.
+        senders: Arc<Mutex<Vec<mpsc::UnboundedSender<PlayerEvent>>>>,
     }
 
     impl FakeLauncher {
         fn session(&self) -> (Box<dyn PlaybackSession>, mpsc::UnboundedSender<PlayerEvent>) {
             let (tx, rx) = mpsc::unbounded();
+            lock(&self.senders).push(tx.clone());
             let session = FakeSession {
                 rx: AsyncMutex::new(rx),
                 seeks: Arc::clone(&self.seeks),
+                pauses: Arc::clone(&self.pauses),
                 quits: Arc::clone(&self.quits),
             };
             (Box::new(session), tx)
@@ -982,6 +1090,10 @@ mod tests {
 
         fn seeks(&self) -> Vec<f64> {
             lock(&self.seeks).clone()
+        }
+
+        fn pauses(&self) -> Vec<PlaybackControl> {
+            lock(&self.pauses).clone()
         }
 
         fn set_gate(&self, gate: oneshot::Receiver<()>) {
@@ -1016,6 +1128,7 @@ mod tests {
     struct FakeSession {
         rx: AsyncMutex<mpsc::UnboundedReceiver<PlayerEvent>>,
         seeks: Arc<Mutex<Vec<f64>>>,
+        pauses: Arc<Mutex<Vec<PlaybackControl>>>,
         quits: Arc<AtomicUsize>,
     }
 
@@ -1028,6 +1141,17 @@ mod tests {
             let seeks = Arc::clone(&self.seeks);
             Box::pin(async move {
                 lock(&seeks).push(seconds);
+                Ok(())
+            })
+        }
+
+        fn set_playback_state(
+            &self,
+            state: PlaybackControl,
+        ) -> SessionFuture<'_, Result<(), PlayerError>> {
+            let seen = Arc::clone(&self.pauses);
+            Box::pin(async move {
+                lock(&seen).push(state);
                 Ok(())
             })
         }
@@ -1109,11 +1233,12 @@ mod tests {
             let (session, events) = self.launcher.session();
             let (stop, stopped) = oneshot::channel();
             let (done, finished) = oneshot::channel();
+            let (_control, controls) = tokio::sync::mpsc::unbounded_channel();
             let manager = Arc::clone(&self.manager);
             let request = request.clone();
             tokio::spawn(async move {
                 manager
-                    .drive(1, session, request, resume, stopped, done)
+                    .drive(1, session, request, resume, stopped, controls, done)
                     .await;
             });
             (events, stop, finished)
@@ -1553,6 +1678,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hud_commands_reach_the_running_session() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        fixture.manager.play(request(media, 1)).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), fixture.launcher.wait_for_launch())
+            .await
+            .expect("the launcher was called");
+
+        assert!(
+            fixture
+                .manager
+                .set_playback_state(PlaybackControl::Pause),
+            "a session is running"
+        );
+        assert!(fixture.manager.seek(42.0));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while fixture.launcher.pauses().is_empty() || fixture.launcher.seeks().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the session handled both commands");
+
+        assert_eq!(fixture.launcher.pauses(), [PlaybackControl::Pause]);
+        assert_eq!(fixture.launcher.seeks(), [42.0]);
+        fixture.manager.stop().await;
+    }
+
+    #[tokio::test]
     async fn a_new_play_stops_the_old_session_first() {
         let fixture = Fixture::new(PlaybackSettings::default()).await;
         let media = fixture.media(1).await;
@@ -1602,6 +1756,19 @@ mod tests {
             Box::pin(async move {
                 lock(&seeks).push(seconds);
                 self.inner.seek(seconds).await
+            })
+        }
+
+        fn set_playback_state(
+            &self,
+            state: PlaybackControl,
+        ) -> SessionFuture<'_, Result<(), PlayerError>> {
+            Box::pin(async move {
+                if state == PlaybackControl::Pause {
+                    self.inner.pause().await
+                } else {
+                    self.inner.resume().await
+                }
             })
         }
 

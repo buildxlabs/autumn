@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use domain::{ExternalId, ListEntry, MediaId, MediaKind};
+use domain::{ExternalId, ListEntry, MediaId, MediaKind, PlaybackControl};
 use engine::{BoxFuture, EngineError, EngineServices, ListedEntry, PlayRequest};
 use metadata::{HomeLoad, Load, MediaDetail};
 
@@ -198,7 +198,7 @@ impl EngineServices for PendingServices {
 }
 
 /// One playback command sent through a store, recorded for command tests.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum PlaybackCall {
     /// A play request.
@@ -207,6 +207,10 @@ pub enum PlaybackCall {
     Stop,
     /// A retry of a failed progress sync.
     Retry(MediaId, u32),
+    /// A play/pause command.
+    Pause(PlaybackControl),
+    /// An absolute seek, in seconds.
+    Seek(f64),
 }
 
 /// An engine fake that records playback commands; other calls stay pending.
@@ -286,6 +290,23 @@ impl EngineServices for PlaybackServices {
     fn retry_sync(&self, media: MediaId, episode: u32) -> BoxFuture<Result<(), EngineError>> {
         if let Ok(mut calls) = self.calls.lock() {
             calls.push(PlaybackCall::Retry(media, episode));
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn set_playback_state(
+        &self,
+        state: PlaybackControl,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::Pause(state));
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn seek(&self, seconds: f64) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::Seek(seconds));
         }
         Box::pin(async { Ok(()) })
     }

@@ -6,7 +6,7 @@ use db::Db;
 use domain::TransferDirection;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
-    MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
+    MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, Resource, SharedString,
     StatefulInteractiveElement, Styled, Subscription, Task, TestSupportExt, Window,
     assets::IconName,
     component::{
@@ -19,8 +19,8 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, LruImageCache, POSTER_IMAGE_CAPACITY, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
-    RailItem,
+    ACCOUNT_ID, LruImageCache, PLAYBACK_HUD_HEIGHT, POSTER_IMAGE_CAPACITY, PlaybackHud,
+    PlaybackHudActions, PlaybackHudView, PosterGrid, RAIL_WIDTH, Rail, RailExpansion, RailItem,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -28,10 +28,14 @@ use ui_components::{
 use ui_state::{
     RailBadges, Route, RouterState, ScrollRestore, SearchFilters, SettingsTab,
     account::{AccountCommand, AccountStore},
-    actions::{GoBack, GoForward, OpenCommandPalette, OpenSearch, WORKSPACE},
+    actions::{
+        GoBack, GoForward, OpenCommandPalette, OpenSearch, PLAYER, PlayPause, SeekBack,
+        SeekForward, StopPlayback, WORKSPACE,
+    },
     entry_store::EntryStore,
     fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS, SectionStatus},
     home_store::HomeStore,
+    playback_store::PlaybackStore,
 };
 
 #[cfg(debug_assertions)]
@@ -41,6 +45,7 @@ use ui_state::{
 };
 
 pub use ::settings::PlaybackSettings;
+use ::settings::PlayerChoice;
 pub use settings::{PlaybackServices, PlaybackTestError, PlayerOption, PosterCacheAction};
 use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus};
 
@@ -135,6 +140,10 @@ pub struct AppShell {
     _entry_events: Subscription,
     /// The Home screen's store; `show` opens Home's sections.
     home_store: Entity<HomeStore>,
+    /// The one playback session, mirrored from the engine for the HUD.
+    playback_store: Entity<PlaybackStore>,
+    /// The HUD's focus handle, so Player key bindings apply only to it.
+    hud_focus: FocusHandle,
     /// Paging state for Home's carousels.
     home_carousels: Entity<HomeCarousels>,
     /// Keeps the carousel counts subscribed to Home store notifications.
@@ -221,6 +230,7 @@ impl AppShell {
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
         home_store: Entity<HomeStore>,
+        playback_store: Entity<PlaybackStore>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -277,6 +287,9 @@ impl AppShell {
             }
         })
         .detach();
+        // The HUD is drawn from the playback store; engine events notify it
+        // at most four times a second.
+        cx.observe(&playback_store, |_, _, cx| cx.notify()).detach();
         // Home is the first route: load it now, as `show` does on return.
         home_store.update(cx, HomeStore::open);
         let user = account.read(cx).name().map(str::to_owned);
@@ -310,6 +323,8 @@ impl AppShell {
             entry_editor,
             _entry_events: entry_events,
             home_store,
+            playback_store,
+            hud_focus: cx.focus_handle(),
             home_carousels,
             _home_events: home_events,
             account,
@@ -372,6 +387,7 @@ impl AppShell {
         discover_loader: DiscoverLoader,
         entry_store: Entity<EntryStore>,
         home_store: Entity<HomeStore>,
+        playback_store: Entity<PlaybackStore>,
         db: Db,
         anilist: AniList,
         catalog: CatalogCache,
@@ -392,6 +408,7 @@ impl AppShell {
             discover_loader,
             entry_store,
             home_store,
+            playback_store,
             window,
             cx,
         );
@@ -647,6 +664,143 @@ impl AppShell {
             (false, _) => RailExpansion::Collapsed,
             (true, RailMode::Hover) => RailExpansion::Overlay,
             (true, RailMode::ClickPin) => RailExpansion::Pushed,
+        }
+    }
+
+    /// The bottom bar, present on every route while a session runs. It reads
+    /// only the store; every command goes through it and out over the bridge.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one method builds the view model, callbacks and key bindings for the bar"
+    )]
+    fn render_playback_hud(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Option<gpui_kit::AnyElement> {
+        let (state, details, closed) = {
+            let playback = self.playback_store.read(cx);
+            (
+                playback.state(),
+                playback.details().cloned(),
+                playback.closed(),
+            )
+        };
+        let Some(state) = state else {
+            return closed.then(|| {
+                div()
+                    .id("playback-hud-closed")
+                    .test_support()
+                    .h(px(PLAYBACK_HUD_HEIGHT))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .border_t_1()
+                    .border_color(cx.theme().colors.border)
+                    .bg(cx.theme().colors.sidebar)
+                    .child(Label::new("Player closed"))
+                    .into_any_element()
+            });
+        };
+
+        let poster = details
+            .as_ref()
+            .and_then(|details| details.poster.as_deref())
+            .map(|url| Resource::Uri(url.to_owned().into()));
+        let view = PlaybackHudView {
+            poster,
+            media_title: details
+                .as_ref()
+                .map_or_else(
+                    || format!("Media {}", state.media.get()),
+                    |d| d.media_title.clone(),
+                )
+                .into(),
+            episode: Some(state.episode),
+            episode_title: details
+                .as_ref()
+                .and_then(|details| details.episode_title.clone())
+                .map(Into::into),
+            player: self.player_name().into(),
+            position: state.position,
+            duration: state.duration,
+            paused: state.paused,
+            chapters: Vec::new(),
+        };
+        let store = self.playback_store.clone();
+        let actions = PlaybackHudActions::new()
+            .on_toggle_pause({
+                let store = store.clone();
+                move |_, cx| store.update(cx, PlaybackStore::toggle_pause)
+            })
+            .on_seek({
+                let store = store.clone();
+                move |seconds, _, cx| store.update(cx, |store, cx| store.seek_to(seconds, cx))
+            })
+            .on_skip_back({
+                let store = store.clone();
+                move |_, cx| store.update(cx, |store, cx| store.seek_by(-10., cx))
+            })
+            .on_skip_forward({
+                let store = store.clone();
+                move |_, cx| store.update(cx, |store, cx| store.seek_by(10., cx))
+            })
+            .on_stop(move |_, cx| store.update(cx, PlaybackStore::stop));
+
+        Some(
+            div()
+                .id("playback-hud")
+                .test_support()
+                .track_focus(&self.hud_focus)
+                .key_context(PLAYER)
+                .on_action(cx.listener(|shell, _: &PlayPause, _, cx| {
+                    shell
+                        .playback_store
+                        .update(cx, PlaybackStore::toggle_pause);
+                }))
+                .on_action(cx.listener(|shell, _: &SeekBack, _, cx| {
+                    shell
+                        .playback_store
+                        .update(cx, |store, cx| store.seek_by(-10., cx));
+                }))
+                .on_action(cx.listener(|shell, _: &SeekForward, _, cx| {
+                    shell
+                        .playback_store
+                        .update(cx, |store, cx| store.seek_by(10., cx));
+                }))
+                .on_action(cx.listener(|shell, _: &StopPlayback, _, cx| {
+                    shell.playback_store.update(cx, PlaybackStore::stop);
+                }))
+                .on_click(cx.listener(|shell, _, window, cx| {
+                    window.focus(&shell.hud_focus.clone(), cx);
+                }))
+                .child(PlaybackHud::new(
+                    "playback-hud-bar",
+                    view,
+                    actions,
+                    window,
+                    cx,
+                ))
+                .into_any_element(),
+        )
+    }
+
+    /// The player named in Settings, resolved against detected players.
+    fn player_name(&self) -> String {
+        match &self.playback.player {
+            PlayerChoice::Auto => self
+                .players
+                .first()
+                .map_or_else(|| "Auto".to_owned(), |player| player.label.to_string()),
+            PlayerChoice::Installed { kind } | PlayerChoice::Custom { kind, .. } => self
+                .players
+                .iter()
+                .find(|player| player.kind == *kind)
+                .map_or_else(
+                    || kind.label().to_owned(),
+                    |player| player.label.to_string(),
+                ),
         }
     }
 
@@ -933,7 +1087,7 @@ impl AppShell {
 }
 
 impl Render for AppShell {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let expiring = self.account.read(cx).expiring();
         let expired = self.account.read(cx).expired();
@@ -980,7 +1134,8 @@ impl Render for AppShell {
             .children(self.fetch_status.read(cx).loading().then(fetch_loader))
             .children(prompt.map(|prompt| account_banner(cx, prompt)))
             .children(transfer.map(|preview| transfer_banner(cx, preview.direction)))
-            .child(body);
+            .child(body)
+            .children(self.render_playback_hud(window, cx));
         #[cfg(debug_assertions)]
         let shell = shell
             .on_action(cx.listener(|shell, _: &DebugSlowFetch, _, cx| {
@@ -1189,7 +1344,9 @@ mod tests {
         DiscoverSection, DiscoverStore, DiscoverUpdate, Section, SectionEntries, test_media,
     };
     use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
-    use domain::{AniListAccountState, AniListWait, AppEvent, SectionFetch};
+    use domain::{
+        AniListAccountState, AniListWait, AppEvent, MediaId, PlaybackState, SectionFetch,
+    };
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
         ScrollDelta, Task, TestAppContext, WindowBounds, WindowHandle, WindowOptions,
@@ -1202,9 +1359,9 @@ mod tests {
     use tokio::net::TcpListener;
     use ui_state::entry_store::EntryStore;
     use ui_state::home_store::HomeStore;
-    use ui_state::test_support::pending_services;
+    use ui_state::test_support::{PlaybackCall, PlaybackServices, pending_services};
     use ui_state::{
-        PlatformGateway, Route, SearchFilters, SettingsTab,
+        PlatformGateway, PlaybackStore, Route, SearchFilters, SettingsTab,
         account::{AccountCommand, AccountStore},
         actions::OpenCommandPalette,
         bridge::BridgeError,
@@ -1257,10 +1414,24 @@ mod tests {
             Self::open_state(cx, RailPrefs::default(), Some(session))
         }
 
+        /// A shell whose playback store records commands through a fake engine.
+        fn open_with_playback(cx: &mut TestAppContext, services: PlaybackServices) -> Self {
+            Self::open_playback_state(cx, RailPrefs::default(), None, services)
+        }
+
         fn open_state(
             cx: &mut TestAppContext,
             prefs: RailPrefs,
             session: Option<AniListAccountState>,
+        ) -> Self {
+            Self::open_playback_state(cx, prefs, session, PlaybackServices::default())
+        }
+
+        fn open_playback_state(
+            cx: &mut TestAppContext,
+            prefs: RailPrefs,
+            session: Option<AniListAccountState>,
+            playback_services: PlaybackServices,
         ) -> Self {
             let saved = Rc::new(RefCell::new(Vec::new()));
             let log = Rc::clone(&saved);
@@ -1325,6 +1496,7 @@ mod tests {
                             }),
                             entry_store,
                             home_store,
+                            cx.new(|_| PlaybackStore::new(std::sync::Arc::new(playback_services))),
                             window,
                             cx,
                         )
@@ -1345,8 +1517,10 @@ mod tests {
             let (sender, receiver) = channel();
             cx.update(|cx| {
                 let store = self.view.read(cx).fetch_status.clone();
+                let playback = self.view.read(cx).playback_store.clone();
                 start_pump(cx, receiver, move |event, cx| {
-                    store.update(cx, |store, cx| store.apply(event, cx));
+                    store.update(cx, |store, cx| store.apply(event.clone(), cx));
+                    playback.update(cx, |store, cx| store.apply(event, cx));
                 })
                 .detach();
             });
@@ -1372,6 +1546,12 @@ mod tests {
 
         fn click(&self, cx: &mut TestAppContext, id: &'static str) {
             self.act(cx, |window, cx| window.click(id, cx));
+        }
+
+        fn click_at(&self, cx: &mut TestAppContext, id: &'static str, offset: Point<Pixels>) {
+            self.act(cx, |window, cx| {
+                window.click_with_options(id, ClickOptions::new().with_offset(offset), cx);
+            });
         }
 
         fn hover(&self, cx: &mut TestAppContext, id: &'static str) {
@@ -1731,6 +1911,59 @@ mod tests {
         gpui_kit::base::test_support::texts(window)
             .iter()
             .any(|text| text.text() == expected)
+    }
+
+    #[gpui_kit::test]
+    fn the_playback_hud_tracks_the_session_and_hides_when_it_ends(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a test runtime");
+        cx.update(|cx| ui_state::bridge::init(cx, runtime.handle().clone()));
+
+        let services = PlaybackServices::default();
+        let calls = services.clone();
+        let shell = Shell::open_with_playback(cx, services);
+        let sender = shell.events(cx);
+
+        sender
+            .send(AppEvent::PlaybackState(PlaybackState {
+                media: MediaId::new(7),
+                episode: 3,
+                position: Duration::from_secs(42),
+                duration: Some(Duration::from_mins(24)),
+                paused: false,
+            }))
+            .unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("playback-hud").is_some(),
+                "the HUD is shown"
+            );
+            assert!(has_text(window, "0:42 / 24:00"), "the position is rendered");
+        });
+
+        let width = shell.bounds(cx, "playback-hud-seek-track").size.width;
+        shell.click_at(cx, "playback-hud-seek-track", point(width / 2., px(2.)));
+        cx.run_until_parked();
+        assert_eq!(
+            calls.calls(),
+            [PlaybackCall::Seek(720.)],
+            "a click on the bar seeks to that position"
+        );
+
+        sender
+            .send(AppEvent::PlaybackStopped { unexpected: false })
+            .unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("playback-hud").is_none(),
+                "the HUD is hidden"
+            );
+        });
     }
 
     fn pinned() -> RailPrefs {
@@ -2686,6 +2919,7 @@ mod tests {
                             }),
                             entry_store,
                             home_store,
+                            cx.new(|_| PlaybackStore::new(pending_services())),
                             db.clone(),
                             anilist,
                             catalog,
