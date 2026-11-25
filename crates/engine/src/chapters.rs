@@ -56,20 +56,28 @@ impl SkipPatterns {
 ///
 /// Ordered editions use per-chapter times that do not line up with mpv's
 /// timeline, so they are left to the player's `chapter-list`. Hidden chapters
-/// are not skip markers either.
+/// are not skip markers either, but a missing end still stops at the next
+/// chapter, hidden or not, so ends are resolved before hidden ones are dropped.
 fn from_edition(edition: &mkv::Edition, patterns: &SkipPatterns) -> Vec<PlaybackChapter> {
     if edition.ordered {
         return Vec::new();
     }
-    let chapters = edition
-        .chapters
+    let all = &edition.chapters;
+    let chapters = all
         .iter()
-        .filter(|chapter| !chapter.hidden)
-        .map(|chapter| {
+        .enumerate()
+        .filter(|(_, chapter)| !chapter.hidden)
+        .map(|(index, chapter)| {
             let name = chapter.display.first().map(|display| display.name.clone());
             let start = Duration::from_nanos(chapter.start);
-            let end = (chapter.end > chapter.start).then(|| Duration::from_nanos(chapter.end));
-            PlaybackChapter::new(name, start, end, None)
+            let end = if chapter.end > chapter.start {
+                Some(chapter.end)
+            } else {
+                all.get(index + 1)
+                    .map(|next| next.start)
+                    .filter(|next| *next > chapter.start)
+            };
+            PlaybackChapter::new(name, start, end.map(Duration::from_nanos), None)
         })
         .collect();
     patterns.attach(chapters)
@@ -246,6 +254,24 @@ mod tests {
         assert_eq!(
             chapters.first().and_then(|chapter| chapter.kind),
             Some(ChapterKind::Opening)
+        );
+    }
+
+    #[test]
+    fn a_chapter_without_an_end_stops_at_the_next_hidden_chapter() {
+        let mut edition = edition(EditionOrder::Unordered);
+        if let Some(opening) = edition.chapters.first_mut() {
+            opening.start = 10_000_000_000;
+            opening.end = 0;
+        }
+        if let Some(hidden) = edition.chapters.get_mut(1) {
+            hidden.start = 80_000_000_000;
+        }
+        let chapters = from_edition(&edition, &patterns());
+        assert_eq!(
+            chapters.first().and_then(|chapter| chapter.end),
+            Some(Duration::from_secs(80)),
+            "the end comes from the hidden chapter, not the end of the file"
         );
     }
 
