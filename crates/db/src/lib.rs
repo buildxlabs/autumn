@@ -6,6 +6,7 @@ mod error;
 mod local_file;
 mod local_list;
 mod media;
+mod scan_summary;
 mod settings;
 
 use std::{path::Path, time::Duration};
@@ -16,9 +17,12 @@ use sqlx::{
 };
 
 pub use error::DbError;
-pub use local_file::{LocalFile, LocalFileRepo};
+pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
 pub use local_list::LocalListRepo;
 pub use media::{LinkConflict, MediaRepo, Minted};
+pub use scan_summary::{
+    MediaMatchSummary, ScanSummary, ScanSummaryRepo, UnmatchedFile, UnmatchedReason,
+};
 pub use settings::SettingsRepo;
 
 /// How long a write waits for another connection's lock before failing.
@@ -66,6 +70,11 @@ impl Db {
     /// Local files found by library scans.
     pub fn local_file(&self) -> LocalFileRepo<'_> {
         LocalFileRepo::new(&self.pool)
+    }
+
+    /// Persisted outcomes of library scans.
+    pub fn scan_summary(&self) -> ScanSummaryRepo<'_> {
+        ScanSummaryRepo::new(&self.pool)
     }
 
     /// Settings rows, one per settings tab.

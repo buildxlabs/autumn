@@ -83,11 +83,23 @@ impl Matcher {
     /// The best candidate above the threshold, if there is one.
     #[must_use]
     pub fn best(&self, title: &NormalizedTitle, candidates: &[Candidate]) -> Option<Match> {
+        self.best_candidate(title, candidates)
+            .filter(|found| found.confidence > self.threshold)
+    }
+
+    /// The best candidate that scored above zero, regardless of the threshold.
+    /// A scan uses this to report why a file was left unmatched.
+    #[must_use]
+    pub fn best_candidate(
+        &self,
+        title: &NormalizedTitle,
+        candidates: &[Candidate],
+    ) -> Option<Match> {
         candidates
             .iter()
             .enumerate()
             .map(|(index, candidate)| (index, self.score(title, candidate)))
-            .filter(|(_, score)| *score > self.threshold)
+            .filter(|(_, score)| *score > 0.0)
             .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(candidate, confidence)| Match {
                 candidate,
