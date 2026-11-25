@@ -24,7 +24,7 @@ impl MediaId {
 
 /// Whether a media is an anime or a manga. Both share the one [`MediaId`]
 /// space; one media is one season or cour.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[non_exhaustive]
 pub enum MediaKind {

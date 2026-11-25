@@ -3,6 +3,7 @@
 use std::{rc::Rc, time::Duration};
 
 use db::Db;
+use domain::TransferDirection;
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, NavigationDirection, ParentElement, Pixels, Point, Render, SharedString,
@@ -941,6 +942,7 @@ impl Render for AppShell {
         } else {
             expiring.then_some(AccountPrompt::Expiring)
         };
+        let transfer = self.account.read(cx).transfer_preview().cloned();
         let rail = self.render_rail(cx);
         let body = div().flex_1().min_h_0().relative().flex();
         // Pushed, the rail is in the layout. Otherwise its slot stays
@@ -977,6 +979,7 @@ impl Render for AppShell {
             .child(self.render_titlebar(cx))
             .children(self.fetch_status.read(cx).loading().then(fetch_loader))
             .children(prompt.map(|prompt| account_banner(cx, prompt)))
+            .children(transfer.map(|preview| transfer_banner(cx, preview.direction)))
             .child(body);
         #[cfg(debug_assertions)]
         let shell = shell
@@ -1053,6 +1056,45 @@ fn account_banner(cx: &mut Context<'_, AppShell>, prompt: AccountPrompt) -> impl
         .child(
             Button::new("account-banner-open")
                 .label("Log in again")
+                .on_click(move |_, _, cx| {
+                    let _ = shell.update(cx, |shell, cx| {
+                        shell.navigate(
+                            Route::Settings {
+                                tab: SettingsTab::Account,
+                            },
+                            cx,
+                        );
+                    });
+                }),
+        )
+}
+
+/// A shell-wide prompt to review a list transfer offered on connect or
+/// sign-out. The preview itself lives in Settings → Account.
+fn transfer_banner(
+    cx: &mut Context<'_, AppShell>,
+    direction: TransferDirection,
+) -> impl IntoElement {
+    let shell = cx.entity().downgrade();
+    let colors = cx.theme().colors;
+    div()
+        .id("transfer-banner")
+        .test_support()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .px_8()
+        .py_2()
+        .bg(colors.accent)
+        .text_color(colors.accent_foreground)
+        .child(Label::new(format!(
+            "{} lists are ready to transfer — review the preview",
+            direction.source_label()
+        )))
+        .child(
+            Button::new("transfer-banner-open")
+                .label("Review transfer")
                 .on_click(move |_, _, cx| {
                     let _ = shell.update(cx, |shell, cx| {
                         shell.navigate(
@@ -1163,7 +1205,7 @@ mod tests {
     use ui_state::test_support::pending_services;
     use ui_state::{
         PlatformGateway, Route, SearchFilters, SettingsTab,
-        account::AccountStore,
+        account::{AccountCommand, AccountStore},
         actions::OpenCommandPalette,
         bridge::BridgeError,
         events::{Sender, channel, start_pump},
@@ -1198,6 +1240,8 @@ mod tests {
         saved: Rc<RefCell<Vec<RailPrefs>>>,
         /// Every account the Discover loader was given, oldest first.
         users: Rc<RefCell<Vec<Option<String>>>>,
+        /// Every account command emitted by the shell, oldest first.
+        commands: Rc<RefCell<Vec<AccountCommand>>>,
     }
 
     impl Shell {
@@ -1222,6 +1266,8 @@ mod tests {
             let log = Rc::clone(&saved);
             let users = Rc::new(RefCell::new(Vec::new()));
             let seen = Rc::clone(&users);
+            let commands = Rc::new(RefCell::new(Vec::new()));
+            let sent = Rc::clone(&commands);
             let (window, view) = cx.update(|cx| {
                 gpui_kit::init(cx);
                 ui_theme::init(cx);
@@ -1264,7 +1310,10 @@ mod tests {
                                     Task::ready(Ok(bytes.get()))
                                 }
                             },
-                            |_, _| Task::ready(()),
+                            move |command, _| {
+                                sent.borrow_mut().push(command);
+                                Task::ready(())
+                            },
                             Rc::new(move |user: Option<String>, _: &App| {
                                 seen.borrow_mut().push(user);
                                 let store = DiscoverStore::from_sections(vec![Section::new(
@@ -1288,6 +1337,7 @@ mod tests {
                 view,
                 saved,
                 users,
+                commands,
             }
         }
 
@@ -1301,6 +1351,10 @@ mod tests {
                 .detach();
             });
             sender
+        }
+
+        fn commands(&self) -> Vec<AccountCommand> {
+            self.commands.borrow().clone()
         }
 
         fn act(
@@ -1946,6 +2000,105 @@ mod tests {
                 "a still-valid token is not described as read-only"
             );
         });
+    }
+
+    #[gpui_kit::test]
+    fn a_list_transfer_preview_is_shown_in_the_shell_and_account_tab(cx: &mut TestAppContext) {
+        use domain::{
+            AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score,
+            TransferChoice, TransferDirection, TransferItem, TransferPreview,
+        };
+
+        let shell = Shell::open_with_account(
+            cx,
+            AniListAccountState::Active {
+                name: "FrierenFan".to_owned(),
+                avatar: None,
+                expires_at: std::time::UNIX_EPOCH + std::time::Duration::from_hours(500_000),
+                expiring: false,
+            },
+        );
+        let entry = ListEntry {
+            media: MediaId::new(1),
+            status: ListStatus::Current,
+            score: Score::UNSCORED,
+            progress: 12,
+            progress_volumes: 0,
+            repeat: 0,
+            started_at: FuzzyDate::UNKNOWN,
+            completed_at: FuzzyDate::UNKNOWN,
+            notes: String::new(),
+            private: false,
+            priority: 0,
+            advanced_scores: AdvancedScores::default(),
+            custom_lists: Vec::new(),
+            hidden_from_status_lists: false,
+            created_at: std::time::UNIX_EPOCH,
+            updated_at: std::time::UNIX_EPOCH,
+        };
+        let preview = TransferPreview {
+            direction: TransferDirection::ToAniList,
+            items: vec![TransferItem::new(MediaKind::Anime, entry, None)],
+            custom_lists: Vec::new(),
+        };
+        let account = shell.view.read_with(cx, |shell, _| shell.account.clone());
+        account.update(cx, |store, cx| {
+            store.apply(AppEvent::TransferPreview(Some(preview)), cx);
+        });
+
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("transfer-banner-open").is_some(),
+                "connecting offers the transfer outside Settings"
+            );
+        });
+        shell.click(cx, "transfer-banner-open");
+        shell.act(cx, |window, _| {
+            let texts = gpui_kit::base::test_support::texts(window);
+            assert!(
+                texts
+                    .iter()
+                    .any(|text| text.visible()
+                        && text.text().contains("Copy Local lists to AniList")),
+                "the preview names the direction"
+            );
+            assert!(
+                window.try_find("transfer-choice-1").is_some()
+                    && window.try_find("transfer-confirm").is_some()
+                    && window.try_find("transfer-cancel").is_some(),
+                "each entry can be reviewed and the plan confirmed or dismissed"
+            );
+        });
+        account.update(cx, |store, cx| {
+            store.choose(MediaId::new(1), TransferChoice::Skip, cx);
+        });
+        let choices = account.read_with(cx, |store, _| match store.transfer_preview() {
+            Some(preview) => preview
+                .items
+                .iter()
+                .map(|item| (item.media, item.choice))
+                .collect(),
+            None => Vec::new(),
+        });
+        account.update(cx, |_, cx| {
+            AccountStore::request(
+                AccountCommand::TransferConfirm {
+                    direction: TransferDirection::ToAniList,
+                    choices,
+                },
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        let commands = shell.commands();
+        assert!(
+            commands.iter().any(|command| matches!(
+                command,
+                AccountCommand::TransferConfirm { choices, .. }
+                    if choices == &[(MediaId::new(1), TransferChoice::Skip)]
+            )),
+            "the overridden choice reaches the confirm command: {commands:?}"
+        );
     }
 
     #[gpui_kit::test]

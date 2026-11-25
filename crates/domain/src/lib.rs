@@ -9,12 +9,17 @@ mod fuzzy_date;
 mod list_entry;
 mod media;
 mod score;
+mod transfer;
 
 pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
 pub use score::{Score, ScoreError};
+pub use transfer::{
+    TransferChoice, TransferDirection, TransferItem, TransferPreview, TransferProgress,
+    TransferState,
+};
 
 /// An event the engine publishes for the UI to apply to its stores.
 ///
@@ -49,6 +54,10 @@ pub enum AppEvent {
     },
     /// A library scan finished and the local files may have changed.
     LibraryChanged,
+    /// A list transfer preview is ready for review, or `None` when dismissed.
+    TransferPreview(Option<TransferPreview>),
+    /// A background list transfer processed another entry.
+    TransferProgress(TransferProgress),
 }
 
 /// The next opportunity to start an AniList request.
