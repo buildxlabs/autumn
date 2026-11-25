@@ -4,7 +4,6 @@
 
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
-use domain::MediaKind;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, Context, Entity, EventEmitter, InteractiveElement,
     IntoElement, ParentElement, Pixels, Point, Render, Resource, Styled, Subscription, Task,
@@ -82,14 +81,6 @@ impl std::fmt::Debug for SearchScreen {
 
 impl EventEmitter<SearchEvent> for SearchScreen {}
 
-fn next_kind(current: Option<MediaKind>) -> Option<MediaKind> {
-    match current {
-        None => Some(MediaKind::Anime),
-        Some(MediaKind::Anime) => Some(MediaKind::Manga),
-        _ => None,
-    }
-}
-
 fn next_sort(current: Option<SearchSort>) -> Option<SearchSort> {
     match current {
         None => Some(SearchSort::Match),
@@ -103,6 +94,7 @@ fn next_sort(current: Option<SearchSort>) -> Option<SearchSort> {
     }
 }
 
+/// Cycles the anime formats only: manga is on the ROADMAP Backlog (#185).
 fn next_format(current: Option<SearchFormat>) -> Option<SearchFormat> {
     match current {
         None => Some(SearchFormat::Tv),
@@ -112,9 +104,6 @@ fn next_format(current: Option<SearchFormat>) -> Option<SearchFormat> {
         Some(SearchFormat::Special) => Some(SearchFormat::Ova),
         Some(SearchFormat::Ova) => Some(SearchFormat::Ona),
         Some(SearchFormat::Ona) => Some(SearchFormat::Music),
-        Some(SearchFormat::Music) => Some(SearchFormat::Manga),
-        Some(SearchFormat::Manga) => Some(SearchFormat::Novel),
-        Some(SearchFormat::Novel) => Some(SearchFormat::OneShot),
         _ => None,
     }
 }
@@ -154,13 +143,8 @@ fn card_view(media: &ui_state::MediaPreview) -> MediaCardView {
             .as_ref()
             .map(|url| Resource::Uri(url.clone().into())),
         title: media.title.clone().into(),
-        format: match media.format {
-            Some(SearchFormat::Manga | SearchFormat::Novel | SearchFormat::OneShot) => {
-                Some(MediaFormat::Manga)
-            }
-            Some(_) => Some(MediaFormat::Anime),
-            None => None,
-        },
+        // The catalog asks AniList for anime only.
+        format: media.format.map(|_| MediaFormat::Anime),
         score: media.score.map(f32::from),
         progress: 0,
         total: None,
@@ -693,13 +677,6 @@ impl Render for SearchScreen {
                     .items_center()
                     .child(Input::new(&self.query).aria_label("Search query"))
                     .child(
-                        Button::new("search-kind")
-                            .label(label("Type", filters.kind.as_ref()))
-                            .on_click(cx.listener(|screen: &mut Self, _, _, cx| {
-                                screen.change(cx, |f| f.kind = next_kind(f.kind));
-                            })),
-                    )
-                    .child(
                         Button::new("search-sort")
                             .label(label("Sort", filters.sort.as_ref()))
                             .on_click(cx.listener(|screen: &mut Self, _, _, cx| {
@@ -758,5 +735,34 @@ impl Render for SearchScreen {
             }))
             .child(div().flex_1().min_h_0().child(self.grid.clone()))
             .test_support()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ui_state::SearchFormat;
+
+    use super::next_format;
+
+    #[test]
+    fn format_cycles_anime_formats_only() {
+        let mut seen = Vec::new();
+        let mut current = next_format(None);
+        while let Some(format) = current {
+            seen.push(format);
+            current = next_format(current);
+        }
+        assert_eq!(
+            seen,
+            [
+                SearchFormat::Tv,
+                SearchFormat::TvShort,
+                SearchFormat::Movie,
+                SearchFormat::Special,
+                SearchFormat::Ova,
+                SearchFormat::Ona,
+                SearchFormat::Music,
+            ]
+        );
     }
 }
