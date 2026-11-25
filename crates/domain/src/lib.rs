@@ -17,7 +17,8 @@ pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
 pub use playback::{
-    ChapterKind, PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState, StreamSource,
+    AutoNext, ChapterKind, PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState,
+    StreamSource,
 };
 pub use score::{Score, ScoreError};
 pub use transfer::{
@@ -85,6 +86,9 @@ pub enum AppEvent {
         /// The chapter the player is in, when one is selected.
         current: Option<usize>,
     },
+    /// The next-episode countdown changed, or `None` when it ended or was
+    /// cancelled.
+    PlaybackAutoNext(Option<AutoNext>),
     /// The session ended, so the HUD has nothing to show.
     PlaybackStopped {
         /// Whether the player quit on its own rather than through a command.

@@ -458,6 +458,10 @@ pub enum PlaybackCall {
     Seek(f64),
     /// A request to skip the current chapter.
     SkipChapter,
+    /// Play the next episode now, during its countdown.
+    PlayNextNow,
+    /// Cancel the next-episode countdown.
+    CancelAutoNext,
 }
 
 /// An engine fake that records playback commands; other calls stay pending.
@@ -558,6 +562,20 @@ impl EngineServices for PlaybackServices {
     fn skip_chapter(&self) -> BoxFuture<Result<(), EngineError>> {
         if let Ok(mut calls) = self.calls.lock() {
             calls.push(PlaybackCall::SkipChapter);
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn play_next_now(&self) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::PlayNextNow);
+        }
+        Box::pin(async { Ok(()) })
+    }
+
+    fn cancel_auto_next(&self) -> BoxFuture<Result<(), EngineError>> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(PlaybackCall::CancelAutoNext);
         }
         Box::pin(async { Ok(()) })
     }

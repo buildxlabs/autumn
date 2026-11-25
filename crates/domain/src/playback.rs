@@ -84,6 +84,30 @@ impl PlaybackChapter {
     }
 }
 
+/// The countdown to the next library episode, shown after an episode ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AutoNext {
+    /// The media both episodes belong to.
+    pub media: MediaId,
+    /// The episode that plays when the countdown reaches zero.
+    pub episode: u32,
+    /// Time left before it plays.
+    pub remaining: Duration,
+}
+
+impl AutoNext {
+    /// A countdown to `episode` of `media` with `remaining` time left.
+    #[must_use]
+    pub fn new(media: MediaId, episode: u32, remaining: Duration) -> Self {
+        Self {
+            media,
+            episode,
+            remaining,
+        }
+    }
+}
+
 /// Whether to pause or resume the active player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
