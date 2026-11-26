@@ -65,7 +65,7 @@ use crate::{
     lists::{ListsEvent, ListsScreen},
     palette::{CommandPalette, Mode, PaletteEvent},
     placeholder::{episode_gallery, mock_media_views, placeholder},
-    scan_summaries::ScanSummariesScreen,
+    scan_summaries::{MediaSearchDialog, MediaSearchEvent, ScanSummariesScreen},
     search::{SearchEvent, SearchScreen},
 };
 
@@ -123,6 +123,9 @@ pub enum RailMode {
 /// save drops an older one still running.
 type SavePrefs = Rc<dyn Fn(&RailPrefs, &mut App) -> Task<()>>;
 
+/// Moves the confirmed files to the trash.
+pub(crate) type TrashAction = Rc<dyn Fn(&[PathBuf], &mut App)>;
+
 /// Sends an account command to the owner of the token.
 type AccountRequest = Box<dyn Fn(AccountCommand, &mut App) -> Task<()>>;
 
@@ -149,6 +152,9 @@ pub struct AppShell {
     _entry_events: Subscription,
     /// The Entry's Library tab: local files as episode cards (#132).
     entry_library: Entity<EntryLibraryStore>,
+    /// The AniList search behind the Library tab's Re-match (#133), built
+    /// once startup has an AniList client.
+    entry_rematch: Option<Entity<MediaSearchDialog>>,
     /// The Home screen's store; `show` opens Home's sections.
     home_store: Entity<HomeStore>,
     /// The one playback session, mirrored from the engine for the HUD.
@@ -349,7 +355,13 @@ impl AppShell {
             }
         })
         .detach();
-        cx.observe(&entry_library, |_, _, cx| cx.notify()).detach();
+        cx.observe_in(&entry_library, window, |_, store, window, cx| {
+            if let Some(error) = store.update(cx, |store, _| store.take_error()) {
+                window.push_notification(Notification::error(error), cx);
+            }
+            cx.notify();
+        })
+        .detach();
         // The HUD is drawn from the playback store; engine events notify it
         // at most four times a second.
         cx.observe(&playback_store, |_, _, cx| cx.notify()).detach();
@@ -389,6 +401,7 @@ impl AppShell {
             entry_editor,
             _entry_events: entry_events,
             entry_library,
+            entry_rematch: None,
             home_store,
             playback_store,
             hud_focus: cx.focus_handle(),
@@ -561,8 +574,13 @@ impl AppShell {
         let explorer_host = cx.entity().downgrade();
         explorer.update(cx, |screen, _| {
             screen.set_on_trash(move |paths, window, cx| {
-                let _ =
-                    explorer_host.update(cx, |shell, cx| shell.confirm_trash(paths, window, cx));
+                let _ = explorer_host.update(cx, |shell, cx| {
+                    let store = shell.explorer.clone();
+                    let trash = Rc::new(move |paths: &[PathBuf], cx: &mut App| {
+                        store.update(cx, |store, cx| store.trash(paths, cx));
+                    });
+                    Self::confirm_trash(paths, trash, window, cx);
+                });
             });
         });
         shell.explorer_screen = Some(explorer);
@@ -572,6 +590,18 @@ impl AppShell {
             }
         })
         .detach();
+
+        let rematch = cx.new(|cx| MediaSearchDialog::new(window, anilist.clone(), cx));
+        // The dialog is opened on one file; the match applies to the whole
+        // selection, which is what the user picked Re-match for.
+        cx.subscribe(&rematch, |shell, _, event, cx| {
+            let MediaSearchEvent::Matched { anilist_id, .. } = event;
+            shell
+                .entry_library
+                .update(cx, |store, cx| store.rematch(*anilist_id, cx));
+        })
+        .detach();
+        shell.entry_rematch = Some(rematch);
 
         let search = SearchScreen::new(SearchFilters::default(), anilist, window, cx);
         let shell_handle = cx.entity().downgrade();
@@ -615,6 +645,25 @@ impl AppShell {
         let offset = self.leaving_scroll(cx);
         let restore = self.router.push(route, offset);
         self.show(restore, cx);
+    }
+
+    /// Opens the AniList search to re-match the Library tab's selection.
+    pub(crate) fn open_entry_rematch(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        let first = self.entry_library.read(cx).selected().into_iter().next();
+        let (Some(dialog), Some(path)) = (self.entry_rematch.clone(), first) else {
+            return;
+        };
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let view = dialog.clone();
+        window.open_dialog(cx, move |dialog, _, _| {
+            dialog
+                .w(px(480.))
+                .title("Re-match selected files")
+                .child(view.clone())
+        });
+        dialog.update(cx, |dialog, cx| dialog.open(path, window, cx));
     }
 
     /// Shows `tab` of the Entry on screen. A tab switch replaces the route,
@@ -704,19 +753,20 @@ impl AppShell {
     }
 
     /// The one sheet can only close after the user confirms the file count.
-    fn confirm_trash(
-        &mut self,
+    /// Asks before moving `paths` to the OS trash (OD-6), naming the file
+    /// count; `trash` runs only on confirm.
+    pub(crate) fn confirm_trash(
         paths: Vec<PathBuf>,
+        trash: TrashAction,
         window: &mut Window,
-        cx: &mut Context<'_, Self>,
+        cx: &mut App,
     ) {
-        if window.has_active_dialog(cx) {
+        if window.has_active_dialog(cx) || paths.is_empty() {
             return;
         }
         let count = paths.len();
-        let store = self.explorer.clone();
         window.open_dialog(cx, move |dialog, _, _| {
-            let store = store.clone();
+            let trash = Rc::clone(&trash);
             let confirm_paths = paths.clone();
             dialog.title("Move to trash").child(
                 div()
@@ -735,9 +785,7 @@ impl AppShell {
                                     .label("Move to trash")
                                     .on_click(move |_, window, cx| {
                                         window.close_dialog(cx);
-                                        store.update(cx, |store, cx| {
-                                            store.trash(&confirm_paths, cx);
-                                        });
+                                        trash(&confirm_paths, cx);
                                     }),
                             )
                             .child(Button::new("cancel-trash").label("Cancel").on_click(
