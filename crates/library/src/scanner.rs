@@ -29,7 +29,8 @@ pub struct ScannedFile {
     pub modified: i64,
     /// What the release parser read from the name and parent folders.
     pub release: Release,
-    /// The normalized title used to group this file with its siblings.
+    /// The normalized title, plus the parsed season when there is one, used
+    /// to group this file with its siblings.
     pub group_key: String,
 }
 
@@ -138,11 +139,16 @@ fn scanned(path: &Path) -> Result<Option<ScannedFile>, LibraryError> {
             }
         }
     }
+    // The parser moves a season marker out of the title, so the season is
+    // part of the key: `Title S2` files must not join `Title`'s group.
     let group_key = release
         .title
         .as_deref()
         .map(normalize)
-        .map_or_else(String::new, |title| title.key);
+        .map_or_else(String::new, |title| match release.season {
+            Some(season) => format!("{} s{season}", title.key),
+            None => title.key,
+        });
     Ok(Some(ScannedFile {
         path: path.to_path_buf(),
         size,

@@ -129,8 +129,12 @@ fn title_score(file: &NormalizedTitle, media: &NormalizedTitle) -> f64 {
     let base = strsim::jaro_winkler(&file.base, &media.base);
     let tokens = token_ratio(&file.tokens, &media.tokens);
     let mut score = 0.5 * key + 0.3 * tokens + 0.2 * base;
-    if let (Some(a), Some(b)) = (file.season, media.season) {
-        score += if a == b { 0.05 } else { -0.25 };
+    match (file.season, media.season) {
+        (Some(a), Some(b)) => score += if a == b { 0.05 } else { -0.25 },
+        // A name without a season marker is a first season, so it should not
+        // tie with a title that names a later one.
+        (None, Some(b)) if b > 1 => score -= 0.05,
+        _ => {}
     }
     if let (Some(a), Some(b)) = (file.year, media.year) {
         score += if a.abs_diff(b) <= 1 { 0.02 } else { -0.1 };

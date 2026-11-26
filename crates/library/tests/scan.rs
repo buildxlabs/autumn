@@ -132,6 +132,68 @@ async fn a_file_with_no_title_anywhere_stays_unmatched() {
     assert_eq!(row.confidence, None);
 }
 
+#[tokio::test]
+async fn a_season_marker_in_the_name_picks_that_season() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("shows");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(
+        folder.join("[SubsPlease] Mushoku Tensei - 05 (1080p) [5D1F0E2A].mkv"),
+        b"",
+    )
+    .unwrap();
+    fs::write(
+        folder.join("[SubsPlease] Mushoku Tensei S2 - 01 (1080p) [EC64C8B1].mkv"),
+        b"",
+    )
+    .unwrap();
+    let candidates = [
+        library::Candidate::new(
+            "Mushoku Tensei: Isekai Ittara Honki Dasu",
+            vec![ExternalId::AniList(108_465)],
+        )
+        .with_alias("Mushoku Tensei: Jobless Reincarnation"),
+        library::Candidate::new(
+            "Mushoku Tensei II: Isekai Ittara Honki Dasu",
+            vec![ExternalId::AniList(146_065)],
+        )
+        .with_alias("Mushoku Tensei: Jobless Reincarnation Season 2"),
+    ];
+
+    Library::new(db.clone())
+        .scan(slice::from_ref(&folder), &candidates, |_| {})
+        .await
+        .unwrap();
+
+    let media = |id| {
+        let db = db.clone();
+        async move {
+            db.media()
+                .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(id)])
+                .await
+                .unwrap()
+                .media
+        }
+    };
+    let (first, second) = (media(108_465).await, media(146_065).await);
+    let rows = db.local_file().all().await.unwrap();
+    let season = |marker: &str| {
+        rows.iter()
+            .find(|row| row.path.to_string_lossy().contains(marker))
+            .and_then(|row| row.media_id)
+    };
+    assert_eq!(
+        season("Tensei - 05"),
+        Some(first),
+        "no marker: the first season"
+    );
+    assert_eq!(
+        season("Tensei S2 - 01"),
+        Some(second),
+        "S2: the second season"
+    );
+}
+
 /// Test helpers, in `cfg(test)` so the workspace's test-only lint
 /// allowances apply.
 #[cfg(test)]
