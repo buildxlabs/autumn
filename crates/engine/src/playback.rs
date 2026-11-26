@@ -1607,15 +1607,17 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 #[cfg(test)]
+pub(crate) mod fakes;
+
+#[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::Ordering;
 
     use domain::{ChapterKind, ExternalId, ListStatus, MediaKind};
-    use futures::{SinkExt, StreamExt, channel::mpsc};
+    use futures::{SinkExt, channel::mpsc};
     use settings::PlaybackSettings;
-    use tokio::sync::Mutex as AsyncMutex;
 
-    use super::*;
+    use super::{fakes::FakeLauncher, *};
 
     fn entry(media: MediaId, progress: u32, status: ListStatus) -> ListEntry {
         new_entry(media, progress, status)
@@ -1677,160 +1679,6 @@ mod tests {
             let failure = self.fail();
             let saved = value.clone();
             Box::pin(async move { failure.map_or(Ok(saved), Err) })
-        }
-    }
-
-    #[derive(Debug, Default, Clone)]
-    struct FakeLauncher {
-        seeks: Arc<Mutex<Vec<f64>>>,
-        pauses: Arc<Mutex<Vec<PlaybackControl>>>,
-        quits: Arc<AtomicUsize>,
-        launches: Arc<AtomicUsize>,
-        gate: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
-        /// Keeps each session's event sender alive until its test ends.
-        senders: Arc<Mutex<Vec<mpsc::UnboundedSender<PlayerEvent>>>>,
-        messages: Arc<Mutex<Vec<String>>>,
-        /// Files replaced in the same window, as with mpv's `loadfile`.
-        loads: Arc<Mutex<Vec<PathBuf>>>,
-        /// Acts like VLC or MPC-HC, which need a fresh launch per file.
-        relaunch: Arc<AtomicBool>,
-        /// Makes every seek fail, as a player that rejects the command.
-        fail_seeks: Arc<AtomicBool>,
-    }
-
-    impl FakeLauncher {
-        fn session(&self) -> (Box<dyn PlaybackSession>, mpsc::UnboundedSender<PlayerEvent>) {
-            let (tx, rx) = mpsc::unbounded();
-            lock(&self.senders).push(tx.clone());
-            let session = FakeSession {
-                rx: AsyncMutex::new(rx),
-                seeks: Arc::clone(&self.seeks),
-                pauses: Arc::clone(&self.pauses),
-                messages: Arc::clone(&self.messages),
-                quits: Arc::clone(&self.quits),
-                loads: Arc::clone(&self.loads),
-                relaunch: Arc::clone(&self.relaunch),
-                fail_seeks: Arc::clone(&self.fail_seeks),
-            };
-            (Box::new(session), tx)
-        }
-
-        fn loads(&self) -> Vec<PathBuf> {
-            lock(&self.loads).clone()
-        }
-
-        /// The event sender of the `index`th session launched so far.
-        fn sender(&self, index: usize) -> mpsc::UnboundedSender<PlayerEvent> {
-            lock(&self.senders)
-                .get(index)
-                .cloned()
-                .expect("a session was launched")
-        }
-
-        fn launches(&self) -> usize {
-            self.launches.load(Ordering::SeqCst)
-        }
-
-        fn seeks(&self) -> Vec<f64> {
-            lock(&self.seeks).clone()
-        }
-
-        fn pauses(&self) -> Vec<PlaybackControl> {
-            lock(&self.pauses).clone()
-        }
-
-        fn set_gate(&self, gate: oneshot::Receiver<()>) {
-            *lock(&self.gate) = Some(gate);
-        }
-
-        async fn wait_for_launch(&self) {
-            while self.launches.load(Ordering::SeqCst) == 0 {
-                tokio::task::yield_now().await;
-            }
-        }
-    }
-
-    impl PlayerLauncher for FakeLauncher {
-        fn launch(
-            &self,
-            _launch: PlayerLaunch,
-        ) -> BoxFuture<Result<Box<dyn PlaybackSession>, PlayerError>> {
-            self.launches.fetch_add(1, Ordering::SeqCst);
-            let (session, _) = self.session();
-            let gate = lock(&self.gate).take();
-            Box::pin(async move {
-                if let Some(gate) = gate {
-                    let _ = gate.await;
-                }
-                Ok(session)
-            })
-        }
-    }
-
-    #[derive(Debug)]
-    struct FakeSession {
-        rx: AsyncMutex<mpsc::UnboundedReceiver<PlayerEvent>>,
-        seeks: Arc<Mutex<Vec<f64>>>,
-        pauses: Arc<Mutex<Vec<PlaybackControl>>>,
-        messages: Arc<Mutex<Vec<String>>>,
-        quits: Arc<AtomicUsize>,
-        loads: Arc<Mutex<Vec<PathBuf>>>,
-        relaunch: Arc<AtomicBool>,
-        fail_seeks: Arc<AtomicBool>,
-    }
-
-    impl PlaybackSession for FakeSession {
-        fn next_event(&mut self) -> SessionFuture<'_, Option<PlayerEvent>> {
-            Box::pin(async move { self.rx.lock().await.next().await })
-        }
-
-        fn seek(&self, seconds: f64) -> SessionFuture<'_, Result<(), PlayerError>> {
-            let seeks = Arc::clone(&self.seeks);
-            let fail = self.fail_seeks.load(Ordering::SeqCst);
-            Box::pin(async move {
-                lock(&seeks).push(seconds);
-                if fail {
-                    Err(PlayerError::Endpoint("seek rejected".to_owned()))
-                } else {
-                    Ok(())
-                }
-            })
-        }
-
-        fn set_playback_state(
-            &self,
-            state: PlaybackControl,
-        ) -> SessionFuture<'_, Result<(), PlayerError>> {
-            let seen = Arc::clone(&self.pauses);
-            Box::pin(async move {
-                lock(&seen).push(state);
-                Ok(())
-            })
-        }
-
-        fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>> {
-            let messages = Arc::clone(&self.messages);
-            let text = text.to_owned();
-            Box::pin(async move {
-                lock(&messages).push(text);
-                Ok(())
-            })
-        }
-
-        fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
-            let quits = Arc::clone(&self.quits);
-            Box::pin(async move {
-                quits.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            })
-        }
-
-        fn load_file<'a>(&'a self, path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>> {
-            let relaunch = self.relaunch.load(Ordering::SeqCst);
-            if !relaunch {
-                lock(&self.loads).push(path.to_path_buf());
-            }
-            Box::pin(async move { Ok(!relaunch) })
         }
     }
 

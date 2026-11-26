@@ -556,33 +556,18 @@ pub(crate) fn media_info(
 }
 
 #[cfg(test)]
+pub(crate) mod fakes;
+
+#[cfg(test)]
 mod tests {
     use std::fs;
 
     use tempfile::tempdir;
-    use tokio::time::timeout;
 
-    use super::*;
-
-    #[derive(Debug)]
-    struct FakeCandidates {
-        titles: Vec<Candidate>,
-        gate: Arc<Mutex<Option<flume::Receiver<()>>>>,
-    }
-
-    impl CandidateSource for FakeCandidates {
-        fn load(&self) -> BoxFuture<Result<Vec<Candidate>, EngineError>> {
-            let titles = self.titles.clone();
-            let gate = Arc::clone(&self.gate);
-            Box::pin(async move {
-                let receiver = gate.lock().ok().and_then(|mut slot| slot.take());
-                if let Some(receiver) = receiver {
-                    let _ = receiver.recv_async().await;
-                }
-                Ok(titles)
-            })
-        }
-    }
+    use super::{
+        fakes::{FakeCandidates, next_finish},
+        *,
+    };
 
     fn scanner(
         db: Db,
@@ -607,31 +592,6 @@ mod tests {
             Arc::new(Mutex::new(events)),
             Handle::current(),
         )
-    }
-
-    /// Waits for the next finished scan, skipping progress events.
-    async fn next_finish(
-        receiver: &flume::Receiver<AppEvent>,
-        wait: Duration,
-    ) -> Option<(usize, usize, usize, Option<String>)> {
-        timeout(wait, async {
-            loop {
-                let event = receiver.recv_async().await.ok()?;
-                if let AppEvent::LibraryScanFinished {
-                    files_walked,
-                    files_matched,
-                    files_unmatched,
-                    error,
-                    ..
-                } = event
-                {
-                    return Some((files_walked, files_matched, files_unmatched, error));
-                }
-            }
-        })
-        .await
-        .ok()
-        .flatten()
     }
 
     fn alpha() -> Vec<Candidate> {
