@@ -1,6 +1,8 @@
 //! Settings as one JSON row per tab, the shape `db` stores.
 
-use settings::{AppearanceSettings, LibrarySettings, PlaybackSettings, PlayerChoice, Settings};
+use settings::{
+    AppearanceSettings, GeneralSettings, LibrarySettings, PlaybackSettings, PlayerChoice, Settings,
+};
 
 fn pinned() -> Settings {
     Settings {
@@ -13,6 +15,7 @@ fn pinned() -> Settings {
             watched_threshold: 90,
             ..PlaybackSettings::default()
         },
+        general: GeneralSettings::default(),
     }
 }
 
@@ -32,7 +35,7 @@ fn there_is_one_row_per_tab() {
 
     let mut tabs: Vec<&str> = rows.iter().map(|(tab, _)| tab.as_str()).collect();
     tabs.sort_unstable();
-    assert_eq!(tabs, ["appearance", "library", "playback"]);
+    assert_eq!(tabs, ["appearance", "general", "library", "playback"]);
 }
 
 #[test]

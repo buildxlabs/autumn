@@ -30,6 +30,29 @@ pub struct Settings {
     pub playback: PlaybackSettings,
     /// The Library tab.
     pub library: LibrarySettings,
+    /// The General tab, including the first-run wizard flag.
+    pub general: GeneralSettings,
+}
+
+/// The General tab. A new install and a Phase 1 install both start with
+/// `onboarding_completed` false, so each sees the wizard once (#138).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GeneralSettings {
+    /// Whether the first-run wizard has been completed.
+    pub onboarding_completed: bool,
+}
+
+impl GeneralSettings {
+    /// Marks the wizard done. The other tabs keep their current values.
+    pub fn complete(&mut self) {
+        self.onboarding_completed = true;
+    }
+
+    /// Reopens the wizard from Settings → General.
+    pub fn reopen(&mut self) {
+        self.onboarding_completed = false;
+    }
 }
 
 /// The Library tab.
@@ -253,6 +276,18 @@ impl PlaybackSettings {
 }
 
 impl Settings {
+    /// Marks the first-run wizard done, so the next launch goes straight to
+    /// Home. The other tabs are left as they are.
+    pub fn complete_onboarding(&mut self) {
+        self.general.onboarding_completed = true;
+    }
+
+    /// Reopens the wizard from Settings → General, keeping the current
+    /// choices as the wizard's starting values.
+    pub fn reopen_onboarding(&mut self) {
+        self.general.onboarding_completed = false;
+    }
+
     /// Reads the Phase 0 `settings.json` at `path`, for the one-time import
     /// into the database. `None` when there is no file.
     ///

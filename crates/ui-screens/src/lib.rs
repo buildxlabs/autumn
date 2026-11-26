@@ -22,6 +22,7 @@ pub use discover::{
 };
 
 pub use shell::{
-    AppShell, LibraryServices, LibrarySettings, PlaybackServices, PlaybackSettings,
-    PlaybackTestError, PlayerOption, PosterCacheAction, RailMode, RailPrefs, SYSTEM_ROUTES,
+    AppShell, GeneralServices, GeneralSettings, LibraryServices, LibrarySettings, PlaybackServices,
+    PlaybackSettings, PlaybackTestError, PlayerOption, PosterCacheAction, RailMode, RailPrefs,
+    SYSTEM_ROUTES,
 };

@@ -146,6 +146,7 @@ mod tests {
             },
             library: LibrarySettings::default(),
             playback: PlaybackSettings::default(),
+            general: settings::GeneralSettings::default(),
         }
     }
 
@@ -170,8 +171,8 @@ mod tests {
         );
         assert_eq!(
             db.settings().rows().await.unwrap().len(),
-            3,
-            "three rows: appearance, library and playback tabs"
+            4,
+            "four rows: appearance, library, playback and general tabs"
         );
     }
 

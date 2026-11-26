@@ -28,7 +28,7 @@ use gpui_kit::{
     px,
 };
 use metadata::ODBL_CREDIT;
-use settings::{LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice};
+use settings::{GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice};
 use ui_state::{
     LibraryStore, Route, ScanState, SettingsTab,
     account::{AccountCommand, AccountStore},
@@ -74,6 +74,7 @@ impl std::fmt::Display for PlaybackTestError {
     }
 }
 
+type SaveGeneral = Rc<dyn Fn(&GeneralSettings, &mut App) -> Task<()>>;
 type SavePlayback = Rc<dyn Fn(&PlaybackSettings, &mut App) -> Task<()>>;
 type SaveLibrary = Rc<dyn Fn(&LibrarySettings, &mut App) -> Task<()>>;
 type DetectPlayers = Rc<dyn Fn(&mut App) -> Task<Vec<PlayerOption>>>;
@@ -125,6 +126,38 @@ impl PlaybackServices {
                 )))
             },
         )
+    }
+}
+
+/// Writes the General tab, which holds the first-run flag (#138).
+#[derive(Clone)]
+pub struct GeneralServices {
+    save: SaveGeneral,
+}
+
+impl std::fmt::Debug for GeneralServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeneralServices").finish_non_exhaustive()
+    }
+}
+
+impl GeneralServices {
+    /// Creates the callback the General tab and the wizard use to save.
+    pub fn new(save: impl Fn(&GeneralSettings, &mut App) -> Task<()> + 'static) -> Self {
+        Self {
+            save: Rc::new(save),
+        }
+    }
+
+    /// Inert callbacks for embedding the shell without a settings backend.
+    #[must_use]
+    pub fn inert() -> Self {
+        Self::new(|_, _| Task::ready(()))
+    }
+
+    /// Saves one General tab value; the wizard and the test seam use it.
+    pub fn save(&self, settings: &GeneralSettings, cx: &mut App) -> Task<()> {
+        (self.save)(settings, cx)
     }
 }
 
@@ -307,7 +340,7 @@ impl AppShell {
     }
 
     /// Applies one Playback change, validates it and saves it without waiting.
-    fn update_playback(
+    pub(super) fn update_playback(
         &mut self,
         change: impl FnOnce(&mut PlaybackSettings),
         cx: &mut Context<'_, Self>,
@@ -333,6 +366,16 @@ impl AppShell {
 
     /// Adds the chosen folders to the library, skipping ones already listed.
     pub(super) fn add_library_folders(&mut self, cx: &mut Context<'_, Self>) {
+        self.pick_library_folders(false, cx);
+    }
+
+    /// Picks folders for the Library tab, or for the wizard's first step,
+    /// where a successful pick also starts the first scan.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "the Library tab and the wizard share this picker; only the wizard scans after saving"
+    )]
+    pub(super) fn pick_library_folders(&mut self, scan_after: bool, cx: &mut Context<'_, Self>) {
         if self.library_pick_task.is_some() {
             return;
         }
@@ -356,6 +399,9 @@ impl AppShell {
                     }
                 }
                 shell.commit_library(cx);
+                if scan_after {
+                    shell.start_scan(cx);
+                }
             });
         }));
         cx.notify();
@@ -448,7 +494,8 @@ impl AppShell {
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 6] = [
+        const TABS: [SettingsTab; 7] = [
+            SettingsTab::General,
             SettingsTab::Appearance,
             SettingsTab::Account,
             SettingsTab::Playback,
@@ -457,16 +504,18 @@ impl AppShell {
             SettingsTab::About,
         ];
         let selected = match tab {
-            SettingsTab::Appearance => 0,
-            SettingsTab::Account => 1,
-            SettingsTab::Playback => 2,
-            SettingsTab::Library => 3,
-            SettingsTab::Storage => 4,
-            SettingsTab::About => 5,
+            SettingsTab::General => 0,
+            SettingsTab::Appearance => 1,
+            SettingsTab::Account => 2,
+            SettingsTab::Playback => 3,
+            SettingsTab::Library => 4,
+            SettingsTab::Storage => 5,
+            SettingsTab::About => 6,
         };
         let tabs = TabBar::new("settings-tabs")
             .underline()
             .selected_index(selected)
+            .child(settings_tab("settings-general", "General"))
             .child(settings_tab("settings-appearance", "Appearance"))
             .child(settings_tab("settings-account", "Account"))
             .child(settings_tab("settings-playback", "Playback"))
@@ -480,6 +529,30 @@ impl AppShell {
             }));
 
         let (title, items) = match tab {
+            SettingsTab::General => {
+                let shell = cx.entity().downgrade();
+                (
+                    "General",
+                    vec![SettingItem::render(move |_, _, _| {
+                        let shell = shell.clone();
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(Label::new("Review the library, account and player setup."))
+                            .child(
+                                Button::new("settings-run-setup")
+                                    .label("Run setup again")
+                                    .on_click(move |_, _, cx| {
+                                        let _ = shell.update(cx, |shell, cx| {
+                                            shell.reopen_onboarding(cx);
+                                        });
+                                    }),
+                            )
+                            .into_any_element()
+                    })],
+                )
+            }
             SettingsTab::Appearance => {
                 let checked = self.prefs.mode == RailMode::ClickPin;
                 let shell = cx.entity().downgrade();
