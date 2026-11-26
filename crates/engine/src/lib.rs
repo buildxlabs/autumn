@@ -9,6 +9,8 @@
 
 mod chapters;
 mod library;
+#[cfg(test)]
+mod phase2_exit;
 mod playback;
 mod settings_store;
 
