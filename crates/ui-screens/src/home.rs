@@ -117,7 +117,9 @@ pub(crate) fn observe(
             grid.set_items(cards, cx);
             grid.on_open(move |index, _, cx| {
                 if let Some(Some(id)) = ids.get(index).copied() {
-                    let _ = shell.update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                    let _ = shell.update(cx, |shell, cx| {
+                        shell.navigate(Route::Entry { id, tab: None }, cx);
+                    });
                 }
             });
         });
@@ -381,6 +383,8 @@ fn continue_card(
         locked: false,
         progress: item.progress.map(|percent| f32::from(percent) / 100.0),
         skeleton: false,
+        unavailable: None,
+        selected: false,
     };
     let media_id: MediaId = item.entry.entry.media;
     let episode = item.episode;
@@ -444,8 +448,9 @@ fn library_group(group: &LibraryGroup, cx: &mut Context<'_, AppShell>) -> gpui_k
                     )
                     .on_open(move |_, cx| {
                         if let Some(id) = id {
-                            let _ = shell
-                                .update(cx, |shell, cx| shell.navigate(Route::Entry { id }, cx));
+                            let _ = shell.update(cx, |shell, cx| {
+                                shell.navigate(Route::Entry { id, tab: None }, cx);
+                            });
                         }
                     })
                     .into_any_element()
@@ -1030,6 +1035,11 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::default()))
                             }),
                             entry_store,
+                            cx.new(|_| {
+                                ui_state::EntryLibraryStore::new(
+                                    ui_state::test_support::pending_services(),
+                                )
+                            }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(Arc::new(playback.clone()))),
                             window,
