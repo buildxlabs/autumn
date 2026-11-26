@@ -388,6 +388,7 @@ mod tests {
                                 ))
                             }),
                             cx.new(|_| EntryStore::new(Arc::clone(&services))),
+                            cx.new(|_| ui_state::EntryLibraryStore::new(Arc::clone(&services))),
                             cx.new(|_| HomeStore::new(Arc::clone(&services))),
                             cx.new(|_| PlaybackStore::new(Arc::clone(&services))),
                             GeneralSettings::default(),

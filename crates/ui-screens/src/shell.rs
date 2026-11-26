@@ -1873,21 +1873,9 @@ mod tests {
                             crate::shell::PlaybackServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
-                            cx.new(|_| {
-                                ui_state::LibraryStore::new(
-                                    ui_state::test_support::pending_services(),
-                                )
-                            }),
-                            cx.new(|_| {
-                                ui_state::ScanSummariesStore::new(
-                                    ui_state::test_support::pending_services(),
-                                )
-                            }),
-                            cx.new(|_| {
-                                ui_state::LibraryExplorerStore::new(
-                                    ui_state::test_support::pending_services(),
-                                )
-                            }),
+                            cx.new(|_| ui_state::LibraryStore::new(pending_services())),
+                            cx.new(|_| ui_state::ScanSummariesStore::new(pending_services())),
+                            cx.new(|_| ui_state::LibraryExplorerStore::new(pending_services())),
                             fetch_status,
                             account,
                             "https://example.test/login".to_owned(),
@@ -1918,11 +1906,7 @@ mod tests {
                                 Task::ready(Ok::<_, BridgeError>(DiscoverUpdate::new(store)))
                             }),
                             entry_store,
-                            cx.new(|_| {
-                                ui_state::EntryLibraryStore::new(
-                                    ui_state::test_support::pending_services(),
-                                )
-                            }),
+                            cx.new(|_| ui_state::EntryLibraryStore::new(pending_services())),
                             home_store,
                             cx.new(|_| PlaybackStore::new(std::sync::Arc::new(playback_services))),
                             settings::GeneralSettings {

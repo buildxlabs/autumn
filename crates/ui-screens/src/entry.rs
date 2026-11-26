@@ -1113,6 +1113,11 @@ mod tests {
                             cx.new(|_| ui_state::EntryLibraryStore::new(Arc::new(library))),
                             home_store,
                             cx.new(|_| ui_state::PlaybackStore::new(Arc::new(playback))),
+                            settings::GeneralSettings {
+                                onboarding_completed: true,
+                            },
+                            crate::shell::GeneralServices::inert(),
+                            true,
                             window,
                             cx,
                         )

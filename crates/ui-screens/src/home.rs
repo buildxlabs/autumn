@@ -1047,6 +1047,11 @@ mod tests {
                             }),
                             home_store,
                             cx.new(|_| PlaybackStore::new(Arc::new(playback.clone()))),
+                            settings::GeneralSettings {
+                                onboarding_completed: true,
+                            },
+                            crate::shell::GeneralServices::inert(),
+                            true,
                             window,
                             cx,
                         )
