@@ -52,6 +52,47 @@ const THRESHOLD_MIN: u8 = 50;
 const THRESHOLD_MAX: u8 = 100;
 /// The library row kind of a regular, numbered episode.
 const REGULAR_EPISODE: &str = "episode";
+/// The first continuity key reserved for files outside the episode run.
+/// Real episode numbers are far smaller, so existing rows keep their meaning.
+const NON_EPISODE_KEY_BASE: u32 = 1_000_000;
+
+/// The kind of file a play request opens (#194).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the Library tab plays exactly these file kinds"
+)]
+pub enum PlaybackFileKind {
+    /// A numbered episode of the main run, or a movie listed with it.
+    Regular,
+    /// A special or OVA.
+    Special,
+    /// A creditless opening.
+    Ncop,
+    /// A creditless ending.
+    Nced,
+}
+
+impl PlaybackFileKind {
+    /// The continuity row of the `number`th file of this kind.
+    #[must_use]
+    pub fn continuity_key(self, number: u32) -> u32 {
+        let rank: u32 = match self {
+            Self::Regular => 0,
+            Self::Special => 1,
+            Self::Ncop => 2,
+            Self::Nced => 3,
+        };
+        rank.saturating_mul(NON_EPISODE_KEY_BASE)
+            .saturating_add(number)
+    }
+
+    /// Whether this file moves list progress and offers the next episode.
+    #[must_use]
+    pub fn is_regular(self) -> bool {
+        matches!(self, Self::Regular)
+    }
+}
 
 /// One request to play an episode.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,12 +100,16 @@ const REGULAR_EPISODE: &str = "episode";
 pub struct PlayRequest {
     /// The media the episode belongs to.
     pub media: MediaId,
-    /// The episode's number in the main run.
+    /// The episode's number in the main run; zero for a special or NC file.
     pub episode: u32,
     /// What the player should open.
     pub source: StreamSource,
     /// Labels for the HUD, supplied by the screen that requested play.
     pub details: Option<PlaybackDetails>,
+    /// The continuity row this file resumes from and saves to.
+    pub continuity_key: u32,
+    /// The kind of file; only episodes sync progress and offer auto-next.
+    pub kind: PlaybackFileKind,
 }
 
 impl PlayRequest {
@@ -76,6 +121,42 @@ impl PlayRequest {
             episode,
             source,
             details: None,
+            continuity_key: episode,
+            kind: PlaybackFileKind::Regular,
+        }
+    }
+
+    /// Plays a special. Its number names the file, never a list episode.
+    #[must_use]
+    pub fn special(media: MediaId, number: u32, source: StreamSource) -> Self {
+        Self::non_episode(media, PlaybackFileKind::Special, number, source)
+    }
+
+    /// Plays a creditless opening. Its number names the file, never an episode.
+    #[must_use]
+    pub fn ncop(media: MediaId, number: u32, source: StreamSource) -> Self {
+        Self::non_episode(media, PlaybackFileKind::Ncop, number, source)
+    }
+
+    /// Plays a creditless ending. Its number names the file, never an episode.
+    #[must_use]
+    pub fn nced(media: MediaId, number: u32, source: StreamSource) -> Self {
+        Self::non_episode(media, PlaybackFileKind::Nced, number, source)
+    }
+
+    fn non_episode(
+        media: MediaId,
+        kind: PlaybackFileKind,
+        number: u32,
+        source: StreamSource,
+    ) -> Self {
+        Self {
+            media,
+            episode: 0,
+            source,
+            details: None,
+            continuity_key: kind.continuity_key(number),
+            kind,
         }
     }
 
@@ -719,7 +800,7 @@ impl PlaybackManager {
         let resume = self
             .db
             .continuity()
-            .get(request.media, request.episode)
+            .get(request.media, request.continuity_key)
             .await?;
         let container_chapters = self.container_chapters(path).await;
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
@@ -1180,6 +1261,9 @@ impl PlaybackManager {
     /// Looks up the next regular episode in the library and, when auto-next
     /// is on and it exists, starts its countdown.
     async fn offer_next(&self, request: &PlayRequest) -> Option<Countdown> {
+        if !request.kind.is_regular() {
+            return None;
+        }
         let seconds = self.auto_next?;
         let next = self.next_episode(request).await?;
         let step = self.countdown_step;
@@ -1220,6 +1304,8 @@ impl PlaybackManager {
             episode,
             source: StreamSource::local(file.path),
             details,
+            continuity_key: episode,
+            kind: PlaybackFileKind::Regular,
         })
     }
 
@@ -1250,7 +1336,12 @@ impl PlaybackManager {
         let StreamSource::Local { path } = &next.source else {
             return false;
         };
-        let resume = match self.db.continuity().get(next.media, next.episode).await {
+        let resume = match self
+            .db
+            .continuity()
+            .get(next.media, next.continuity_key)
+            .await
+        {
             Ok(resume) => resume,
             Err(error) => {
                 warn!(%error, "could not read the next episode's position");
@@ -1364,7 +1455,7 @@ impl PlaybackManager {
         }
         state.watched = true;
         self.clear_position(request).await;
-        if self.auto_sync {
+        if self.auto_sync && request.kind.is_regular() {
             self.sync_progress(request.media, request.episode).await;
         }
     }
@@ -1375,7 +1466,7 @@ impl PlaybackManager {
             .continuity()
             .save(
                 request.media,
-                request.episode,
+                request.continuity_key,
                 state.position,
                 state.duration,
             )
@@ -1389,7 +1480,7 @@ impl PlaybackManager {
         let result = self
             .db
             .continuity()
-            .clear(request.media, request.episode)
+            .clear(request.media, request.continuity_key)
             .await;
         if let Err(error) = result {
             warn!(%error, "could not clear a watched episode's position");
@@ -1626,6 +1717,14 @@ mod tests {
 
         fn loads(&self) -> Vec<PathBuf> {
             lock(&self.loads).clone()
+        }
+
+        /// The event sender of the `index`th session launched so far.
+        fn sender(&self, index: usize) -> mpsc::UnboundedSender<PlayerEvent> {
+            lock(&self.senders)
+                .get(index)
+                .cloned()
+                .expect("a session was launched")
         }
 
         fn launches(&self) -> usize {
@@ -2151,6 +2250,164 @@ mod tests {
                 .any(|state| state.position == Duration::from_secs(80)),
             "the HUD sees the position"
         );
+    }
+
+    #[tokio::test]
+    async fn two_specials_resume_at_their_own_positions() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let first = PlayRequest::special(media, 1, StreamSource::local("/media/sp1.mkv"));
+        let second = PlayRequest::special(media, 2, StreamSource::local("/media/sp2.mkv"));
+
+        fixture.manager.play(first.clone()).await.unwrap();
+        let mut events = fixture.launcher.sender(0);
+        events
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 60.0 })
+            .await
+            .unwrap();
+        wait_until("the session to see the position", || {
+            fixture
+                .states()
+                .iter()
+                .any(|state| state.position == Duration::from_secs(60))
+        })
+        .await;
+        fixture.manager.stop().await;
+
+        assert_eq!(
+            fixture
+                .db
+                .continuity()
+                .get(media, first.continuity_key)
+                .await
+                .unwrap()
+                .map(|saved| saved.position),
+            Some(60.0),
+            "the first special saved its own row"
+        );
+        assert_eq!(
+            fixture
+                .db
+                .continuity()
+                .get(media, second.continuity_key)
+                .await
+                .unwrap(),
+            None,
+            "the second special has no row yet"
+        );
+
+        fixture.manager.play(second).await.unwrap();
+        let mut events = fixture.launcher.sender(1);
+        events
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+        assert!(
+            fixture.launcher.seeks().is_empty(),
+            "the other special's position was not reused"
+        );
+        fixture.manager.stop().await;
+
+        fixture.manager.play(first).await.unwrap();
+        let mut events = fixture.launcher.sender(2);
+        events
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        wait_until("the first special resumes", || {
+            !fixture.launcher.seeks().is_empty()
+        })
+        .await;
+        assert_eq!(fixture.launcher.seeks(), [60.0], "its own position resumes");
+        fixture.manager.stop().await;
+    }
+
+    #[tokio::test]
+    async fn a_special_past_the_threshold_never_syncs_or_creates_a_list_entry() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let request = PlayRequest::special(media, 1, StreamSource::local("/media/sp1.mkv"));
+        let (mut events, stop, done) = fixture.drive(None, &request);
+        events
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 80.0 })
+            .await
+            .unwrap();
+        events.send(PlayerEvent::Eof).await.unwrap();
+        finish(events, stop, done).await;
+
+        assert!(fixture.sync.updates().is_empty(), "no progress write");
+        assert!(fixture.sync.saves().is_empty(), "no entry was saved");
+        assert!(
+            lock(&fixture.sync.entry).is_none(),
+            "no list entry was created at zero"
+        );
+        assert_eq!(
+            fixture
+                .db
+                .continuity()
+                .get(media, request.continuity_key)
+                .await
+                .unwrap(),
+            None,
+            "a watched special leaves no resume row"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_regular_episode_still_syncs_and_offers_the_next_one() {
+        let fixture = Fixture::with_fast_countdown(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        fixture.add_episode(media, 1, "/media/show/01.mkv").await;
+        fixture.add_episode(media, 2, "/media/show/02.mkv").await;
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+        events
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 80.0 })
+            .await
+            .unwrap();
+        events.send(PlayerEvent::Eof).await.unwrap();
+        wait_until("the next episode to load", || {
+            !fixture.launcher.loads().is_empty()
+        })
+        .await;
+
+        assert_eq!(fixture.sync.updates(), [1], "the episode moved progress");
+        assert!(
+            fixture
+                .countdowns()
+                .iter()
+                .flatten()
+                .all(|next| next.media == media && next.episode == 2),
+            "the countdown follows the next regular episode"
+        );
+        finish(events, stop, done).await;
     }
 
     #[tokio::test]

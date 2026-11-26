@@ -38,8 +38,9 @@ pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
 };
 pub use playback::{
-    LocalProgressSync, MIN_RESUME, MpvLauncher, PlayRequest, PlaybackError, PlaybackManager,
-    PlaybackSession, PlayerLaunch, PlayerLauncher, ProgressSync, SyncError, sidecar_subtitles,
+    LocalProgressSync, MIN_RESUME, MpvLauncher, PlayRequest, PlaybackError, PlaybackFileKind,
+    PlaybackManager, PlaybackSession, PlayerLaunch, PlayerLauncher, ProgressSync, SyncError,
+    sidecar_subtitles,
 };
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.

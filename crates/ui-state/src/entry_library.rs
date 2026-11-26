@@ -13,7 +13,7 @@ use std::{
 
 use db::{Continuity, FileFlag, LocalFile};
 use domain::{AppEvent, ExternalId, MediaId, MediaKind, PlaybackDetails, StreamSource};
-use engine::{EngineError, EngineServices, PlayRequest};
+use engine::{EngineError, EngineServices, PlayRequest, PlaybackFileKind};
 use gpui_kit::{Context, Task};
 use metadata::{EntryKind, MediaStatus};
 
@@ -108,6 +108,8 @@ impl EpisodeRange {
 pub struct LibraryEpisode {
     /// The sub-tab the file belongs to.
     pub section: LibrarySection,
+    /// The kind of file, which decides how it resumes and syncs.
+    pub kind: PlaybackFileKind,
     /// The episode number within its section.
     pub number: u32,
     /// The `AniZip` title, or a numbered fallback.
@@ -406,17 +408,20 @@ impl EntryLibraryStore {
         if episode.shelved {
             return None;
         }
-        // Progress and resume positions are keyed by regular episode
-        // number; specials and creditless files play without either.
-        let number = match episode.section {
-            LibrarySection::Episodes => episode.number,
-            LibrarySection::Specials | LibrarySection::NonCredit => 0,
+        let source = StreamSource::local(&episode.path);
+        // Only episodes raise list progress. Specials and NC files get their
+        // own continuity key so two of the same kind never share a row.
+        let request = match episode.kind {
+            PlaybackFileKind::Regular => PlayRequest::new(media, episode.number, source),
+            PlaybackFileKind::Special => PlayRequest::special(media, episode.number, source),
+            PlaybackFileKind::Ncop => PlayRequest::ncop(media, episode.number, source),
+            PlaybackFileKind::Nced => PlayRequest::nced(media, episode.number, source),
         };
-        Some(
-            PlayRequest::new(media, number, StreamSource::local(&episode.path)).with_details(
-                PlaybackDetails::new(media_title, Some(episode.title.clone()), poster),
-            ),
-        )
+        Some(request.with_details(PlaybackDetails::new(
+            media_title,
+            Some(episode.title.clone()),
+            poster,
+        )))
     }
 
     /// Handles a click on the card of `path`. Returns whether the click
@@ -698,23 +703,30 @@ fn join(
         .iter()
         .filter(|file| !file.ignored)
         .filter_map(|file| {
-            let section = match file.kind.as_str() {
-                "episode" | "movie" => LibrarySection::Episodes,
-                "special" => LibrarySection::Specials,
-                "ncop" | "nced" => LibrarySection::NonCredit,
+            let kind = match file.kind.as_str() {
+                "episode" | "movie" => PlaybackFileKind::Regular,
+                "special" => PlaybackFileKind::Special,
+                "ncop" => PlaybackFileKind::Ncop,
+                "nced" => PlaybackFileKind::Nced,
                 _ => return None,
+            };
+            let section = match kind {
+                PlaybackFileKind::Regular => LibrarySection::Episodes,
+                PlaybackFileKind::Special => LibrarySection::Specials,
+                PlaybackFileKind::Ncop | PlaybackFileKind::Nced => LibrarySection::NonCredit,
             };
             // A movie or a single-episode release names no number.
             let number = file.episode.unwrap_or(1);
-            let key = match section {
-                LibrarySection::Episodes => Some(number.to_string()),
-                LibrarySection::Specials => Some(format!("S{number}")),
-                LibrarySection::NonCredit => None,
+            let key = match kind {
+                PlaybackFileKind::Regular => Some(number.to_string()),
+                PlaybackFileKind::Special => Some(format!("S{number}")),
+                PlaybackFileKind::Ncop | PlaybackFileKind::Nced => None,
             };
             let entry = key.and_then(|key| metadata?.episodes.get(&key));
-            let regular = section == LibrarySection::Episodes;
+            let regular = kind.is_regular();
             Some(LibraryEpisode {
                 section,
+                kind,
                 number,
                 title: entry
                     .and_then(episode_title)
@@ -727,7 +739,7 @@ fn join(
                 watched: regular && number <= progress,
                 progress: continuity
                     .iter()
-                    .find(|(episode, _)| regular && *episode == number)
+                    .find(|(key, _)| *key == kind.continuity_key(number))
                     .and_then(|(_, position)| fraction(position)),
             })
         })
@@ -1007,6 +1019,79 @@ mod tests {
         assert_eq!(specials.len(), 1);
         assert_eq!(specials[0].title, "Special 1");
         assert!(!specials[0].watched, "progress never covers specials");
+    }
+
+    #[gpui_kit::test]
+    fn specials_and_nc_files_get_their_own_continuity_keys(cx: &mut TestAppContext) {
+        let _runtime = runtime(cx);
+        let media = MediaId::new(13);
+        let services = EntryLibraryServices::new(
+            media,
+            vec![
+                library_file("/s/sp1.mkv", media, "special", Some(1)),
+                library_file("/s/sp2.mkv", media, "special", Some(2)),
+                library_file("/s/ncop.mkv", media, "ncop", Some(1)),
+                library_file("/s/nced.mkv", media, "nced", Some(1)),
+            ],
+        )
+        .with_continuity(vec![(
+            PlaybackFileKind::Special.continuity_key(2),
+            Continuity {
+                position: 300.0,
+                duration: Some(600.0),
+            },
+        )]);
+        let store = open(cx, services);
+        let requests = |cx: &mut TestAppContext| {
+            store.read_with(cx, |store, _| {
+                store
+                    .episodes()
+                    .iter()
+                    .map(|episode| {
+                        store
+                            .play_request(episode, "Show", None)
+                            .expect("a local file can play")
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.select_section(LibrarySection::Specials, cx);
+            });
+        });
+        let specials = requests(cx);
+        assert_eq!(specials.len(), 2);
+        assert_ne!(
+            specials[0].continuity_key, specials[1].continuity_key,
+            "two specials never share a resume row"
+        );
+        assert!(
+            specials
+                .iter()
+                .all(|request| request.episode == 0 && request.kind == PlaybackFileKind::Special)
+        );
+        assert!(
+            store.read_with(cx, |store, _| store.episodes()[1].progress == Some(0.5)),
+            "a special resumes at its own saved position"
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.select_section(LibrarySection::NonCredit, cx);
+            });
+        });
+        let nc = requests(cx);
+        assert_eq!(nc.len(), 2);
+        assert_ne!(
+            nc[0].continuity_key, nc[1].continuity_key,
+            "NCOP and NCED are distinct"
+        );
+        assert!(
+            nc.iter()
+                .all(|request| request.episode == 0 && !request.kind.is_regular())
+        );
     }
 
     #[test]
