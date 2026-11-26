@@ -37,6 +37,7 @@ const FILLER: &str = "episode-card-filler";
 const WATCHED: &str = "episode-card-watched";
 const PROGRESS_TRACK: &str = "episode-card-progress-track";
 const PROGRESS_FILL: &str = "episode-card-progress-fill";
+const UNAVAILABLE: &str = "episode-card-unavailable";
 
 /// One episode as a card or row shows it: plain view-model data, no I/O.
 #[expect(
@@ -66,6 +67,9 @@ pub struct EpisodeCardView {
     pub progress: Option<f32>,
     /// Whether the card is still loading and should draw its skeleton.
     pub skeleton: bool,
+    /// Why the episode can't play, such as a disconnected drive. The card
+    /// shows the reason and ignores clicks and Play.
+    pub unavailable: Option<SharedString>,
 }
 
 /// An action the card offers through a click or its context menu.
@@ -217,6 +221,7 @@ impl RenderOnce for EpisodeCard {
                     .child(thumbnail)
                     .child(number_pill(&self.view))
                     .children(overlay_badges(&self.view))
+                    .children(self.view.unavailable.clone().map(unavailable_overlay))
                     .child(progress_track(
                         self.view.progress,
                         self.width,
@@ -240,8 +245,9 @@ impl RenderOnce for EpisodeCard {
 
         card.on_click({
             let actions = self.actions.clone();
+            let available = self.view.unavailable.is_none();
             move |_, window, cx| {
-                if let Some(on_play) = &actions.play {
+                if let (true, Some(on_play)) = (available, &actions.play) {
                     on_play(window, cx);
                 }
             }
@@ -375,8 +381,9 @@ impl RenderOnce for EpisodeRow {
 
         row.on_click({
             let actions = self.actions.clone();
+            let available = self.view.unavailable.is_none();
             move |_, window, cx| {
-                if let Some(on_play) = &actions.play {
+                if let (true, Some(on_play)) = (available, &actions.play) {
                     on_play(window, cx);
                 }
             }
@@ -503,7 +510,33 @@ fn inline_badges(view: &EpisodeCardView) -> Vec<Div> {
                 .child(Tag::secondary().small().child(filename.clone())),
         );
     }
+    if let Some(reason) = &view.unavailable {
+        badges.push(
+            div()
+                .debug_selector(|| UNAVAILABLE.into())
+                .flex_none()
+                .child(Tag::danger().small().child(reason.clone())),
+        );
+    }
     badges
+}
+
+/// The dimmed cover over an unavailable card's thumbnail, with the reason.
+fn unavailable_overlay(reason: SharedString) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(gpui_kit::Hsla::black().opacity(0.65))
+        .debug_selector(|| UNAVAILABLE.into())
+        .child(
+            div()
+                .text_xs()
+                .text_color(gpui_kit::rgb(0x00ff_ffff))
+                .child(reason),
+        )
 }
 
 /// Continuity bar along the bottom edge of the thumbnail or row.
@@ -533,7 +566,7 @@ fn context_menu_items(
     actions: &EpisodeActions,
     mut menu: PopupMenu,
 ) -> PopupMenu {
-    if let Some(on_play) = actions.play.clone() {
+    if let (None, Some(on_play)) = (&view.unavailable, actions.play.clone()) {
         menu = menu.item(PopupMenuItem::new("Play").on_click(move |_, window, cx| {
             on_play(window, cx);
         }));
@@ -586,6 +619,7 @@ mod tests {
             locked: false,
             progress: Some(0.4),
             skeleton: false,
+            unavailable: None,
         }
     }
 
@@ -645,6 +679,29 @@ mod tests {
             cx.debug_bounds(WATCHED).is_none(),
             "an unwatched episode has no checkmark"
         );
+    }
+
+    #[gpui_kit::test]
+    fn an_unavailable_episode_shows_why_and_does_not_play(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let played = Rc::new(RefCell::new(0));
+        let actions = EpisodeActions::new().on_play({
+            let played = Rc::clone(&played);
+            move |_, _| *played.borrow_mut() += 1
+        });
+        let (_root, cx) = cx.add_window_view(move |_, _| CardView {
+            view: EpisodeCardView {
+                unavailable: Some("Drive disconnected".into()),
+                ..view()
+            },
+            id: "episode-card-unavailable-test",
+            actions,
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        let reason = cx.debug_bounds(UNAVAILABLE).expect("the reason is shown");
+        cx.simulate_click(reason.center(), gpui_kit::Modifiers::none());
+        assert_eq!(*played.borrow(), 0, "an unavailable card never plays");
     }
 
     #[gpui_kit::test]

@@ -40,6 +40,34 @@ impl<'a> ContinuityRepo<'a> {
         row.map(ContinuityRow::into_position).transpose()
     }
 
+    /// Every saved position of `media`, by episode number.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails, or [`DbError::InvalidRow`] when
+    /// a stored value is not a valid position or episode.
+    pub async fn for_media(&self, media: MediaId) -> Result<Vec<(u32, Continuity)>, DbError> {
+        let rows: Vec<EpisodeRow> = sqlx::query_as(
+            "SELECT episode, position, duration FROM continuity
+             WHERE media_id = ? ORDER BY episode",
+        )
+        .bind(media.get())
+        .fetch_all(self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                let episode = u32::try_from(row.episode)
+                    .map_err(|_| DbError::InvalidRow("continuity.episode"))?;
+                let position = ContinuityRow {
+                    position: row.position,
+                    duration: row.duration,
+                }
+                .into_position()?;
+                Ok((episode, position))
+            })
+            .collect()
+    }
+
     /// Upserts the position of `episode`.
     ///
     /// # Errors
@@ -99,6 +127,13 @@ fn check_seconds(value: f64, column: &'static str) -> Result<(), DbError> {
 
 #[derive(FromRow)]
 struct ContinuityRow {
+    position: f64,
+    duration: Option<f64>,
+}
+
+#[derive(FromRow)]
+struct EpisodeRow {
+    episode: i64,
     position: f64,
     duration: Option<f64>,
 }

@@ -62,6 +62,12 @@ impl<R: Clone + Eq> RouterState<R> {
         Some(restore)
     }
 
+    /// Swaps the route on screen for `route` without adding history, as a
+    /// tab switch within one page does. The scroll position is kept.
+    pub fn replace(&mut self, route: R) {
+        self.current = route;
+    }
+
     /// Returns to the previous route, or `None` when there is none.
     pub fn back(&mut self, left_at: Point<Pixels>) -> Option<Point<Pixels>> {
         let route = self.back.pop()?;
@@ -111,7 +117,7 @@ mod tests {
     use gpui_kit::{Pixels, Point, point, px};
 
     use super::RouterState;
-    use crate::Route;
+    use crate::{EntryTab, Route};
 
     /// The offset after scrolling `y` pixels down; `at(0.)` is the top.
     fn at(y: f32) -> Point<Pixels> {
@@ -125,6 +131,22 @@ mod tests {
         assert_eq!(*router.current(), Route::Home, "starts where told");
         assert!(!router.can_go_back(), "nothing behind");
         assert!(!router.can_go_forward(), "nothing ahead");
+    }
+
+    #[test]
+    fn a_replaced_route_is_what_back_returns_to() {
+        let library = Route::Entry {
+            id: 1,
+            tab: Some(EntryTab::Library),
+        };
+        let mut router = RouterState::new(Route::Entry { id: 1, tab: None });
+        router.replace(library.clone());
+        router.push(Route::Discover, at(0.));
+
+        router.back(at(0.));
+
+        assert_eq!(*router.current(), library, "the tab survives Back");
+        assert!(!router.can_go_back(), "the tab switch added no history");
     }
 
     #[test]

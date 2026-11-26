@@ -6,6 +6,7 @@ pub mod account;
 pub mod actions;
 mod badges;
 pub mod bridge;
+pub mod entry_library;
 pub mod entry_store;
 pub mod events;
 pub mod fetch_status;
@@ -26,6 +27,9 @@ pub mod test_support;
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use engine::LibraryMediaInfo;
+pub use entry_library::{
+    EntryLibraryStore, EpisodeLayout, EpisodeRange, LibraryEpisode, LibrarySection,
+};
 pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use library_explorer::{ExplorerFilter, ExplorerRow, LibraryExplorerStore};
 pub use library_store::{LibraryStore, ScanOutcome, ScanState};
@@ -34,7 +38,7 @@ pub use lists::{
 };
 pub use platform::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, PlatformGateway};
 pub use playback_store::{PlaybackError, PlaybackStore};
-pub use route::{Route, SettingsTab};
+pub use route::{EntryTab, Route, SettingsTab};
 pub use router::RouterState;
 pub use scan_summaries::{PendingEdit, ScanSummariesStore};
 pub use scroll::{ContentLoaded, ScrollRestore};

@@ -355,6 +355,7 @@ impl CommandPalette {
             // A media row opens its Anime Entry page (#58).
             Entry::Media(media) => cx.emit(PaletteEvent::Navigate(Route::Entry {
                 id: media.anilist_id,
+                tab: None,
             })),
             Entry::ScanLibrary => cx.emit(PaletteEvent::ScanLibrary),
             Entry::OpenExplorer => cx.emit(PaletteEvent::OpenExplorer),
