@@ -18,7 +18,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 };
 
-pub use continuity::{Continuity, ContinuityRepo};
+pub use continuity::{Continuity, ContinuityRepo, ResumePoint};
 pub use error::DbError;
 pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
 pub use local_list::LocalListRepo;

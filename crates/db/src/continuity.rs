@@ -12,6 +12,21 @@ pub struct Continuity {
     pub duration: Option<f64>,
 }
 
+/// One saved resume position, with the media and episode it belongs to.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResumePoint {
+    /// The media the episode belongs to.
+    pub media: MediaId,
+    /// The episode's number in its main run.
+    pub episode: u32,
+    /// Seconds from the start of the file.
+    pub position: f64,
+    /// The file's duration, when the player reported one.
+    pub duration: Option<f64>,
+    /// When the position was saved, in seconds since the Unix epoch.
+    pub updated_at: i64,
+}
+
 /// Resume positions, keyed by media and episode.
 #[derive(Debug, Clone, Copy)]
 pub struct ContinuityRepo<'a> {
@@ -21,6 +36,37 @@ pub struct ContinuityRepo<'a> {
 impl<'a> ContinuityRepo<'a> {
     pub(crate) fn new(pool: &'a SqlitePool) -> Self {
         Self { pool }
+    }
+
+    /// Every saved position, newest first, so a Home widget can find the
+    /// episode a user was watching without one query per media.
+    ///
+    /// # Errors
+    ///
+    /// [`DbError::Sqlx`] when the query fails, or [`DbError::InvalidRow`] when
+    /// a stored value is not a valid position.
+    pub async fn all(&self) -> Result<Vec<ResumePoint>, DbError> {
+        let rows: Vec<AllRow> = sqlx::query_as(
+            "SELECT media_id, episode, position, duration, updated_at
+                            FROM continuity ORDER BY updated_at DESC",
+        )
+        .fetch_all(self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(ResumePoint {
+                    media: MediaId::new(row.media_id),
+                    episode: u32::try_from(row.episode)
+                        .map_err(|_| DbError::InvalidRow("continuity.episode"))?,
+                    position: check(row.position, "continuity.position")?,
+                    duration: row
+                        .duration
+                        .map(|value| check(value, "continuity.duration"))
+                        .transpose()?,
+                    updated_at: row.updated_at,
+                })
+            })
+            .collect()
     }
 
     /// The saved position for `episode`, if it has one.
@@ -118,11 +164,24 @@ impl<'a> ContinuityRepo<'a> {
 }
 
 fn check_seconds(value: f64, column: &'static str) -> Result<(), DbError> {
+    check(value, column).map(|_| ())
+}
+
+fn check(value: f64, column: &'static str) -> Result<f64, DbError> {
     if value.is_finite() && value >= 0.0 {
-        Ok(())
+        Ok(value)
     } else {
         Err(DbError::InvalidRow(column))
     }
+}
+
+#[derive(FromRow)]
+struct AllRow {
+    media_id: i64,
+    episode: i64,
+    position: f64,
+    duration: Option<f64>,
+    updated_at: i64,
 }
 
 #[derive(FromRow)]
@@ -148,5 +207,47 @@ impl ContinuityRow {
             position: self.position,
             duration: self.duration,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::{ExternalId, MediaKind};
+    use tempfile::tempdir;
+
+    use crate::Db;
+
+    #[tokio::test]
+    async fn all_lists_every_saved_position_with_its_media_and_episode() {
+        let dir = tempdir().unwrap();
+        let db = Db::open(&dir.path().join("continuity.db")).await.unwrap();
+        let media = db
+            .media()
+            .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(42)])
+            .await
+            .unwrap()
+            .media;
+        db.continuity()
+            .save(media, 3, 120.0, Some(1400.0))
+            .await
+            .unwrap();
+        db.continuity().save(media, 4, 60.0, None).await.unwrap();
+
+        let points = db.continuity().all().await.unwrap();
+
+        assert_eq!(points.len(), 2, "both saved positions are listed");
+        assert!(points.iter().all(|point| point.media == media));
+        assert!(
+            points.iter().any(|point| point.episode == 3
+                && (point.position - 120.0).abs() < 0.001
+                && point.duration == Some(1400.0)),
+            "the resumed episode keeps its position and duration: {points:?}"
+        );
+        assert!(
+            points
+                .iter()
+                .any(|point| point.episode == 4 && point.duration.is_none()),
+            "an episode the player hasn't measured is listed too"
+        );
     }
 }
