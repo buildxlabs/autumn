@@ -116,7 +116,9 @@ impl Matcher {
             .enumerate()
             .map(|(index, candidate)| (index, self.score(title, candidate)))
             .filter(|(_, score)| *score > 0.0)
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            // `max_by` keeps the last of equal scores; the caller lists its
+            // preferred candidates first, so the first one must win a tie.
+            .reduce(|best, next| if next.1 > best.1 { next } else { best })
             .map(|(candidate, confidence)| Match {
                 candidate,
                 confidence,
@@ -210,6 +212,17 @@ mod tests {
                 "threshold {threshold}"
             );
         }
+    }
+
+    #[test]
+    fn a_tied_score_goes_to_the_first_candidate() {
+        let title = normalize("Series Alpha");
+        let candidates = [
+            Candidate::new("Series Alpha", vec![ExternalId::AniList(1)]),
+            Candidate::new("Series Alpha", vec![ExternalId::AniList(2)]),
+        ];
+        let found = Matcher::default().best(&title, &candidates);
+        assert_eq!(found.map(|matched| matched.candidate), Some(0));
     }
 
     #[test]
