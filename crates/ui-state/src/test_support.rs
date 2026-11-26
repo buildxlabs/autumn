@@ -199,7 +199,7 @@ impl EngineServices for CannedServices {
         Box::pin(async move { Ok(media) })
     }
 
-    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+    fn resume_points(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
         let resume = self
             .library
             .as_ref()

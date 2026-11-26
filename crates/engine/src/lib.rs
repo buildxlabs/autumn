@@ -214,7 +214,7 @@ pub trait EngineServices: Send + Sync + 'static {
 
     /// Every saved resume position, newest first. The default is empty for
     /// fakes that don't exercise continuity.
-    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+    fn resume_points(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
 
@@ -720,7 +720,7 @@ impl EngineServices for Engine {
         Box::pin(async move { library.summaries().await.map_err(EngineError::from) })
     }
 
-    fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+    fn resume_points(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
         let db = self.db.clone();
         Box::pin(async move { db.continuity().all().await.map_err(EngineError::from) })
     }

@@ -421,7 +421,7 @@ impl HomeStore {
         self.library_task = Some(cx.spawn(async move |store, cx| {
             let files = call(cx, services.all_library_files()).await;
             let info = call(cx, services.library_media_info()).await;
-            let resume = call(cx, services.continuity()).await;
+            let resume = call(cx, services.resume_points()).await;
             let schedule = call(cx, services.airing_schedule()).await;
             update(&store, cx, |store| {
                 store.apply_library(&entries, files, info, resume, schedule);
@@ -1014,7 +1014,7 @@ mod tests {
             Box::pin(async move { if fails { Err(failure()) } else { Ok(info) } })
         }
 
-        fn continuity(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
+        fn resume_points(&self) -> BoxFuture<Result<Vec<ResumePoint>, EngineError>> {
             let resume = self.resume.clone();
             let fails = self.resume_fails.load(Ordering::SeqCst);
             Box::pin(async move { if fails { Err(failure()) } else { Ok(resume) } })
