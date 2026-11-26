@@ -7,7 +7,7 @@
 use std::{sync::Arc, time::Duration};
 
 use domain::{
-    AppEvent, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
+    AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
     PlaybackState,
 };
 use engine::{EngineServices, PlayRequest};
@@ -39,6 +39,9 @@ pub struct PlaybackStore {
     details: Option<PlaybackDetails>,
     chapters: Vec<PlaybackChapter>,
     current_chapter: Option<usize>,
+    auto_next: Option<AutoNext>,
+    /// The episode the last countdown offered, until it starts playing.
+    upcoming: Option<(MediaId, u32)>,
     error: Option<PlaybackError>,
     request: Option<Task<()>>,
     control: Option<Task<()>>,
@@ -67,6 +70,8 @@ impl PlaybackStore {
             details: None,
             chapters: Vec::new(),
             current_chapter: None,
+            auto_next: None,
+            upcoming: None,
             error: None,
             request: None,
             control: None,
@@ -101,6 +106,12 @@ impl PlaybackStore {
             .and_then(|chapter| chapter.kind)
     }
 
+    /// The next-episode countdown, while one runs.
+    #[must_use]
+    pub fn auto_next(&self) -> Option<AutoNext> {
+        self.auto_next
+    }
+
     /// The last failure, until it is dismissed or retried.
     #[must_use]
     pub fn error(&self) -> Option<&PlaybackError> {
@@ -117,7 +128,22 @@ impl PlaybackStore {
     pub fn apply(&mut self, event: AppEvent, cx: &mut Context<'_, Self>) {
         match event {
             AppEvent::PlaybackState(state) => {
+                // The engine moved on to the offered episode: the old
+                // episode title no longer applies.
+                if self.upcoming == Some((state.media, state.episode)) {
+                    self.upcoming = None;
+                    if let Some(details) = self.details.as_mut() {
+                        details.episode_title = None;
+                    }
+                }
                 self.state = Some(state);
+                cx.notify();
+            }
+            AppEvent::PlaybackAutoNext(next) => {
+                if let Some(next) = next {
+                    self.upcoming = Some((next.media, next.episode));
+                }
+                self.auto_next = next;
                 cx.notify();
             }
             AppEvent::PlaybackChapters { chapters, current } => {
@@ -130,6 +156,8 @@ impl PlaybackStore {
                 self.details = None;
                 self.chapters.clear();
                 self.current_chapter = None;
+                self.auto_next = None;
+                self.upcoming = None;
                 self.closed_task = None;
                 self.closed = unexpected;
                 if unexpected {
@@ -166,6 +194,7 @@ impl PlaybackStore {
     /// Starts `request`; a newer request cancels the older one's task.
     pub fn play(&mut self, request: PlayRequest, cx: &mut Context<'_, Self>) {
         self.details.clone_from(&request.details);
+        self.upcoming = None;
         self.closed = false;
         self.closed_task = None;
         let services = Arc::clone(&self.services);
@@ -247,6 +276,16 @@ impl PlaybackStore {
         self.command(cx, |services| services.skip_chapter());
     }
 
+    /// Plays the next episode without waiting for the countdown.
+    pub fn play_next_now(&mut self, cx: &mut Context<'_, Self>) {
+        self.command(cx, |services| services.play_next_now());
+    }
+
+    /// Cancels the next-episode countdown; the engine confirms with an event.
+    pub fn cancel_auto_next(&mut self, cx: &mut Context<'_, Self>) {
+        self.command(cx, |services| services.cancel_auto_next());
+    }
+
     /// Runs one HUD command, cancelling the previous one still in flight.
     fn command(
         &mut self,
@@ -301,8 +340,8 @@ mod tests {
     use std::time::Duration;
 
     use domain::{
-        AppEvent, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
-        PlaybackState, StreamSource,
+        AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl,
+        PlaybackDetails, PlaybackState, StreamSource,
     };
     use engine::PlayRequest;
     use gpui_kit::{AppContext, TestAppContext};
@@ -491,6 +530,68 @@ mod tests {
             });
         });
         assert!(store.read_with(cx, |store, _| store.chapters().is_empty()));
+    }
+
+    #[gpui_kit::test]
+    fn a_countdown_offers_play_now_and_cancel(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .unwrap();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+        let services = PlaybackServices::default();
+        let calls = services.clone();
+        let store = cx.new(|_| PlaybackStore::new(std::sync::Arc::new(services)));
+        let request = PlayRequest::new(MediaId::new(7), 3, StreamSource::local("/media/03.mkv"))
+            .with_details(PlaybackDetails::new(
+                "A show",
+                Some("The beginning".to_owned()),
+                None,
+            ));
+        let next = AutoNext::new(MediaId::new(7), 4, Duration::from_secs(5));
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.play(request, cx);
+                store.apply(AppEvent::PlaybackState(state()), cx);
+                store.apply(AppEvent::PlaybackAutoNext(Some(next)), cx);
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.auto_next()),
+            Some(next)
+        );
+
+        cx.update(|cx| store.update(cx, PlaybackStore::play_next_now));
+        cx.run_until_parked();
+        cx.update(|cx| store.update(cx, PlaybackStore::cancel_auto_next));
+        cx.run_until_parked();
+        assert_eq!(
+            calls.calls().get(1..),
+            Some([PlaybackCall::PlayNextNow, PlaybackCall::CancelAutoNext].as_slice())
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackAutoNext(None), cx);
+                store.apply(
+                    AppEvent::PlaybackState(PlaybackState {
+                        episode: 4,
+                        ..state()
+                    }),
+                    cx,
+                );
+            });
+        });
+        assert_eq!(store.read_with(cx, |store, _| store.auto_next()), None);
+        let details = store.read_with(cx, |store, _| store.details().cloned());
+        let details = details.expect("the media labels stay");
+        assert_eq!(details.media_title, "A show");
+        assert_eq!(
+            details.episode_title, None,
+            "the previous episode's title is not shown for the next one"
+        );
     }
 
     #[gpui_kit::test]

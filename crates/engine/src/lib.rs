@@ -169,6 +169,17 @@ pub trait EngineServices: Send + Sync + 'static {
         Box::pin(async { Ok(()) })
     }
 
+    /// Plays the next episode now, during its countdown. The default is a
+    /// no-op for fakes.
+    fn play_next_now(&self) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Cancels the next-episode countdown. The default is a no-op for fakes.
+    fn cancel_auto_next(&self) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// Starts one scan of the folders in the Library settings. A second call
     /// while a scan runs fails with [`ScanError::AlreadyScanning`]. The default
     /// is a no-op for fakes.
@@ -622,6 +633,28 @@ impl EngineServices for Engine {
         let playback = Arc::clone(&self.playback);
         Box::pin(async move {
             if playback.skip_chapter() {
+                Ok(())
+            } else {
+                Err(EngineError::NoSession)
+            }
+        })
+    }
+
+    fn play_next_now(&self) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            if playback.play_next_now() {
+                Ok(())
+            } else {
+                Err(EngineError::NoSession)
+            }
+        })
+    }
+
+    fn cancel_auto_next(&self) -> BoxFuture<Result<(), EngineError>> {
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            if playback.cancel_auto_next() {
                 Ok(())
             } else {
                 Err(EngineError::NoSession)

@@ -5,6 +5,11 @@
 //! the saved position and opens a player. Resume is sent only when the player
 //! reports `MediaReady`, never on the command line. Positions, pause changes
 //! and the end of a session are published as [`AppEvent`]s for the HUD.
+//!
+//! When an episode ends and the library has the next one, a countdown runs
+//! inside the same session loop (#131). At zero the next file replaces the
+//! current one in the same player, or in a fresh launch for players that
+//! cannot replace a file.
 
 use std::{
     ffi::OsStr,
@@ -22,7 +27,7 @@ use std::{
 
 use db::Db;
 use domain::{
-    AdvancedScores, AppEvent, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId,
+    AdvancedScores, AppEvent, AutoNext, ExternalId, FuzzyDate, ListEntry, ListStatus, MediaId,
     PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState, Score, StreamSource,
 };
 use flume::Sender;
@@ -37,13 +42,15 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
-use crate::{BoxFuture, chapters};
+use crate::{BoxFuture, chapters, library};
 
 /// How long a saved position is worth resuming.
 const MIN_RESUME: f64 = 30.0;
 /// The lowest and highest accepted watched threshold, in percent (OD-5).
 const THRESHOLD_MIN: u8 = 50;
 const THRESHOLD_MAX: u8 = 100;
+/// The library row kind of a regular, numbered episode.
+const REGULAR_EPISODE: &str = "episode";
 
 /// One request to play an episode.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +224,10 @@ pub trait PlaybackSession: Debug + Send + Sync {
 
     /// Asks the player to quit.
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>>;
+
+    /// Replaces the playing file with `path` in the same window. Returns
+    /// `Ok(false)` when this player needs a fresh launch instead.
+    fn load_file<'a>(&'a self, path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>>;
 }
 
 impl PlaybackSession for MpvSession {
@@ -247,6 +258,47 @@ impl PlaybackSession for MpvSession {
 
     fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
         Box::pin(async move { MpvSession::quit(self).await })
+    }
+
+    fn load_file<'a>(&'a self, path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>> {
+        Box::pin(async move {
+            MpvSession::load_file(self, &path.to_string_lossy())
+                .await
+                .map(|()| true)
+        })
+    }
+}
+
+/// A VLC or MPC-HC session: the next episode gets a fresh launch (#131).
+#[derive(Debug)]
+struct RelaunchSession(MpvSession);
+
+impl PlaybackSession for RelaunchSession {
+    fn next_event(&mut self) -> SessionFuture<'_, Option<PlayerEvent>> {
+        PlaybackSession::next_event(&mut self.0)
+    }
+
+    fn seek(&self, seconds: f64) -> SessionFuture<'_, Result<(), PlayerError>> {
+        PlaybackSession::seek(&self.0, seconds)
+    }
+
+    fn set_playback_state(
+        &self,
+        state: PlaybackControl,
+    ) -> SessionFuture<'_, Result<(), PlayerError>> {
+        PlaybackSession::set_playback_state(&self.0, state)
+    }
+
+    fn show_text<'a>(&'a self, text: &'a str) -> SessionFuture<'a, Result<(), PlayerError>> {
+        PlaybackSession::show_text(&self.0, text)
+    }
+
+    fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
+        PlaybackSession::quit(&self.0)
+    }
+
+    fn load_file<'a>(&'a self, _path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>> {
+        Box::pin(async { Ok(false) })
     }
 }
 
@@ -350,11 +402,13 @@ impl PlayerLauncher for MpvLauncher {
             };
             options.media = Some(launch.media);
             options.subtitles = launch.subtitles;
-            let session = match kind {
-                PlayerKind::Mpv => launch_mpv(&executable, &file, &options)?,
-                PlayerKind::Iina => launch_iina(&executable, &file, &options)?,
-                PlayerKind::Vlc => launch_vlc(&executable, &file, &options).await?,
-                PlayerKind::MpcHc => {
+            let boxed: Box<dyn PlaybackSession> = match kind {
+                PlayerKind::Mpv => Box::new(launch_mpv(&executable, &file, &options)?),
+                PlayerKind::Iina => Box::new(launch_iina(&executable, &file, &options)?),
+                PlayerKind::Vlc => Box::new(RelaunchSession(
+                    launch_vlc(&executable, &file, &options).await?,
+                )),
+                PlayerKind::MpcHc => Box::new(RelaunchSession(
                     launch_mpchc(
                         &executable,
                         &launch.mpchc_host,
@@ -362,13 +416,12 @@ impl PlayerLauncher for MpvLauncher {
                         &file,
                         &options,
                     )
-                    .await?
-                }
+                    .await?,
+                )),
                 _ => {
                     return Err(PlayerError::Endpoint("unsupported player kind".to_owned()));
                 }
             };
-            let boxed: Box<dyn PlaybackSession> = Box::new(session);
             Ok(boxed)
         })
     }
@@ -435,6 +488,10 @@ enum Control {
     Seek(f64),
     /// Skip the chapter currently playing.
     SkipChapter,
+    /// Play the next episode now instead of waiting for the countdown.
+    PlayNext,
+    /// Cancel the next-episode countdown.
+    CancelAutoNext,
 }
 
 /// The one slot a play request reserves before it awaits the launcher, so a
@@ -472,6 +529,19 @@ struct SessionState {
     watched: bool,
     /// EOF was seen, so a following player exit is not an unexpected quit.
     eof: bool,
+    /// Whether the episode is over and the next one was offered.
+    end: EpisodeEnd,
+}
+
+/// How far the episode is from offering the next one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EpisodeEnd {
+    /// Still playing.
+    Playing,
+    /// Over: EOF, or the last chapter, an ending, was skipped.
+    Finished,
+    /// The next episode was looked up once; it is not offered again.
+    Offered,
 }
 
 impl SessionState {
@@ -483,6 +553,14 @@ impl SessionState {
             paused: false,
             watched: false,
             eof: false,
+            end: EpisodeEnd::Playing,
+        }
+    }
+
+    /// Marks the episode over, unless the next one was already offered.
+    fn finish(&mut self) {
+        if self.end == EpisodeEnd::Playing {
+            self.end = EpisodeEnd::Finished;
         }
     }
 }
@@ -490,9 +568,40 @@ impl SessionState {
 /// The chapters of the running session and what was already skipped.
 #[derive(Debug, Default)]
 struct ChapterState {
+    /// The file's own chapters, kept so a new player list never replaces them.
+    container: Vec<PlaybackChapter>,
+    /// The list in use: the container's, else the player's.
     chapters: Vec<PlaybackChapter>,
     current: Option<usize>,
     skipped: Option<usize>,
+}
+
+impl ChapterState {
+    fn new(container: Vec<PlaybackChapter>) -> Self {
+        Self {
+            chapters: chapters::with_ends(container.clone(), None),
+            container,
+            ..Self::default()
+        }
+    }
+}
+
+/// The running next-episode countdown.
+#[derive(Debug)]
+struct Countdown {
+    next: PlayRequest,
+    remaining: u8,
+    tick: tokio::time::Interval,
+}
+
+/// Waits for the countdown's next step, or forever when none is running.
+async fn countdown_step(countdown: &mut Option<Countdown>) {
+    match countdown {
+        Some(countdown) => {
+            countdown.tick.tick().await;
+        }
+        None => std::future::pending().await,
+    }
 }
 
 /// Drives the one active session and publishes its state to the UI.
@@ -512,7 +621,11 @@ pub struct PlaybackManager {
     auto_sync: bool,
     skip_op_ed: bool,
     patterns: Arc<chapters::SkipPatterns>,
+    /// Countdown length in steps, `None` when auto-next is off.
+    auto_next: Option<u8>,
     save_interval: Duration,
+    /// One countdown step: a second, shorter in tests.
+    countdown_step: Duration,
     next_id: AtomicU64,
     /// Serializes play and stop so a stop during a launch is never lost.
     commands: Arc<tokio::sync::Mutex<()>>,
@@ -572,7 +685,11 @@ impl PlaybackManager {
                 &settings.opening_patterns,
                 &settings.ending_patterns,
             )),
+            auto_next: settings
+                .auto_next
+                .then(|| settings.auto_next_seconds.max(1)),
             save_interval: Duration::from_secs(5),
+            countdown_step: Duration::from_secs(1),
             next_id: AtomicU64::new(1),
             commands: Arc::new(tokio::sync::Mutex::new(())),
             current: Arc::new(Mutex::new(None)),
@@ -603,28 +720,11 @@ impl PlaybackManager {
             .continuity()
             .get(request.media, request.episode)
             .await?;
-        // Reading EBML metadata is blocking I/O, so it runs off the runtime's
-        // worker threads. A failure means no container chapters; the player's
-        // chapter-list still supplies them.
-        let mkv_path = path.clone();
-        let patterns = Arc::clone(&self.patterns);
-        let container_chapters = tokio::task::spawn_blocking(move || {
-            chapters::read_mkv(mkv_path.as_path(), &patterns).unwrap_or_default()
-        })
-        .await
-        .unwrap_or_default();
+        let container_chapters = self.container_chapters(path).await;
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (settle, settled) = oneshot::channel();
         *lock(&self.current) = Some(SessionControl::Launching { id, settled });
-        let launch = PlayerLaunch {
-            choice: self.player.clone(),
-            source: request.source.clone(),
-            subtitles: sidecar_subtitles(path),
-            cache_dir: self.cache_dir.clone(),
-            media: request.media,
-            mpchc_host: self.mpchc_host.clone(),
-            mpchc_port: self.mpchc_port,
-        };
+        let launch = self.player_launch(&request, path);
         let session = match self.launcher.launch(launch).await {
             Ok(session) => session,
             Err(error) => {
@@ -659,6 +759,33 @@ impl PlaybackManager {
                 .await;
         });
         Ok(())
+    }
+
+    /// The chapters of a local Matroska file. Reading EBML metadata is
+    /// blocking I/O, so it runs off the runtime's worker threads. A failure
+    /// means no container chapters; the player's chapter-list still supplies
+    /// them.
+    async fn container_chapters(&self, path: &Path) -> Vec<PlaybackChapter> {
+        let path = path.to_path_buf();
+        let patterns = Arc::clone(&self.patterns);
+        tokio::task::spawn_blocking(move || {
+            chapters::read_mkv(path.as_path(), &patterns).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
+    /// What the launcher needs to open `request`, whose local file is `path`.
+    fn player_launch(&self, request: &PlayRequest, path: &Path) -> PlayerLaunch {
+        PlayerLaunch {
+            choice: self.player.clone(),
+            source: request.source.clone(),
+            subtitles: sidecar_subtitles(path),
+            cache_dir: self.cache_dir.clone(),
+            media: request.media,
+            mpchc_host: self.mpchc_host.clone(),
+            mpchc_port: self.mpchc_port,
+        }
     }
 
     /// Stops the active session and waits for its final position to be saved.
@@ -708,6 +835,16 @@ impl PlaybackManager {
         self.send_control(Control::SkipChapter)
     }
 
+    /// Plays the next episode now, during its countdown.
+    pub fn play_next_now(&self) -> bool {
+        self.send_control(Control::PlayNext)
+    }
+
+    /// Cancels the next-episode countdown, leaving the player as it is.
+    pub fn cancel_auto_next(&self) -> bool {
+        self.send_control(Control::CancelAutoNext)
+    }
+
     /// Retries a failed progress sync for `episode`.
     pub async fn retry_sync(&self, media: MediaId, episode: u32) {
         self.sync_progress(media, episode).await;
@@ -721,7 +858,7 @@ impl PlaybackManager {
         self: &Arc<Self>,
         id: u64,
         mut session: Box<dyn PlaybackSession>,
-        request: PlayRequest,
+        mut request: PlayRequest,
         resume: Option<db::Continuity>,
         container_chapters: Vec<PlaybackChapter>,
         mut stopped: oneshot::Receiver<()>,
@@ -729,20 +866,19 @@ impl PlaybackManager {
         done: oneshot::Sender<()>,
     ) {
         let mut state = SessionState::new(resume);
-        let mut chapter_state = ChapterState {
-            chapters: chapters::with_ends(container_chapters, None),
-            ..ChapterState::default()
-        };
+        let mut chapter_state = ChapterState::new(container_chapters);
         self.publish_chapters(&chapter_state);
         let mut tick = tokio::time::interval(self.save_interval);
         tick.tick().await; // The first tick is immediate; nothing to save yet.
         let mut unexpected = false;
+        let mut countdown: Option<Countdown> = None;
         loop {
             enum Step {
                 Event(Option<PlayerEvent>),
                 Stop,
                 Control(Control),
                 Tick,
+                Countdown,
             }
             let step = tokio::select! {
                 event = session.next_event() => Step::Event(event),
@@ -754,32 +890,24 @@ impl PlaybackManager {
                 // it would resolve to `None` forever and spin on every pass.
                 Some(control) = controls.recv() => Step::Control(control),
                 _ = tick.tick() => Step::Tick,
+                () = countdown_step(&mut countdown) => Step::Countdown,
             };
-            match step {
+            let play_next = match step {
                 Step::Event(None) => {
                     unexpected = !state.eof;
                     break;
                 }
                 Step::Stop => break,
                 Step::Control(control) => {
-                    let result = match control {
-                        Control::SetPlaybackState(mode) => session.set_playback_state(mode).await,
-                        Control::Seek(seconds) => {
-                            if seconds.is_finite() && seconds >= 0.0 {
-                                state.position = seconds;
-                                self.publish(&state, &request);
-                            }
-                            session.seek(seconds).await
-                        }
-                        Control::SkipChapter => {
-                            self.skip_current(session.as_ref(), &mut state, &mut chapter_state)
-                                .await;
-                            Ok(())
-                        }
-                    };
-                    if let Err(error) = result {
-                        debug!(%error, "player rejected a HUD command");
-                    }
+                    self.control(
+                        session.as_ref(),
+                        &mut state,
+                        &mut chapter_state,
+                        &request,
+                        &mut countdown,
+                        control,
+                    )
+                    .await
                 }
                 Step::Event(Some(event)) => {
                     if matches!(event, PlayerEvent::Exited) {
@@ -797,15 +925,58 @@ impl PlaybackManager {
                     {
                         break;
                     }
+                    None
                 }
-                Step::Tick if !state.watched => self.save_position(&state, &request).await,
-                Step::Tick => {}
+                Step::Tick => {
+                    if !state.watched {
+                        self.save_position(&state, &request).await;
+                    }
+                    None
+                }
+                Step::Countdown => self.count_down(&mut countdown),
+            };
+            if state.end == EpisodeEnd::Finished {
+                state.end = EpisodeEnd::Offered;
+                countdown = self.offer_next(&request).await;
+            }
+            if let Some(next) = play_next
+                && !self
+                    .switch_to(
+                        &mut session,
+                        &mut state,
+                        &mut chapter_state,
+                        &mut request,
+                        next,
+                    )
+                    .await
+            {
+                unexpected = true;
+                break;
             }
         }
+        if self
+            .end_session(id, session.as_ref(), &state, &request)
+            .await
+        {
+            let _ = self.events.send(AppEvent::PlaybackStopped { unexpected });
+        }
+        let _ = done.send(());
+    }
+
+    /// Saves or clears the position, quits the player and releases the slot.
+    /// Returns whether this was still the current session, so the HUD
+    /// should hear that it ended.
+    async fn end_session(
+        &self,
+        id: u64,
+        session: &dyn PlaybackSession,
+        state: &SessionState,
+        request: &PlayRequest,
+    ) -> bool {
         if state.watched {
-            self.clear_position(&request).await;
+            self.clear_position(request).await;
         } else {
-            self.save_position(&state, &request).await;
+            self.save_position(state, request).await;
         }
         if let Err(error) = session.quit().await {
             debug!(%error, "player quit after the session ended");
@@ -815,9 +986,57 @@ impl PlaybackManager {
             .is_some_and(|control| control.id() == id);
         if is_current {
             lock(&self.current).take();
-            let _ = self.events.send(AppEvent::PlaybackStopped { unexpected });
         }
-        let _ = done.send(());
+        is_current
+    }
+
+    /// Runs one HUD command. Returns the next episode when Play now ended
+    /// its countdown.
+    async fn control(
+        &self,
+        session: &dyn PlaybackSession,
+        state: &mut SessionState,
+        chapter_state: &mut ChapterState,
+        request: &PlayRequest,
+        countdown: &mut Option<Countdown>,
+        control: Control,
+    ) -> Option<PlayRequest> {
+        let result = match control {
+            Control::SetPlaybackState(mode) => session.set_playback_state(mode).await,
+            Control::Seek(seconds) => {
+                if seconds.is_finite() && seconds >= 0.0 {
+                    state.position = seconds;
+                    self.publish(state, request);
+                }
+                session.seek(seconds).await
+            }
+            Control::SkipChapter => {
+                self.skip_current(session, state, chapter_state).await;
+                Ok(())
+            }
+            Control::PlayNext => return countdown.take().map(|countdown| countdown.next),
+            Control::CancelAutoNext => {
+                if countdown.take().is_some() {
+                    self.publish_auto_next(None);
+                }
+                Ok(())
+            }
+        };
+        if let Err(error) = result {
+            debug!(%error, "player rejected a HUD command");
+        }
+        None
+    }
+
+    /// One countdown step. Returns the next episode when it reaches zero.
+    fn count_down(&self, countdown: &mut Option<Countdown>) -> Option<PlayRequest> {
+        let running = countdown.as_mut()?;
+        running.remaining = running.remaining.saturating_sub(1);
+        if running.remaining == 0 {
+            return countdown.take().map(|countdown| countdown.next);
+        }
+        self.publish_auto_next(Some(running));
+        None
     }
 
     /// Returns `false` when the session is over.
@@ -863,6 +1082,7 @@ impl PlaybackManager {
             }
             PlayerEvent::Eof => {
                 state.eof = true;
+                state.finish();
                 self.mark_watched(state, request).await;
             }
             PlayerEvent::Exited => return false,
@@ -889,10 +1109,16 @@ impl PlaybackManager {
         position: f64,
         player_list: &[player::Chapter],
     ) {
-        let container = std::mem::take(&mut chapter_state.chapters);
         let from_player = chapters::from_player(player_list, &self.patterns);
-        chapter_state.chapters =
-            chapters::with_ends(chapters::prefer_mkv(container, from_player), None);
+        let chosen = chapters::with_ends(
+            chapters::prefer_mkv(chapter_state.container.clone(), from_player),
+            None,
+        );
+        // A different list makes the skipped index point at another chapter.
+        if chosen != chapter_state.chapters {
+            chapter_state.skipped = None;
+        }
+        chapter_state.chapters = chosen;
         chapter_state.current = chapter_current(&chapter_state.chapters, position);
     }
 
@@ -929,9 +1155,14 @@ impl PlaybackManager {
         // Mark the attempt even when the seek fails: otherwise the 4 Hz
         // position events would retry it continuously.
         chapter_state.skipped = Some(index);
+        let last = chapter_state.chapters.get(index + 1).is_none();
         match session.seek(to.as_secs_f64()).await {
             Ok(()) => {
                 state.position = to.as_secs_f64();
+                // Nothing follows a skipped ending: the episode is over.
+                if last && kind == domain::ChapterKind::Ending {
+                    state.finish();
+                }
                 let message = match kind {
                     domain::ChapterKind::Opening => "Skipped opening",
                     domain::ChapterKind::Ending => "Skipped ending",
@@ -943,6 +1174,119 @@ impl PlaybackManager {
             }
             Err(error) => debug!(%error, "could not skip the chapter"),
         }
+    }
+
+    /// Looks up the next regular episode in the library and, when auto-next
+    /// is on and it exists, starts its countdown.
+    async fn offer_next(&self, request: &PlayRequest) -> Option<Countdown> {
+        let seconds = self.auto_next?;
+        let next = self.next_episode(request).await?;
+        let step = self.countdown_step;
+        let mut countdown = Countdown {
+            next,
+            remaining: seconds,
+            tick: tokio::time::interval_at(tokio::time::Instant::now() + step, step),
+        };
+        countdown
+            .tick
+            .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        self.publish_auto_next(Some(&countdown));
+        Some(countdown)
+    }
+
+    /// The library file of the episode after `request`, as a play request
+    /// that keeps the media's HUD labels.
+    async fn next_episode(&self, request: &PlayRequest) -> Option<PlayRequest> {
+        let episode = request.episode.checked_add(1)?;
+        let files = match library::files_for(&self.db, request.media).await {
+            Ok(files) => files,
+            Err(error) => {
+                warn!(%error, "could not look up the next episode");
+                return None;
+            }
+        };
+        let file = files.into_iter().find(|file| {
+            file.kind == REGULAR_EPISODE
+                && file.episode == Some(episode)
+                && !file.ignored
+                && !file.shelved
+        })?;
+        let details = request.details.as_ref().map(|details| {
+            PlaybackDetails::new(details.media_title.clone(), None, details.poster.clone())
+        });
+        Some(PlayRequest {
+            media: request.media,
+            episode,
+            source: StreamSource::local(file.path),
+            details,
+        })
+    }
+
+    fn publish_auto_next(&self, countdown: Option<&Countdown>) {
+        let next = countdown.map(|countdown| {
+            AutoNext::new(
+                countdown.next.media,
+                countdown.next.episode,
+                Duration::from_secs(u64::from(countdown.remaining)),
+            )
+        });
+        let _ = self.events.send(AppEvent::PlaybackAutoNext(next));
+    }
+
+    /// Moves the session to `next`: the player replaces its file when it
+    /// can, otherwise it is relaunched. Returns `false` when no player is
+    /// left to drive.
+    async fn switch_to(
+        &self,
+        session: &mut Box<dyn PlaybackSession>,
+        state: &mut SessionState,
+        chapter_state: &mut ChapterState,
+        request: &mut PlayRequest,
+        next: PlayRequest,
+    ) -> bool {
+        self.publish_auto_next(None);
+        self.mark_watched(state, request).await;
+        let StreamSource::Local { path } = &next.source else {
+            return false;
+        };
+        let resume = match self.db.continuity().get(next.media, next.episode).await {
+            Ok(resume) => resume,
+            Err(error) => {
+                warn!(%error, "could not read the next episode's position");
+                None
+            }
+        };
+        let container_chapters = self.container_chapters(path).await;
+        let replaced = match session.load_file(path).await {
+            Ok(replaced) => replaced,
+            Err(error) => {
+                debug!(%error, "the player could not replace its file; relaunching");
+                false
+            }
+        };
+        // mpv's keep-open pauses at EOF, and the pause carries over to the
+        // replaced file.
+        if replaced && let Err(error) = session.set_playback_state(PlaybackControl::Resume).await {
+            debug!(%error, "could not resume the next episode");
+        }
+        if !replaced {
+            if let Err(error) = session.quit().await {
+                debug!(%error, "player quit before the next episode");
+            }
+            match self.launcher.launch(self.player_launch(&next, path)).await {
+                Ok(fresh) => *session = fresh,
+                Err(error) => {
+                    warn!(%error, "could not launch the next episode");
+                    return false;
+                }
+            }
+        }
+        *state = SessionState::new(resume);
+        *chapter_state = ChapterState::new(container_chapters);
+        *request = next;
+        self.publish_chapters(chapter_state);
+        self.publish(state, request);
+        true
     }
 
     /// Auto-skip only when the position is inside a matching chapter.
@@ -1172,7 +1516,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use domain::{ChapterKind, ExternalId, ListStatus, MediaKind};
     use futures::{SinkExt, StreamExt, channel::mpsc};
@@ -1254,6 +1598,12 @@ mod tests {
         /// Keeps each session's event sender alive until its test ends.
         senders: Arc<Mutex<Vec<mpsc::UnboundedSender<PlayerEvent>>>>,
         messages: Arc<Mutex<Vec<String>>>,
+        /// Files replaced in the same window, as with mpv's `loadfile`.
+        loads: Arc<Mutex<Vec<PathBuf>>>,
+        /// Acts like VLC or MPC-HC, which need a fresh launch per file.
+        relaunch: Arc<AtomicBool>,
+        /// Makes every seek fail, as a player that rejects the command.
+        fail_seeks: Arc<AtomicBool>,
     }
 
     impl FakeLauncher {
@@ -1266,8 +1616,19 @@ mod tests {
                 pauses: Arc::clone(&self.pauses),
                 messages: Arc::clone(&self.messages),
                 quits: Arc::clone(&self.quits),
+                loads: Arc::clone(&self.loads),
+                relaunch: Arc::clone(&self.relaunch),
+                fail_seeks: Arc::clone(&self.fail_seeks),
             };
             (Box::new(session), tx)
+        }
+
+        fn loads(&self) -> Vec<PathBuf> {
+            lock(&self.loads).clone()
+        }
+
+        fn launches(&self) -> usize {
+            self.launches.load(Ordering::SeqCst)
         }
 
         fn seeks(&self) -> Vec<f64> {
@@ -1313,6 +1674,9 @@ mod tests {
         pauses: Arc<Mutex<Vec<PlaybackControl>>>,
         messages: Arc<Mutex<Vec<String>>>,
         quits: Arc<AtomicUsize>,
+        loads: Arc<Mutex<Vec<PathBuf>>>,
+        relaunch: Arc<AtomicBool>,
+        fail_seeks: Arc<AtomicBool>,
     }
 
     impl PlaybackSession for FakeSession {
@@ -1322,9 +1686,14 @@ mod tests {
 
         fn seek(&self, seconds: f64) -> SessionFuture<'_, Result<(), PlayerError>> {
             let seeks = Arc::clone(&self.seeks);
+            let fail = self.fail_seeks.load(Ordering::SeqCst);
             Box::pin(async move {
                 lock(&seeks).push(seconds);
-                Ok(())
+                if fail {
+                    Err(PlayerError::Endpoint("seek rejected".to_owned()))
+                } else {
+                    Ok(())
+                }
             })
         }
 
@@ -1355,6 +1724,14 @@ mod tests {
                 Ok(())
             })
         }
+
+        fn load_file<'a>(&'a self, path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>> {
+            let relaunch = self.relaunch.load(Ordering::SeqCst);
+            if !relaunch {
+                lock(&self.loads).push(path.to_path_buf());
+            }
+            Box::pin(async move { Ok(!relaunch) })
+        }
     }
 
     struct Fixture {
@@ -1371,6 +1748,56 @@ mod tests {
     impl Fixture {
         async fn new(settings: PlaybackSettings) -> Self {
             Self::with_interval(settings, Duration::from_secs(5)).await
+        }
+
+        /// A fixture whose countdown steps every 20 ms instead of every second.
+        async fn with_fast_countdown(settings: PlaybackSettings) -> Self {
+            let mut fixture = Self::new(settings).await;
+            Arc::get_mut(&mut fixture.manager)
+                .expect("no session holds the manager yet")
+                .countdown_step = Duration::from_millis(20);
+            fixture
+        }
+
+        /// Puts one regular episode file for `media` in the library.
+        async fn add_episode(&self, media: MediaId, episode: u32, path: &str) {
+            let mut files = self.db.local_file().all().await.unwrap();
+            files.push(db::LocalFile {
+                path: PathBuf::from(path),
+                size: 0,
+                modified: 0,
+                title: None,
+                group: None,
+                season: None,
+                episode: Some(episode),
+                kind: "episode".to_owned(),
+                media_id: Some(media),
+                confidence: Some(1.0),
+                locked: false,
+                ignored: false,
+                filler: false,
+                shelved: false,
+            });
+            self.db.local_file().sync(&files).await.unwrap();
+        }
+
+        /// The countdowns published so far, `None` for a cancelled one.
+        fn countdowns(&self) -> Vec<Option<AutoNext>> {
+            self.events
+                .try_iter()
+                .filter_map(|event| match event {
+                    AppEvent::PlaybackAutoNext(next) => Some(next),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        /// The HUD-command sender of the session started last.
+        fn controls(&self) -> tokio::sync::mpsc::UnboundedSender<Control> {
+            lock(&self.control_senders)
+                .last()
+                .cloned()
+                .expect("a session was driven")
         }
 
         async fn with_interval(settings: PlaybackSettings, interval: Duration) -> Self {
@@ -2122,6 +2549,320 @@ mod tests {
         fixture.manager.stop().await;
     }
 
+    /// Polls `done` until it holds, failing the test after two seconds.
+    async fn wait_until(what: &str, done: impl Fn() -> bool) {
+        let waited = tokio::time::timeout(Duration::from_secs(2), async {
+            while !done() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await;
+        assert!(waited.is_ok(), "timed out waiting for {what}");
+    }
+
+    /// A fixture with episodes 1 and 2 of one media in the library.
+    async fn two_episode_library(settings: PlaybackSettings) -> (Fixture, MediaId) {
+        // Sync would look the episode count up on AniList; keep tests offline.
+        let settings = PlaybackSettings {
+            auto_sync_progress: false,
+            ..settings
+        };
+        let fixture = Fixture::with_fast_countdown(settings).await;
+        let media = fixture.media(1).await;
+        fixture.add_episode(media, 1, "/media/show/01.mkv").await;
+        fixture.add_episode(media, 2, "/media/show/02.mkv").await;
+        (fixture, media)
+    }
+
+    fn episode_request(media: MediaId, episode: u32) -> PlayRequest {
+        PlayRequest::new(
+            media,
+            episode,
+            StreamSource::local(format!("/media/show/{episode:02}.mkv")),
+        )
+        .with_details(PlaybackDetails::new(
+            "A show",
+            Some(format!("Episode {episode}")),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn eof_counts_down_and_loads_the_next_episode_in_the_same_player() {
+        let (fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        wait_until("the next file to load and play", || {
+            !fixture.launcher.loads().is_empty() && !fixture.launcher.pauses().is_empty()
+        })
+        .await;
+
+        assert_eq!(
+            fixture.launcher.loads(),
+            [PathBuf::from("/media/show/02.mkv")]
+        );
+        assert_eq!(fixture.launcher.launches(), 0, "the same player was reused");
+        assert_eq!(
+            fixture.launcher.pauses(),
+            [PlaybackControl::Resume],
+            "keep-open paused at EOF; the next episode plays"
+        );
+        let countdowns = fixture.countdowns();
+        let seconds: Vec<u64> = countdowns
+            .iter()
+            .flatten()
+            .map(|next| next.remaining.as_secs())
+            .collect();
+        assert_eq!(seconds, [5, 4, 3, 2, 1], "a five-step countdown");
+        assert!(
+            countdowns
+                .iter()
+                .flatten()
+                .all(|next| next.media == media && next.episode == 2)
+        );
+        assert_eq!(
+            countdowns.last(),
+            Some(&None),
+            "the HUD countdown is cleared"
+        );
+
+        events
+            .send(PlayerEvent::Position { seconds: 1.0 })
+            .await
+            .unwrap();
+        wait_until("a position for the next episode", || {
+            fixture.states().iter().any(|state| state.episode == 2)
+        })
+        .await;
+        finish(events, stop, done).await;
+    }
+
+    #[tokio::test]
+    async fn cancelling_the_countdown_stops_the_load() {
+        let (fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        wait_until("the countdown to start", || {
+            fixture
+                .events
+                .try_iter()
+                .any(|event| matches!(event, AppEvent::PlaybackAutoNext(Some(_))))
+        })
+        .await;
+        fixture.controls().send(Control::CancelAutoNext).unwrap();
+        wait_until("the countdown to be cleared", || {
+            fixture
+                .events
+                .try_iter()
+                .any(|event| matches!(event, AppEvent::PlaybackAutoNext(None)))
+        })
+        .await;
+        // Five 20 ms steps would have finished by now.
+        tokio::time::sleep(Duration::from_millis(250)).await;
+
+        assert!(fixture.launcher.loads().is_empty(), "nothing was loaded");
+        assert_eq!(fixture.launcher.launches(), 0, "nothing was launched");
+        finish(events, stop, done).await;
+    }
+
+    #[tokio::test]
+    async fn no_countdown_on_the_last_library_episode() {
+        let (fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 2));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        finish(events, stop, done).await;
+
+        assert!(
+            fixture.countdowns().is_empty(),
+            "no next episode, no countdown"
+        );
+        assert!(fixture.launcher.loads().is_empty(), "nothing was loaded");
+    }
+
+    #[tokio::test]
+    async fn auto_next_off_shows_no_countdown() {
+        let settings = PlaybackSettings {
+            auto_next: false,
+            ..PlaybackSettings::default()
+        };
+        let (fixture, media) = two_episode_library(settings).await;
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        finish(events, stop, done).await;
+
+        assert!(fixture.countdowns().is_empty(), "auto-next is off");
+        assert!(fixture.launcher.loads().is_empty(), "nothing was loaded");
+    }
+
+    #[tokio::test]
+    async fn play_now_skips_the_rest_of_the_countdown() {
+        let (mut fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        Arc::get_mut(&mut fixture.manager)
+            .expect("no session holds the manager yet")
+            .countdown_step = Duration::from_secs(60);
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        wait_until("the countdown to start", || {
+            fixture
+                .events
+                .try_iter()
+                .any(|event| matches!(event, AppEvent::PlaybackAutoNext(Some(_))))
+        })
+        .await;
+        fixture.controls().send(Control::PlayNext).unwrap();
+        wait_until("the next file to load", || {
+            !fixture.launcher.loads().is_empty()
+        })
+        .await;
+
+        assert_eq!(
+            fixture.launcher.loads(),
+            [PathBuf::from("/media/show/02.mkv")]
+        );
+        finish(events, stop, done).await;
+    }
+
+    #[tokio::test]
+    async fn players_without_loadfile_relaunch_for_the_next_episode() {
+        let (fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        fixture.launcher.relaunch.store(true, Ordering::SeqCst);
+        let (mut events, stop, done) = fixture.drive(None, &episode_request(media, 1));
+
+        events.send(PlayerEvent::Eof).await.unwrap();
+        wait_until("a fresh launch", || fixture.launcher.launches() == 1).await;
+
+        assert!(
+            fixture.launcher.quits.load(Ordering::SeqCst) >= 1,
+            "the old player quit first"
+        );
+        assert!(
+            fixture.launcher.loads().is_empty(),
+            "the window was not reused"
+        );
+        // The first player's events went with it; end the relaunched one.
+        drop(events);
+        let fresh = lock(&fixture.launcher.senders).last().cloned();
+        finish(fresh.expect("the relaunched player"), stop, done).await;
+    }
+
+    #[tokio::test]
+    async fn skipping_a_final_ending_starts_the_countdown() {
+        let (fixture, media) = two_episode_library(PlaybackSettings::default()).await;
+        let ending = PlaybackChapter::new(
+            Some("Ending".to_owned()),
+            Duration::from_secs(200),
+            Some(Duration::from_secs(240)),
+            Some(ChapterKind::Ending),
+        );
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &episode_request(media, 1), vec![ending]);
+
+        events
+            .send(PlayerEvent::Position { seconds: 201.0 })
+            .await
+            .unwrap();
+        wait_until("the next file to load", || {
+            !fixture.launcher.loads().is_empty()
+        })
+        .await;
+
+        assert_eq!(fixture.launcher.seeks(), [240.0], "the ending was skipped");
+        finish(events, stop, done).await;
+    }
+
+    #[tokio::test]
+    async fn the_current_chapter_follows_a_later_position() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &request(media, 1), vec![opening_chapter()]);
+
+        // The list arrives at 0 s, before the opening; mpv's index is wrong.
+        events
+            .send(PlayerEvent::Chapters {
+                current: Some(3),
+                list: Vec::new(),
+            })
+            .await
+            .unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 60.0 })
+            .await
+            .unwrap();
+        finish(events, stop, done).await;
+
+        assert_eq!(
+            fixture.launcher.seeks(),
+            [90.0],
+            "the position, not mpv's index, found the opening"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_skip_seek_is_tried_once() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        fixture.launcher.fail_seeks.store(true, Ordering::SeqCst);
+        let media = fixture.media(1).await;
+        let (mut events, stop, done) =
+            fixture.drive_with_chapters(None, &request(media, 1), vec![opening_chapter()]);
+
+        for seconds in [12.0, 12.25, 12.5] {
+            events
+                .send(PlayerEvent::Position { seconds })
+                .await
+                .unwrap();
+        }
+        finish(events, stop, done).await;
+
+        assert_eq!(fixture.launcher.seeks(), [90.0], "no retry at 4 Hz");
+        assert!(
+            lock(&fixture.launcher.messages).is_empty(),
+            "no OSD on failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_replaced_chapter_list_can_be_skipped_again() {
+        let fixture = Fixture::new(PlaybackSettings::default()).await;
+        let media = fixture.media(1).await;
+        let (mut events, stop, done) = fixture.drive(None, &request(media, 1));
+        let opening_at = |start: f64| PlayerEvent::Chapters {
+            current: Some(0),
+            list: vec![
+                player::Chapter {
+                    title: Some("Opening".to_owned()),
+                    start,
+                },
+                player::Chapter {
+                    title: Some("Part A".to_owned()),
+                    start: start + 90.0,
+                },
+            ],
+        };
+
+        events.send(opening_at(0.0)).await.unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 1.0 })
+            .await
+            .unwrap();
+        // A different list, as after a file change: index 0 is a new opening.
+        events.send(opening_at(100.0)).await.unwrap();
+        events
+            .send(PlayerEvent::Position { seconds: 101.0 })
+            .await
+            .unwrap();
+        finish(events, stop, done).await;
+
+        assert_eq!(fixture.launcher.seeks(), [90.0, 190.0]);
+    }
+
     #[test]
     fn sidecar_subtitles_come_from_the_video_folder_and_subs() {
         let dir = tempfile::tempdir().unwrap();
@@ -2180,6 +2921,10 @@ mod tests {
 
         fn quit(&self) -> SessionFuture<'_, Result<(), PlayerError>> {
             Box::pin(async move { self.inner.quit().await })
+        }
+
+        fn load_file<'a>(&'a self, path: &'a Path) -> SessionFuture<'a, Result<bool, PlayerError>> {
+            PlaybackSession::load_file(&self.inner, path)
         }
     }
 

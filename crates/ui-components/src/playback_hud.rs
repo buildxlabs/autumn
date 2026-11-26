@@ -38,6 +38,9 @@ const SEEK_TRACK: &str = "playback-hud-seek-track";
 const SEEK_FILL: &str = "playback-hud-seek-fill";
 const PLAY_PAUSE: &str = "playback-hud-play-pause";
 const SKIP: &str = "playback-hud-skip";
+const NEXT_COUNTDOWN: &str = "playback-hud-next-countdown";
+const PLAY_NEXT: &str = "playback-hud-play-next";
+const CANCEL_NEXT: &str = "playback-hud-cancel-next";
 
 /// A chapter the HUD can offer to skip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +57,15 @@ pub enum SkipKind {
 pub struct ChapterMark {
     /// Where the chapter starts, from the beginning of the file.
     pub start: Duration,
+}
+
+/// The countdown to the next episode, shown after an episode ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutoNextView {
+    /// The episode that plays at zero.
+    pub episode: u32,
+    /// Time left before it plays.
+    pub remaining: Duration,
 }
 
 /// Everything the HUD draws, supplied by the store and the shell.
@@ -79,6 +91,8 @@ pub struct PlaybackHudView {
     pub chapters: Vec<ChapterMark>,
     /// Whether to offer Skip Opening or Skip Ending.
     pub skip: Option<SkipKind>,
+    /// The next-episode countdown, while one runs.
+    pub auto_next: Option<AutoNextView>,
 }
 
 /// One button callback: the screen updates its store from it.
@@ -95,6 +109,8 @@ pub struct PlaybackHudActions {
     skip_forward: Option<HudCallback>,
     stop: Option<HudCallback>,
     skip: Option<HudCallback>,
+    play_next: Option<HudCallback>,
+    cancel_auto_next: Option<HudCallback>,
 }
 
 impl std::fmt::Debug for PlaybackHudActions {
@@ -106,6 +122,8 @@ impl std::fmt::Debug for PlaybackHudActions {
             .field("skip_forward", &self.skip_forward.is_some())
             .field("stop", &self.stop.is_some())
             .field("skip", &self.skip.is_some())
+            .field("play_next", &self.play_next.is_some())
+            .field("cancel_auto_next", &self.cancel_auto_next.is_some())
             .finish()
     }
 }
@@ -156,6 +174,20 @@ impl PlaybackHudActions {
     #[must_use]
     pub fn on_skip(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.skip = Some(Rc::new(action));
+        self
+    }
+
+    /// Called when Play now is pressed during the next-episode countdown.
+    #[must_use]
+    pub fn on_play_next(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.play_next = Some(Rc::new(action));
+        self
+    }
+
+    /// Called when Cancel is pressed during the next-episode countdown.
+    #[must_use]
+    pub fn on_cancel_auto_next(mut self, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.cancel_auto_next = Some(Rc::new(action));
         self
     }
 }
@@ -333,6 +365,32 @@ impl RenderOnce for PlaybackHud {
                     .text_color(colors.muted_foreground)
                     .child(Label::new(self.view.player.clone())),
             )
+            .children(self.view.auto_next.map(|next| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .debug_selector(|| NEXT_COUNTDOWN.into())
+                            .text_xs()
+                            .child(Label::new(format!(
+                                "EP {} in {}s",
+                                next.episode,
+                                next.remaining.as_secs()
+                            ))),
+                    )
+                    .child(text_button(
+                        PLAY_NEXT,
+                        "Play now",
+                        self.actions.play_next.as_ref(),
+                    ))
+                    .child(text_button(
+                        CANCEL_NEXT,
+                        "Cancel",
+                        self.actions.cancel_auto_next.as_ref(),
+                    ))
+            }))
             .children(self.view.skip.map(|kind| {
                 let label = match kind {
                     SkipKind::Opening => "Skip Opening",
@@ -500,7 +558,8 @@ mod tests {
     };
 
     use super::{
-        ChapterMark, PlaybackHud, PlaybackHudActions, PlaybackHudView, SEEK_TRACK, SKIP, SkipKind,
+        AutoNextView, CANCEL_NEXT, ChapterMark, PLAY_NEXT, PlaybackHud, PlaybackHudActions,
+        PlaybackHudView, SEEK_TRACK, SKIP, SkipKind,
     };
 
     struct HudTest {
@@ -592,6 +651,31 @@ mod tests {
 
         cx.update(|window, app| window.click(SKIP, app));
         assert_eq!(*skips.borrow(), 1, "the skip callback fired");
+    }
+
+    #[gpui_kit::test]
+    fn the_countdown_offers_play_now_and_cancel(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let pressed = Rc::new(RefCell::new(Vec::new()));
+        let (now, cancel) = (Rc::clone(&pressed), Rc::clone(&pressed));
+        let actions = PlaybackHudActions::new()
+            .on_play_next(move |_, _| now.borrow_mut().push("play now"))
+            .on_cancel_auto_next(move |_, _| cancel.borrow_mut().push("cancel"));
+        let mut view = view();
+        view.auto_next = Some(AutoNextView {
+            episode: 4,
+            remaining: Duration::from_secs(5),
+        });
+        let (_, cx) = cx.add_window_view(move |_, _| HudTest { view, actions });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        assert!(
+            has_text(cx, "EP 4 in 5s"),
+            "the countdown names the episode"
+        );
+        cx.update(|window, app| window.click(PLAY_NEXT, app));
+        cx.update(|window, app| window.click(CANCEL_NEXT, app));
+        assert_eq!(*pressed.borrow(), ["play now", "cancel"]);
     }
 
     #[gpui_kit::test]

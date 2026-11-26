@@ -21,9 +21,9 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, ChapterMark, LruImageCache, PLAYBACK_HUD_HEIGHT, POSTER_IMAGE_CAPACITY,
-    PlaybackHud, PlaybackHudActions, PlaybackHudView, PosterGrid, RAIL_WIDTH, Rail, RailExpansion,
-    RailItem, SkipKind,
+    ACCOUNT_ID, AutoNextView, ChapterMark, LruImageCache, PLAYBACK_HUD_HEIGHT,
+    POSTER_IMAGE_CAPACITY, PlaybackHud, PlaybackHudActions, PlaybackHudView, PosterGrid,
+    RAIL_WIDTH, Rail, RailExpansion, RailItem, SkipKind,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -992,13 +992,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Option<gpui_kit::AnyElement> {
-        let (state, details, chapters, skip, closed) = {
+        let (state, details, chapters, skip, auto_next, closed) = {
             let playback = self.playback_store.read(cx);
             (
                 playback.state(),
                 playback.details().cloned(),
                 playback.chapters().to_vec(),
                 playback.skip_kind(),
+                playback.auto_next(),
                 playback.closed(),
             )
         };
@@ -1052,6 +1053,10 @@ impl AppShell {
                 domain::ChapterKind::Ending => SkipKind::Ending,
                 _ => SkipKind::Opening,
             }),
+            auto_next: auto_next.map(|next| AutoNextView {
+                episode: next.episode,
+                remaining: next.remaining,
+            }),
         };
         let store = self.playback_store.clone();
         let actions = PlaybackHudActions::new()
@@ -1075,7 +1080,15 @@ impl AppShell {
                 let store = store.clone();
                 move |_, cx| store.update(cx, PlaybackStore::stop)
             })
-            .on_skip(move |_, cx| store.update(cx, PlaybackStore::skip_chapter));
+            .on_skip({
+                let store = store.clone();
+                move |_, cx| store.update(cx, PlaybackStore::skip_chapter)
+            })
+            .on_play_next({
+                let store = store.clone();
+                move |_, cx| store.update(cx, PlaybackStore::play_next_now)
+            })
+            .on_cancel_auto_next(move |_, cx| store.update(cx, PlaybackStore::cancel_auto_next));
 
         Some(
             div()
