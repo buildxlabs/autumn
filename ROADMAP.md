@@ -4,7 +4,7 @@ The master plan for Autumn: decisions, stack, phases with exit criteria, and a c
 
 Scope: **native desktop only** (macOS, Linux, Windows). No web app, no server mode, no mobile.
 
-Last reviewed: 2026-11-25.
+Last reviewed: 2026-11-26.
 
 **Manga is not planned for now.** The former Phase 7 sits in the [Backlog](#backlog-ideas-from-the-other-references); the app is anime-only. Phase numbers are unchanged.
 
@@ -94,11 +94,11 @@ Phases 2 and 3 also overlap: the remaining Phase 2 screens are built while the P
 - [x] `release-parser` with a corpus of 500+ real release names. `mkv` (chapters, tracks, fonts).
 - [x] `library`: multi-folder scan, matcher with threshold, lock/unlock, specials/NCOP/NCED split, filler marking, watcher + auto-scan, shelving, scan summaries.
 - [x] `player`: detection on all OSes, supervised detached spawn, fresh IPC path per launch, mpv + IINA IPC, VLC, MPC-HC.
-- [ ] `engine` v1: playback manager, continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next with countdown, OP/ED chapter skip. (Core landed in #172; auto-next with countdown and OP/ED chapter skip remain in #131.)
-- [ ] Screens: Entry Library tab (episode cards, range pagination, missing banner, bulk actions), Scan Summaries, Library Explorer (tree), Playback HUD. Home widgets that depend on the library.
-- [ ] First-run onboarding: library path, account choice, player choice.
-- [ ] Hide manga from the UI (rail item, `/manga`, Trending Manga carousel); keep the manga data model so AniList manga list entries survive sync and transfer.
-- **Exit:** point at a folder of fansub releases. Matched shows appear, play in mpv, resume where they stopped, and progress updates on the active platform at the threshold.
+- [x] `engine` v1: playback manager, continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next with countdown, OP/ED chapter skip. An end-to-end engine test covers scan → play → resume → watched → Local progress, and shelving.
+- [x] Screens: Entry Library tab (episode cards, range pagination, missing banner, bulk actions), Scan Summaries, Library Explorer (tree), Playback HUD. Home widgets that depend on the library.
+- [x] First-run onboarding: library path, account choice, player choice.
+- [x] Hide manga from the UI (rail item, `/manga`, Trending Manga carousel); keep the manga data model so AniList manga list entries survive sync and transfer.
+- **Exit:** point at a folder of fansub releases. Matched shows appear, play in mpv, resume where they stopped, and progress updates on the active platform at the threshold. (Waits on the real-hardware run in #139.)
 
 ### Phase 3: Torrent streaming and search
 
@@ -166,7 +166,7 @@ Every feature from the research documents and the reference code is listed here 
 | Area                | Feature                                                                                                                                               | Phase                                              |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Library             | Multi-directory library, fuzzy scanner without naming rules                                                                                           | 2                                                  |
-|                     | Release filename parser; configurable matching threshold                                                                                              | 2                                                  |
+|                     | Release filename parser; one matcher with a configurable threshold (default 0.5), no legacy fallback (OD-4)                                           | 2                                                  |
 |                     | File watcher + auto-scan; shelving on drive disconnect                                                                                                | 2                                                  |
 |                     | Library explorer (tree, lock/unlock, re-match, rename, delete); bulk file actions                                                                     | 2                                                  |
 |                     | Scan summaries with confidence + unmatched list                                                                                                       | 2                                                  |
