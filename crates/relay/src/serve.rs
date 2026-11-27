@@ -118,7 +118,7 @@ pub(crate) async fn stream(State(state): State<Arc<RelayState>>, request: Reques
     let body = StreamBody {
         reader,
         remaining: count,
-        stall: Box::pin(sleep(STALL_AFTER)),
+        stall: None,
         stall_sent: false,
         buffering: state.buffering.clone(),
         token,
@@ -233,7 +233,9 @@ impl Reader {
 struct StreamBody {
     reader: Reader,
     remaining: u64,
-    stall: Pin<Box<Sleep>>,
+    /// Armed when a read first returns `Pending`, cleared when bytes arrive,
+    /// so only time spent waiting on the reader counts as a stall.
+    stall: Option<Pin<Box<Sleep>>>,
     stall_sent: bool,
     buffering: broadcast::Sender<BufferingEvent>,
     token: StreamToken,
@@ -257,12 +259,6 @@ impl Stream for StreamBody {
             this.done = true;
             return Poll::Ready(None);
         }
-        if !this.stall_sent && this.stall.as_mut().poll(cx).is_ready() {
-            this.stall_sent = true;
-            let _ = this
-                .buffering
-                .send(BufferingEvent::Stalled { token: this.token });
-        }
         if this.remaining == 0 {
             this.done = true;
             return Poll::Ready(None);
@@ -276,8 +272,20 @@ impl Stream for StreamBody {
         };
         let mut read = ReadBuf::new(slice);
         match this.reader.poll_read(cx, &mut read) {
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => {
+                let stall = this
+                    .stall
+                    .get_or_insert_with(|| Box::pin(sleep(STALL_AFTER)));
+                if !this.stall_sent && stall.as_mut().poll(cx).is_ready() {
+                    this.stall_sent = true;
+                    let _ = this
+                        .buffering
+                        .send(BufferingEvent::Stalled { token: this.token });
+                }
+                Poll::Pending
+            }
             Poll::Ready(Ok(())) => {
+                this.stall = None;
                 let filled = read.filled();
                 if filled.is_empty() {
                     this.done = true;
@@ -288,7 +296,6 @@ impl Stream for StreamBody {
                         .buffering
                         .send(BufferingEvent::Ready { token: this.token });
                     this.stall_sent = false;
-                    this.stall = Box::pin(sleep(STALL_AFTER));
                 }
                 let taken = u64::try_from(filled.len()).unwrap_or(0);
                 this.remaining = this.remaining.saturating_sub(taken);

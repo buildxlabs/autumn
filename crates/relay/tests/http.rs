@@ -90,6 +90,50 @@ impl AsyncSeek for Blocking {
     }
 }
 
+/// A reader that yields one byte every 500 ms, like a slow but flowing swarm.
+struct Trickle {
+    left: usize,
+    delay: Pin<Box<tokio::time::Sleep>>,
+}
+
+impl Trickle {
+    fn new(len: usize) -> Self {
+        Self {
+            left: len,
+            delay: Box::pin(tokio::time::sleep(Duration::from_millis(500))),
+        }
+    }
+}
+
+impl AsyncRead for Trickle {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if self.left == 0 {
+            return Poll::Ready(Ok(()));
+        }
+        if self.delay.as_mut().poll(cx).is_pending() {
+            return Poll::Pending;
+        }
+        self.left -= 1;
+        self.delay = Box::pin(tokio::time::sleep(Duration::from_millis(500)));
+        buf.put_slice(b"x");
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl AsyncSeek for Trickle {
+    fn start_seek(self: Pin<&mut Self>, _position: SeekFrom) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn poll_complete(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<u64>> {
+        Poll::Ready(Ok(0))
+    }
+}
+
 #[tokio::test]
 async fn relay_binds_an_ephemeral_loopback_port() {
     let relay = Relay::start().await.expect("start the relay");
@@ -290,6 +334,23 @@ async fn a_blocked_read_reports_buffering_after_two_seconds() {
 
     relay.revoke(&token).await;
     let _ = pending.await;
+}
+
+#[tokio::test]
+async fn a_slow_but_flowing_read_never_reports_buffering() {
+    let dir = TempDir::new().expect("temp dir");
+    let relay = Relay::start().await.expect("start the relay");
+    let (_token, url) = relay.mint(spec(dir.path(), 6), Trickle::new(6)).await;
+    let mut events = relay.subscribe_buffering();
+    let client = Client::new();
+
+    let received = body(get(&client, &url, None).await).await;
+
+    assert_eq!(received, b"xxxxxx", "three seconds of trickled bytes");
+    assert!(
+        events.try_recv().is_err(),
+        "no gap reached two seconds, so no buffering event"
+    );
 }
 
 #[tokio::test]
