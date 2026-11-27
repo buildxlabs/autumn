@@ -58,6 +58,7 @@ tokio = { default-features = false, features = [
   "sync",
   "time",
 ], version = "1.54" }
+torrent = { path = "crates/torrent" }
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3" }

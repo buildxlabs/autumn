@@ -1,0 +1,23 @@
+[package]
+name                   = "relay"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[dependencies]
+axum                = { features = [ "tokio" ], workspace = true }
+futures.workspace   = true
+rand.workspace      = true
+thiserror.workspace = true
+tokio               = { features = [ "fs", "io-util" ], workspace = true }
+torrent.workspace   = true
+tracing.workspace   = true
+
+[dev-dependencies]
+reqwest.workspace  = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
