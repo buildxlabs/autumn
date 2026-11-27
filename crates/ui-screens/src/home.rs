@@ -3,7 +3,6 @@
 
 use std::rc::Rc;
 
-use domain::{MediaId, PlaybackDetails};
 use gpui_kit::{
     App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement, ParentElement,
     Resource, SharedString, Styled, Subscription, TestSupportExt, Window,
@@ -374,8 +373,8 @@ fn continue_card(
         thumbnail: media
             .and_then(|media| media.banner.clone().or_else(|| media.poster.clone()))
             .map(|url| Resource::Uri(url.into())),
-        episode_number: item.episode,
-        title: format!("Episode {}", item.episode).into(),
+        episode_number: item.number,
+        title: item.label.clone().into(),
         media_title: media.map(|media| title_of(media).into()),
         filename: Some(item.path.to_string_lossy().into_owned().into()),
         filler: false,
@@ -386,23 +385,14 @@ fn continue_card(
         unavailable: None,
         selected: false,
     };
-    let media_id: MediaId = item.entry.entry.media;
-    let episode = item.episode;
-    let path = item.path.clone();
-    let details = PlaybackDetails::new(
-        media.map_or_else(|| "Untitled".to_owned(), title_of),
-        Some(format!("Episode {episode}")),
-        media.and_then(|media| media.poster.clone()),
-    );
+    let request = item.play_request();
     let store = playback_store.clone();
     EpisodeCard::new(
         view,
         SharedString::from(format!("home-continue-episode-{index}")),
     )
     .actions(EpisodeActions::new().on_play(move |_, cx| {
-        store.update(cx, |store, cx| {
-            store.play_file(media_id, episode, path.clone(), details.clone(), cx);
-        });
+        store.update(cx, |store, cx| store.play(request.clone(), cx));
     }))
     .into_any_element()
 }

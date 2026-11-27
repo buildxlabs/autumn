@@ -17,8 +17,8 @@ use std::{
 };
 
 use db::{LocalFile, ResumePoint};
-use domain::{ListEntry, ListStatus, MediaId, MediaKind};
-use engine::{EngineServices, LibraryMediaInfo};
+use domain::{ListEntry, ListStatus, MediaId, MediaKind, PlaybackDetails, StreamSource};
+use engine::{EngineServices, LibraryMediaInfo, MIN_RESUME, PlayRequest, PlaybackFileKind};
 use gpui_kit::{Context, Task, WeakEntity};
 use metadata::{AiringEpisode, Cached, HomeLoad, Load, MediaSummary};
 
@@ -143,17 +143,57 @@ pub struct HomeEntry {
     pub media: Option<MediaSummary>,
 }
 
-/// The next episode of one media with a local file.
+/// The next playable file of one media with local files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContinueEpisode {
     /// The list entry and its cached card text.
     pub entry: HomeEntry,
-    /// The episode to play.
-    pub episode: u32,
+    /// The file's kind, which decides how it resumes and syncs.
+    pub kind: PlaybackFileKind,
+    /// The file's number within its kind.
+    pub number: u32,
+    /// How the card labels the file.
+    pub label: String,
     /// The local file that plays it.
     pub path: PathBuf,
-    /// Saved position as a whole percentage, when the episode was resumed.
+    /// Saved position as a whole percentage, when the file was resumed.
     pub progress: Option<u8>,
+}
+
+impl ContinueEpisode {
+    /// The engine request for this file, with HUD labels and its own
+    /// continuity key. Specials and NC files never carry list episode numbers.
+    #[must_use]
+    pub fn play_request(&self) -> PlayRequest {
+        let source = StreamSource::local(self.path.clone());
+        let media = self.entry.entry.media;
+        let request = match self.kind {
+            PlaybackFileKind::Regular => PlayRequest::new(media, self.number, source),
+            PlaybackFileKind::Special => PlayRequest::special(media, self.number, source),
+            PlaybackFileKind::Ncop => PlayRequest::ncop(media, self.number, source),
+            PlaybackFileKind::Nced => PlayRequest::nced(media, self.number, source),
+        };
+        let media_title = self.entry.media.as_ref().map_or_else(
+            || "Untitled".to_owned(),
+            |summary| {
+                summary
+                    .title
+                    .english
+                    .clone()
+                    .or_else(|| summary.title.romaji.clone())
+                    .or_else(|| summary.title.native.clone())
+                    .unwrap_or_default()
+            },
+        );
+        request.with_details(PlaybackDetails::new(
+            media_title,
+            Some(self.label.clone()),
+            self.entry
+                .media
+                .as_ref()
+                .and_then(|media| media.poster.clone()),
+        ))
+    }
 }
 
 /// The media with local files in one list status.
@@ -581,26 +621,86 @@ fn percentage(position: f64, duration: f64) -> u8 {
     (position * 100.0 / duration).clamp(0.0, 100.0) as u8
 }
 
-/// The next playable episode of each media with local files. A saved resume
-/// position wins; otherwise the first file from `progress + 1` on is used.
-/// Resumed episodes sort ahead of the rest, newest position first.
+/// A local file Home can continue, with the number it resumes under.
+struct Candidate<'a> {
+    file: &'a LocalFile,
+    kind: PlaybackFileKind,
+    number: u32,
+}
+
+/// The playable kind of a library file, when Home knows how to resume it.
+fn file_kind(kind: &str) -> Option<PlaybackFileKind> {
+    match kind {
+        "episode" => Some(PlaybackFileKind::Regular),
+        "special" => Some(PlaybackFileKind::Special),
+        "ncop" => Some(PlaybackFileKind::Ncop),
+        "nced" => Some(PlaybackFileKind::Nced),
+        _ => None,
+    }
+}
+
+/// Whether a saved position is still worth resuming.
+fn in_progress(point: &ResumePoint) -> bool {
+    point.position >= MIN_RESUME
+        && point
+            .duration
+            .is_some_and(|duration| point.position < duration)
+}
+
+/// One card for a file, with the labels its kind needs.
+fn continued(
+    item: &HomeEntry,
+    candidate: &Candidate<'_>,
+    point: Option<&ResumePoint>,
+) -> ContinueEpisode {
+    let kind = candidate.kind;
+    let number = candidate.number;
+    let label = match kind {
+        PlaybackFileKind::Regular => format!("Episode {number}"),
+        PlaybackFileKind::Special => format!("Special {number}"),
+        PlaybackFileKind::Ncop => format!("NCOP {number}"),
+        PlaybackFileKind::Nced => format!("NCED {number}"),
+    };
+    ContinueEpisode {
+        entry: item.clone(),
+        kind,
+        number,
+        label,
+        path: candidate.file.path.clone(),
+        progress: point.and_then(|point| {
+            point
+                .duration
+                .map(|duration| percentage(point.position, duration))
+        }),
+    }
+}
+
+/// The next playable file of each media with local files. An in-progress
+/// resume wins; a special or NC file wins only when its resume is newer than
+/// the regular episode's. Otherwise the first file from `progress + 1` on is
+/// used, which never picks a special or NC file. Resumed files sort ahead of
+/// the rest, newest position first.
 fn next_episodes(
     entries: &[HomeEntry],
     files: &[LocalFile],
     resume: &[ResumePoint],
 ) -> Vec<ContinueEpisode> {
-    let mut playable: HashMap<MediaId, Vec<&LocalFile>> = HashMap::new();
+    let mut playable: HashMap<MediaId, Vec<Candidate<'_>>> = HashMap::new();
     for file in files {
-        if file.kind == "episode"
-            && !file.ignored
-            && !file.shelved
-            && file.episode.is_some()
-            && let Some(media) = file.media_id
-        {
-            playable.entry(media).or_default().push(file);
+        let (Some(kind), Some(number), Some(media)) =
+            (file_kind(&file.kind), file.episode, file.media_id)
+        else {
+            continue;
+        };
+        if !file.ignored && !file.shelved {
+            playable
+                .entry(media)
+                .or_default()
+                .push(Candidate { file, kind, number });
         }
     }
-    let mut episodes: Vec<(bool, SystemTime, ContinueEpisode)> = Vec::new();
+    let mut resumed: Vec<(i64, ContinueEpisode)> = Vec::new();
+    let mut upcoming: Vec<ContinueEpisode> = Vec::new();
     for item in entries {
         if matches!(
             item.entry.status,
@@ -611,59 +711,57 @@ fn next_episodes(
         let Some(candidates) = playable.get(&item.entry.media) else {
             continue;
         };
-        let saved = resume.iter().find_map(|point| {
-            if point.media != item.entry.media || point.position < engine::MIN_RESUME {
-                return None;
-            }
-            let duration = point.duration?;
-            if point.position >= duration {
-                return None;
-            }
-            let file = candidates
-                .iter()
-                .find(|file| file.episode == Some(point.episode))?;
-            let percentage = percentage(point.position, duration);
-            Some((
-                true,
-                SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_secs(u64::try_from(point.updated_at).unwrap_or(0)),
-                ContinueEpisode {
-                    entry: item.clone(),
-                    episode: point.episode,
-                    path: file.path.clone(),
-                    progress: Some(percentage),
-                },
-            ))
-        });
-        let next = item.entry.progress.saturating_add(1);
-        let chosen = saved.or_else(|| {
-            candidates
-                .iter()
-                .filter(|file| file.episode.is_some_and(|episode| episode >= next))
-                .min_by_key(|file| file.episode)
-                .and_then(|file| {
-                    file.episode.map(|episode| {
-                        (
-                            false,
-                            item.entry.updated_at,
-                            ContinueEpisode {
-                                entry: item.clone(),
-                                episode,
-                                path: file.path.clone(),
-                                progress: None,
-                            },
-                        )
-                    })
+        let saved = |kind: PlaybackFileKind, number: u32| {
+            candidates.iter().find_map(|candidate| {
+                if candidate.kind != kind || candidate.number != number {
+                    return None;
+                }
+                resume.iter().find(|point| {
+                    point.media == item.entry.media
+                        && point.episode == kind.continuity_key(number)
+                        && in_progress(point)
                 })
-        });
-        if let Some(chosen) = chosen {
-            episodes.push(chosen);
+            })
+        };
+        let regular = candidates
+            .iter()
+            .filter(|candidate| candidate.kind.is_regular())
+            .filter_map(|candidate| {
+                saved(candidate.kind, candidate.number).map(|point| (candidate, point))
+            })
+            .max_by_key(|(_, point)| point.updated_at);
+        let other = candidates
+            .iter()
+            .filter(|candidate| !candidate.kind.is_regular())
+            .filter_map(|candidate| {
+                saved(candidate.kind, candidate.number).map(|point| (candidate, point))
+            })
+            .max_by_key(|(_, point)| point.updated_at);
+        let chosen = match (regular, other) {
+            (Some(regular), Some(other)) if other.1.updated_at > regular.1.updated_at => {
+                Some(other)
+            }
+            (Some(regular), _) => Some(regular),
+            (None, other) => other,
+        };
+        if let Some((candidate, point)) = chosen {
+            resumed.push((point.updated_at, continued(item, candidate, Some(point))));
+            continue;
+        }
+        let next = item.entry.progress.saturating_add(1);
+        if let Some(candidate) = candidates
+            .iter()
+            .filter(|candidate| candidate.kind.is_regular() && candidate.number >= next)
+            .min_by_key(|candidate| candidate.number)
+        {
+            upcoming.push(continued(item, candidate, None));
         }
     }
-    episodes.sort_by_key(|(resumed, updated, _)| (!*resumed, std::cmp::Reverse(*updated)));
-    episodes
+    resumed.sort_by_key(|(updated, _)| std::cmp::Reverse(*updated));
+    resumed
         .into_iter()
-        .map(|(_, _, episode)| episode)
+        .map(|(_, episode)| episode)
+        .chain(upcoming)
         .collect()
 }
 
@@ -736,8 +834,12 @@ mod tests {
     };
 
     use db::{LocalFile, ResumePoint};
-    use domain::{AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score};
-    use engine::{BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry};
+    use domain::{
+        AdvancedScores, FuzzyDate, ListEntry, ListStatus, MediaId, MediaKind, Score, StreamSource,
+    };
+    use engine::{
+        BoxFuture, EngineError, EngineServices, LibraryMediaInfo, ListedEntry, PlaybackFileKind,
+    };
     use gpui_kit::{AppContext, TestAppContext};
     use metadata::{
         AiringEpisode, Cached, Error as MetadataError, HomeLoad, Load, MediaSummary, MediaTitle,
@@ -833,6 +935,13 @@ mod tests {
             ignored: false,
             filler: false,
             shelved: false,
+        }
+    }
+
+    fn file_of_kind(path: &str, media: MediaId, number: u32, kind: &str, size: i64) -> LocalFile {
+        LocalFile {
+            kind: kind.to_owned(),
+            ..file(path, media, number, size)
         }
     }
 
@@ -1302,7 +1411,7 @@ mod tests {
             .map(|item| {
                 (
                     item.entry.entry.media,
-                    item.episode,
+                    item.number,
                     item.path.clone(),
                     item.progress,
                 )
@@ -1326,6 +1435,141 @@ mod tests {
             services.collection_calls.load(Ordering::SeqCst),
             1,
             "the library reused the one collection read"
+        );
+    }
+
+    #[gpui_kit::test]
+    async fn a_newer_special_resume_replaces_the_regular_episode(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let media = MediaId::new(1);
+        let special_key = PlaybackFileKind::Special.continuity_key(1);
+        let services = Arc::new(FakeServices {
+            collection: vec![(entry(1, ListStatus::Current, 3), Some(summary(1)))],
+            files: vec![
+                file("/a/03.mkv", media, 3, 100),
+                file("/a/04.mkv", media, 4, 100),
+                file_of_kind("/a/sp1.mkv", media, 1, "special", 100),
+            ],
+            resume: vec![
+                resume(media, 3, 300.0, 1200.0, 10),
+                resume(media, special_key, 600.0, 1200.0, 20),
+            ],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, services).await;
+
+        let episodes = episodes_of(cx, &store);
+        assert_eq!(episodes.len(), 1, "one card per media");
+        let chosen = episodes.first().expect("one continued file");
+        assert_eq!(chosen.path, PathBuf::from("/a/sp1.mkv"));
+        assert_eq!(chosen.kind, PlaybackFileKind::Special);
+        assert_eq!(chosen.number, 1);
+        assert_eq!(chosen.label, "Special 1");
+        assert!(!chosen.kind.is_regular(), "a special is not a list episode");
+        assert_eq!(chosen.progress, Some(50));
+        assert_eq!(chosen.entry.entry.progress, 3, "list progress did not move");
+
+        let request = chosen.play_request();
+        assert_eq!(request.media, media);
+        assert_eq!(request.episode, 0);
+        assert_eq!(request.continuity_key, special_key);
+        assert_eq!(request.kind, PlaybackFileKind::Special);
+        assert_eq!(request.source, StreamSource::local("/a/sp1.mkv"));
+    }
+
+    #[gpui_kit::test]
+    async fn an_older_or_finished_special_resume_stays_out_of_continue_watching(
+        cx: &mut TestAppContext,
+    ) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let media = MediaId::new(1);
+        let special_key = PlaybackFileKind::Special.continuity_key(1);
+        let services = Arc::new(FakeServices {
+            collection: vec![(entry(1, ListStatus::Current, 3), Some(summary(1)))],
+            files: vec![
+                file("/a/03.mkv", media, 3, 100),
+                file_of_kind("/a/sp1.mkv", media, 1, "special", 100),
+            ],
+            resume: vec![
+                resume(media, 3, 300.0, 1200.0, 30),
+                // Older than the episode, and finished files are not in progress.
+                resume(media, special_key, 600.0, 1200.0, 20),
+                resume(media, special_key, 1200.0, 1200.0, 40),
+            ],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, services).await;
+
+        let episodes = episodes_of(cx, &store);
+        assert_eq!(episodes.len(), 1);
+        let chosen = episodes.first().expect("one continued file");
+        assert_eq!(chosen.path, PathBuf::from("/a/03.mkv"));
+        assert_eq!(chosen.kind, PlaybackFileKind::Regular);
+        assert_eq!(chosen.number, 3);
+        assert_eq!(chosen.progress, Some(25));
+    }
+
+    #[gpui_kit::test]
+    async fn nc_files_resume_with_their_own_request_kinds(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        let first = MediaId::new(2);
+        let second = MediaId::new(3);
+        let services = Arc::new(FakeServices {
+            collection: vec![
+                (entry(2, ListStatus::Current, 0), Some(summary(2))),
+                (entry(3, ListStatus::Current, 0), Some(summary(3))),
+            ],
+            files: vec![
+                file("/b/01.mkv", first, 1, 100),
+                file_of_kind("/b/ncop1.mkv", first, 1, "ncop", 100),
+                file("/c/01.mkv", second, 1, 100),
+                file_of_kind("/c/nced1.mkv", second, 1, "nced", 100),
+            ],
+            // With no regular resume, an in-progress NC file still leads.
+            resume: vec![
+                resume(
+                    first,
+                    PlaybackFileKind::Ncop.continuity_key(1),
+                    60.0,
+                    120.0,
+                    5,
+                ),
+                resume(
+                    second,
+                    PlaybackFileKind::Nced.continuity_key(1),
+                    90.0,
+                    120.0,
+                    6,
+                ),
+            ],
+            ..FakeServices::default()
+        });
+        let store = open_store(cx, &runtime, services).await;
+
+        let episodes = episodes_of(cx, &store);
+        assert_eq!(episodes.len(), 2, "one card per media");
+        let opening = episodes
+            .iter()
+            .find(|item| item.entry.entry.media == first)
+            .expect("the opening file");
+        assert_eq!(opening.path, PathBuf::from("/b/ncop1.mkv"));
+        assert_eq!(opening.label, "NCOP 1");
+        assert_eq!(opening.play_request().kind, PlaybackFileKind::Ncop);
+        let ending = episodes
+            .iter()
+            .find(|item| item.entry.entry.media == second)
+            .expect("the ending file");
+        assert_eq!(ending.path, PathBuf::from("/c/nced1.mkv"));
+        assert_eq!(ending.label, "NCED 1");
+        assert_eq!(ending.play_request().kind, PlaybackFileKind::Nced);
+        assert!(
+            episodes
+                .iter()
+                .all(|item| !item.kind.is_regular() && item.entry.entry.progress == 0),
+            "neither NC file moves list progress"
         );
     }
 
