@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
+  <channel>
+    <title>Nyaa.si</title>
+    <link>https://nyaa.si/</link>
+    <description>Nyaa.si RSS feed</description>
+    <item>
+      <title>[SubsPlease] Sousou no Frieren - 01 (1080p) [ABCD1234].mkv</title>
+      <link>https://nyaa.si/download/2000001.torrent</link>
+      <guid>https://nyaa.si/view/2000001</guid>
+      <pubDate>Tue, 24 Nov 2026 12:00:00 +0000</pubDate>
+      <nyaa:seeders>120</nyaa:seeders>
+      <nyaa:leechers>15</nyaa:leechers>
+      <nyaa:downloads>3400</nyaa:downloads>
+      <nyaa:infoHash>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</nyaa:infoHash>
+      <nyaa:categoryId>1_2</nyaa:categoryId>
+      <nyaa:category>Anime - English-translated</nyaa:category>
+      <nyaa:size>326.4 MiB</nyaa:size>
+      <nyaa:comments>0</nyaa:comments>
+      <nyaa:trusted>Yes</nyaa:trusted>
+      <nyaa:remake>No</nyaa:remake>
+    </item>
+    <item>
+      <title>[OldGroup] Sousou no Frieren - 01 (720p) [DEADBEEF].mkv</title>
+      <link>https://nyaa.si/download/2000002.torrent</link>
+      <guid>https://nyaa.si/view/2000002</guid>
+      <pubDate>Tue, 24 Nov 2026 13:30:00 +0000</pubDate>
+      <nyaa:seeders>3</nyaa:seeders>
+      <nyaa:leechers>1</nyaa:leechers>
+      <nyaa:downloads>42</nyaa:downloads>
+      <nyaa:infoHash>bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</nyaa:infoHash>
+      <nyaa:categoryId>1_2</nyaa:categoryId>
+      <nyaa:category>Anime - English-translated</nyaa:category>
+      <nyaa:size>1.2 GiB</nyaa:size>
+      <nyaa:comments>2</nyaa:comments>
+      <nyaa:trusted>No</nyaa:trusted>
+      <nyaa:remake>Yes</nyaa:remake>
+    </item>
+    <item>
+      <title>[Group] Sousou no Frieren - 01-12 (BD 1080p) [Batch]</title>
+      <link>https://nyaa.si/download/2000003.torrent</link>
+      <guid>https://nyaa.si/view/2000003</guid>
+      <pubDate>Wed, 25 Nov 2026 08:10:00 +0000</pubDate>
+      <nyaa:seeders>45</nyaa:seeders>
+      <nyaa:leechers>7</nyaa:leechers>
+      <nyaa:downloads>900</nyaa:downloads>
+      <nyaa:infoHash>cccccccccccccccccccccccccccccccccccccccc</nyaa:infoHash>
+      <nyaa:categoryId>1_2</nyaa:categoryId>
+      <nyaa:category>Anime - English-translated</nyaa:category>
+      <nyaa:size>12.8 GiB</nyaa:size>
+      <nyaa:comments>1</nyaa:comments>
+      <nyaa:trusted>No</nyaa:trusted>
+      <nyaa:remake>No</nyaa:remake>
+    </item>
+  </channel>
+</rss>

@@ -32,6 +32,7 @@ net = { path = "crates/net" }
 notify = "9"
 nucleo-matcher = "0.3"
 player = { path = "crates/player" }
+quick-xml = "0.41"
 rand = "0.10"
 regex = "1"
 release-parser = { path = "crates/release-parser" }
@@ -66,6 +67,7 @@ ui-components = { path = "crates/ui-components" }
 ui-screens = { path = "crates/ui-screens" }
 ui-state = { path = "crates/ui-state" }
 ui-theme = { path = "crates/ui-theme" }
+url = "2"
 winreg = "0.56"
 
 [profile.dev.package."*"]

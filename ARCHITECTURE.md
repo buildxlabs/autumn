@@ -109,6 +109,7 @@ engine         → domain, net, db, metadata, tracker, settings, library, player
 library        → domain, db
 metadata      → domain, net
 player        → domain
+search        → net (indexer HTTP through the shared client, §6)
 tracker       → domain, db
 ui-state      → domain, engine, metadata, tracker, db (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker)
 ui-components → (gpui-kit only)
