@@ -117,7 +117,7 @@ tracker       → domain, db
 ui-state      → domain, engine, metadata, tracker, db (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker)
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain, settings, futures, time (ui-theme as a dev-dependency only)
-autumn        → engine, settings, db, domain, metadata, net, player, auth, tracker, ui-state, ui-screens, ui-theme (the composition root builds the active platform)
+autumn        → engine, settings, db, domain, metadata, net, player, auth, tracker, torrent, ui-state, ui-screens, ui-theme (the composition root builds the active platform and owns the torrent cache request)
 ```
 
 Screens never depend on `engine`: they reach its services only through the

@@ -9,6 +9,7 @@
 
 use std::{
     collections::HashSet,
+    ffi::OsStr,
     fmt,
     io::{self, SeekFrom},
     net::{Ipv4Addr, SocketAddr},
@@ -649,15 +650,119 @@ impl TorrentSession {
     }
 }
 
+/// The disposable torrent cache on disk, independent of a running session.
+///
+/// `clear` accepts the infohashes of live streams and leaves their files
+/// alone. A caller with a session passes its active infohashes; without one,
+/// an empty slice clears everything (ARCHITECTURE §6, ADR-0006).
+#[derive(Debug, Clone)]
+pub struct TorrentCache {
+    root: PathBuf,
+}
+
+impl TorrentCache {
+    /// Views the cache rooted at the session's output folder.
+    #[must_use]
+    pub fn new(root: PathBuf) -> Self {
+        Self { root }
+    }
+
+    /// The total size in bytes of the files in infohash directories.
+    ///
+    /// A cache that has not been created yet has size zero.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`] if a directory cannot be read.
+    pub async fn size_bytes(&self) -> Result<u64, Error> {
+        let dirs = match infohash_dirs(&self.root).await {
+            Ok(dirs) => dirs,
+            Err(Error::Io(source)) if source.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(error),
+        };
+        let mut total = 0u64;
+        for dir in dirs {
+            total = total.saturating_add(dir_size(&dir).await?);
+        }
+        Ok(total)
+    }
+
+    /// Deletes every cached torrent except the ones still streaming, then
+    /// reports the remaining size.
+    ///
+    /// Only infohash-named directories are removed, so a user-chosen folder
+    /// keeps anything else it contains. A live infohash and its files are
+    /// left untouched; the caller owns the session and knows which those are.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`] if a directory cannot be read or removed.
+    pub async fn clear(&self, active: &[InfoHash]) -> Result<u64, Error> {
+        let active: HashSet<InfoHash> = active.iter().copied().collect();
+        let dirs = match infohash_dirs(&self.root).await {
+            Ok(dirs) => dirs,
+            Err(Error::Io(source)) if source.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(error),
+        };
+        for dir in dirs {
+            let Some(name) = dir.file_name() else {
+                continue;
+            };
+            if let Some(hash) = parse_infohash_dir(name)
+                && !active.contains(&hash)
+            {
+                remove_dir_if_present(&dir).await?;
+            }
+        }
+        self.size_bytes().await
+    }
+}
+
+/// Lists the infohash directories directly under `root`.
+async fn infohash_dirs(root: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut entries = tokio::fs::read_dir(root).await?;
+    let mut dirs = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        if parse_infohash_dir(&entry.file_name()).is_some() && entry.file_type().await?.is_dir() {
+            dirs.push(entry.path());
+        }
+    }
+    Ok(dirs)
+}
+
+/// Sums file sizes under `dir`, walking directories but not symlinks.
+async fn dir_size(dir: &Path) -> Result<u64, Error> {
+    let mut pending = vec![dir.to_path_buf()];
+    let mut total = 0u64;
+    while let Some(dir) = pending.pop() {
+        let mut entries = tokio::fs::read_dir(&dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let kind = entry.file_type().await?;
+            if kind.is_dir() {
+                pending.push(entry.path());
+            } else if kind.is_file() {
+                total = total.saturating_add(entry.metadata().await?.len());
+            }
+        }
+    }
+    Ok(total)
+}
+
+/// Recognizes the `<infohash>` directory names librqbit writes under a cache.
+fn parse_infohash_dir(name: &OsStr) -> Option<InfoHash> {
+    let name = name.to_str()?;
+    if name.len() != 40 || !name.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    InfoHash::from_str(&name.to_ascii_lowercase()).ok()
+}
+
 /// Deletes every infohash-named directory directly under `root`. Anything
 /// else is left alone, in case `root` is ever a user-chosen folder.
 async fn sweep(root: &Path) -> Result<(), Error> {
     let mut entries = tokio::fs::read_dir(root).await?;
     while let Some(entry) = entries.next_entry().await? {
-        let is_infohash = entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.len() == 40 && name.bytes().all(|b| b.is_ascii_hexdigit()));
+        let is_infohash = parse_infohash_dir(&entry.file_name()).is_some();
         if is_infohash && entry.file_type().await?.is_dir() {
             remove_dir_if_present(&entry.path()).await?;
         }

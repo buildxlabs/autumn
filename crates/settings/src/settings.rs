@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{AutoSelectSettings, SettingsError};
+use crate::{AppPaths, AutoSelectSettings, SettingsError};
 
 /// The default title-similarity a file needs to match a candidate, in percent (#127).
 pub const DEFAULT_MATCH_THRESHOLD: u8 = 50;
@@ -34,6 +34,8 @@ pub struct Settings {
     pub general: GeneralSettings,
     /// Auto-select profiles, the global default and per-media overrides.
     pub auto_select: AutoSelectSettings,
+    /// The torrent controls shown on the Storage tab.
+    pub torrent: TorrentSettings,
 }
 
 /// The General tab. A new install and a Phase 1 install both start with
@@ -99,6 +101,16 @@ impl LibrarySettings {
         }
         Ok(())
     }
+}
+
+/// The torrent controls shown on the Storage tab (ADR-0006, #180 Q1/Q4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TorrentSettings {
+    /// Where streamed torrent files land. `None` means `<cache>/torrents`.
+    pub download_folder: Option<PathBuf>,
+    /// Stop uploading to peers while torrents seed. Off by default (Q4).
+    pub disable_upload: bool,
 }
 
 /// The Appearance tab.
@@ -277,7 +289,56 @@ impl PlaybackSettings {
     }
 }
 
+/// Rejects a torrent download folder that overlaps a library folder.
+///
+/// Same, parent and child paths all overlap: `Library::scan` walks every file
+/// under its folders and would report partial downloads as unmatched.
+///
+/// # Errors
+///
+/// Returns [`SettingsError::Validation`] when `folder` is the same as, above,
+/// or below any library folder.
+pub fn validate_torrent_folder(
+    folder: &Path,
+    library_folders: &[PathBuf],
+) -> Result<(), SettingsError> {
+    let overlaps = library_folders
+        .iter()
+        .any(|library| folder.starts_with(library) || library.starts_with(folder));
+    if overlaps {
+        return Err(SettingsError::Validation {
+            field: "torrent.download_folder",
+            message: "must not overlap a library folder",
+        });
+    }
+    Ok(())
+}
+
 impl Settings {
+    /// The effective torrent download folder: the chosen one, or the default
+    /// under the OS cache dir.
+    #[must_use]
+    pub fn torrent_folder(&self, paths: &AppPaths) -> PathBuf {
+        self.torrent
+            .download_folder
+            .clone()
+            .unwrap_or_else(|| paths.torrent_dir())
+    }
+
+    /// Rejects the effective torrent folder when it overlaps a library folder.
+    ///
+    /// # Errors
+    ///
+    /// See [`validate_torrent_folder`].
+    pub fn validate_torrent_folder(&self, default_folder: &Path) -> Result<(), SettingsError> {
+        let folder = self
+            .torrent
+            .download_folder
+            .as_deref()
+            .unwrap_or(default_folder);
+        validate_torrent_folder(folder, &self.library.folders)
+    }
+
     /// Marks the first-run wizard done, so the next launch goes straight to
     /// Home. The other tabs are left as they are.
     pub fn complete_onboarding(&mut self) {

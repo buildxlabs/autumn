@@ -13,6 +13,9 @@ use crate::SettingsError;
 /// `buildxlabs\Autumn` on Windows.
 const PROJECT: (&str, &str, &str) = ("dev", "buildxlabs", "Autumn");
 
+/// The name of the disposable torrent cache under the OS cache dir (ADR-0006).
+const TORRENT_CACHE_DIR: &str = "torrents";
+
 /// The app's config, data and cache directories (ARCHITECTURE §8).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppPaths {
@@ -73,6 +76,11 @@ impl AppPaths {
     /// Holds disposable caches; always safe to delete.
     pub fn cache_dir(&self) -> &Path {
         &self.cache
+    }
+
+    /// `<cache>/torrents`, the default torrent download folder (ADR-0006).
+    pub fn torrent_dir(&self) -> PathBuf {
+        self.cache.join(TORRENT_CACHE_DIR)
     }
 
     /// `<config>/settings.json`: the Phase 0 settings file, read once for the

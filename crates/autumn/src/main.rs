@@ -10,6 +10,7 @@ mod playback;
 mod playback_sync;
 mod rail_prefs;
 mod startup;
+mod torrent;
 
 use std::{fmt::Display, process::ExitCode, rc::Rc, sync::Arc, time::SystemTime};
 
@@ -24,6 +25,7 @@ use gpui_kit::{
 use metadata::{AniList, CatalogCache};
 use ui_screens::{
     AppShell, DiscoverLoader, DiscoverStore, PosterCacheAction, RailPrefs, RealDiscoverCatalog,
+    TorrentServices, TorrentSettings,
 };
 use ui_state::{
     AniListHandle, EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlatformGateway,
@@ -166,6 +168,12 @@ fn main() -> ExitCode {
         started.paths.cache_dir(),
     );
     let general_services = general::saver(engine.db().clone(), engine.settings().clone());
+    let torrent = engine.settings().torrent.clone();
+    let torrent_services = torrent::services(
+        engine.db().clone(),
+        engine.settings().clone(),
+        started.paths.torrent_dir(),
+    );
     let storage_request = poster_cache_request(engine.poster_cache());
     let save_prefs = rail_prefs::saver(engine.db().clone(), engine.settings().clone());
     let discover_catalog = RealDiscoverCatalog::new(
@@ -231,6 +239,8 @@ fn main() -> ExitCode {
                 keychain_available,
                 library_settings,
                 library_services,
+                torrent,
+                torrent_services,
                 library_store,
                 scan_summaries,
                 explorer,
@@ -301,6 +311,8 @@ fn open_main_window(
     keychain_available: bool,
     library_settings: ui_screens::LibrarySettings,
     library_services: ui_screens::LibraryServices,
+    torrent: TorrentSettings,
+    torrent_services: TorrentServices,
     library_store: Entity<LibraryStore>,
     scan_summaries: Entity<ScanSummariesStore>,
     explorer: Entity<LibraryExplorerStore>,
@@ -331,6 +343,8 @@ fn open_main_window(
                 playback_services,
                 library_settings,
                 library_services,
+                torrent,
+                torrent_services,
                 library_store,
                 scan_summaries,
                 explorer,
@@ -398,7 +412,7 @@ mod tests {
 
     use gpui_kit::{App, AppContext, Task, TestAppContext};
     use metadata::{AniList, CatalogCache};
-    use ui_screens::{DiscoverUpdate, RailPrefs};
+    use ui_screens::{DiscoverUpdate, RailPrefs, TorrentServices, TorrentSettings};
     use ui_state::PlatformGateway;
     use ui_state::{
         EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlaybackStore, ScanSummariesStore,
@@ -444,6 +458,8 @@ mod tests {
                 true,
                 settings::LibrarySettings::default(),
                 ui_screens::LibraryServices::inert(),
+                TorrentSettings::default(),
+                TorrentServices::inert(),
                 library_store,
                 scan_summaries,
                 explorer,

@@ -620,6 +620,7 @@ dependencies = [
  "settings",
  "tempfile",
  "tokio",
+ "torrent",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
