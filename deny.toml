@@ -15,7 +15,13 @@ all-features = true
 
 [advisories]
 # Each entry: { id = "RUSTSEC-YYYY-NNNN", reason = "why the risk is accepted" }.
-ignore       = [  ]
+ignore = [
+  # ringbuf 0.4.8 via librqbit-utp 0.7.0 (latest; pins ^0.4.7, fix is 0.5.2).
+  # The bug needs an element whose Drop panics during skip/clear; librqbit-utp
+  # only stores u8 (`SharedRb<Heap<u8>>`), and Autumn's listener is TCP-only.
+  # Remove when librqbit-utp moves to ringbuf >= 0.5.2.
+  { id = "RUSTSEC-2026-0293", reason = "only u8 elements, which never panic on drop; no upstream fix in librqbit-utp 0.7.0" },
+]
 unmaintained = "workspace"
 
 [bans]
