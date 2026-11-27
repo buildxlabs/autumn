@@ -21,8 +21,9 @@ use std::{
 };
 
 use librqbit::{
-    AddTorrent, AddTorrentOptions, Api, DhtSessionConfig, ListenerOptions, Magnet, ManagedTorrent,
-    Session, SessionOptions, api::TorrentIdOrHash, dht::Id20, torrent_from_bytes,
+    AddTorrent, AddTorrentOptions, AddTorrentResponse, Api, DhtSessionConfig, ListenerOptions,
+    Magnet, ManagedTorrent, Session, SessionOptions, api::TorrentIdOrHash, dht::Id20,
+    torrent_from_bytes,
 };
 use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt, ReadBuf};
 
@@ -102,6 +103,30 @@ pub enum TorrentSource {
     Magnet(String),
     /// The bytes of a `.torrent` file.
     File(Vec<u8>),
+}
+
+/// One file of a torrent, as listed in its metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TorrentFile {
+    /// The index [`TorrentSession::add`] selects it by.
+    pub index: usize,
+    /// The `/`-separated path inside the torrent, without the torrent's name.
+    pub path: String,
+    /// Size in bytes.
+    pub len: u64,
+}
+
+impl TorrentFile {
+    /// A file at `index` with its path inside the torrent and its size.
+    #[must_use]
+    pub fn new(index: usize, path: impl Into<String>, len: u64) -> Self {
+        Self {
+            index,
+            path: path.into(),
+            len,
+        }
+    }
 }
 
 /// How the session finds peers.
@@ -322,6 +347,78 @@ impl TorrentSession {
             .await
             .map_err(session_err)?;
         Ok(info_hash)
+    }
+
+    /// Lists a torrent's files without adding it or downloading anything.
+    ///
+    /// A `.torrent` is read directly; a magnet link waits until its metadata
+    /// arrives from peers, so callers should bound the wait. Padding files
+    /// are left out, and each file keeps the index [`add`](Self::add) takes.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidSource`] for an unparsable source, [`Error::Session`]
+    /// if librqbit cannot resolve the metadata.
+    pub async fn list_files(&self, source: TorrentSource) -> Result<Vec<TorrentFile>, Error> {
+        let add = match source {
+            TorrentSource::Magnet(url) => {
+                Magnet::parse(&url).map_err(|e| Error::InvalidSource(e.into()))?;
+                AddTorrent::from_url(url)
+            }
+            TorrentSource::File(bytes) => {
+                torrent_from_bytes(&bytes).map_err(|e| Error::InvalidSource(e.into()))?;
+                AddTorrent::from_bytes(bytes)
+            }
+        };
+        let initial_peers = match &self.discovery {
+            PeerDiscovery::Public => None,
+            PeerDiscovery::Only(peers) => Some(peers.clone()),
+        };
+        let options = AddTorrentOptions {
+            list_only: true,
+            initial_peers,
+            ..AddTorrentOptions::default()
+        };
+        let response = self
+            .api
+            .session()
+            .add_torrent(add, Some(options))
+            .await
+            .map_err(session_err)?;
+        let files = match response {
+            AddTorrentResponse::ListOnly(listed) => listed
+                .info
+                .iter_file_details()
+                .enumerate()
+                .filter(|(_, file)| !file.attrs().padding)
+                .map(|(index, file)| TorrentFile {
+                    index,
+                    path: file.filename.to_vec().join("/"),
+                    len: file.len,
+                })
+                .collect(),
+            AddTorrentResponse::AlreadyManaged(_, handle)
+            | AddTorrentResponse::Added(_, handle) => handle
+                .with_metadata(|meta| {
+                    meta.file_infos
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, file)| !file.attrs.padding)
+                        .map(|(index, file)| TorrentFile {
+                            index,
+                            path: file
+                                .relative_filename
+                                .components()
+                                .map(|part| part.as_os_str().to_string_lossy())
+                                .collect::<Vec<_>>()
+                                .join("/"),
+                            len: file.len,
+                        })
+                        .collect()
+                })
+                .map_err(session_err)?,
+        };
+        Ok(files)
     }
 
     /// Opens a stream over one file of a torrent, waiting for the torrent to

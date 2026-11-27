@@ -147,6 +147,7 @@ mod tests {
             library: LibrarySettings::default(),
             playback: PlaybackSettings::default(),
             general: settings::GeneralSettings::default(),
+            auto_select: settings::AutoSelectSettings::default(),
         }
     }
 
@@ -171,8 +172,8 @@ mod tests {
         );
         assert_eq!(
             db.settings().rows().await.unwrap().len(),
-            4,
-            "four rows: appearance, library, playback and general tabs"
+            5,
+            "five rows: appearance, library, playback, general and auto_select tabs"
         );
     }
 
