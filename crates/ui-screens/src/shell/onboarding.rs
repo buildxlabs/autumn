@@ -371,6 +371,8 @@ mod tests {
                             RailPrefs::default(),
                             PlaybackSettings::default(),
                             PlaybackServices::inert(),
+                            crate::shell::NetworkSettings::default(),
+                            crate::shell::NetworkServices::inert(),
                             LibrarySettings::default(),
                             LibraryServices::inert(),
                             cx.new(|_| LibraryStore::new(Arc::clone(&services))),

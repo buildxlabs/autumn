@@ -29,8 +29,8 @@ use gpui_kit::{
 };
 use metadata::ODBL_CREDIT;
 use settings::{
-    GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice,
-    TorrentSettings, validate_torrent_folder,
+    GeneralSettings, LibrarySettings, NetworkSettings, PlaybackKind, PlaybackSettings,
+    PlayerChoice, TorrentSettings, validate_torrent_folder,
 };
 use ui_state::{
     LibraryStore, Route, ScanState, SettingsTab,
@@ -82,6 +82,7 @@ type SavePlayback = Rc<dyn Fn(&PlaybackSettings, &mut App) -> Task<()>>;
 type SaveLibrary = Rc<dyn Fn(&LibrarySettings, &mut App) -> Task<()>>;
 type SaveTorrent = Rc<dyn Fn(&TorrentSettings, &mut App) -> Task<()>>;
 type TorrentCacheRequest = Rc<dyn Fn(TorrentCacheAction, &mut App) -> Task<gpui_kit::Result<u64>>>;
+type SaveNetwork = Rc<dyn Fn(&NetworkSettings, &mut App) -> Task<()>>;
 type DetectPlayers = Rc<dyn Fn(&mut App) -> Task<Vec<PlayerOption>>>;
 type ValidatePlayer = Rc<dyn Fn(PathBuf, &mut App) -> Task<Result<PlayerOption, String>>>;
 type TestPlayer = Rc<dyn Fn(PlaybackSettings, &mut App) -> Task<Result<(), PlaybackTestError>>>;
@@ -231,6 +232,33 @@ impl TorrentServices {
             |_, _| Task::ready(Ok(0)),
             PathBuf::from("<cache>/torrents"),
         )
+    }
+}
+
+/// The composition-root callback that persists the Network tab.
+#[derive(Clone)]
+pub struct NetworkServices {
+    save: SaveNetwork,
+}
+
+impl std::fmt::Debug for NetworkServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NetworkServices").finish_non_exhaustive()
+    }
+}
+
+impl NetworkServices {
+    /// Creates the save callback the Network tab needs.
+    pub fn new(save: impl Fn(&NetworkSettings, &mut App) -> Task<()> + 'static) -> Self {
+        Self {
+            save: Rc::new(save),
+        }
+    }
+
+    /// Inert callbacks for embedding the shell without a settings backend.
+    #[must_use]
+    pub fn inert() -> Self {
+        Self::new(|_, _| Task::ready(()))
     }
 }
 
@@ -442,6 +470,34 @@ impl AppShell {
         self.playback_error = None;
         let task = (self.playback_services.save)(&self.playback, cx);
         self.save_playback_task = Some(cx.spawn(async move |_, _| {
+            task.await;
+        }));
+    }
+
+    /// Applies one Network change, validates it and saves it without waiting.
+    fn update_network(
+        &mut self,
+        change: impl FnOnce(&mut NetworkSettings),
+        cx: &mut Context<'_, Self>,
+    ) {
+        change(&mut self.network);
+        self.commit_network(cx);
+        cx.notify();
+    }
+
+    /// Persists the current Network tab. A newer save cancels the older one.
+    fn commit_network(&mut self, cx: &mut Context<'_, Self>) {
+        if let Err(error) = self.network.validate() {
+            self.network_error = Some(error.to_string());
+            return;
+        }
+        self.network_error = None;
+        // Normalize base URLs + trim before persisting.
+        if let Ok(normalized) = self.network.normalized() {
+            self.network = normalized;
+        }
+        let task = (self.network_services.save)(&self.network, cx);
+        self.save_network_task = Some(cx.spawn(async move |_, _| {
             task.await;
         }));
     }
@@ -673,13 +729,14 @@ impl AppShell {
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 7] = [
+        const TABS: [SettingsTab; 8] = [
             SettingsTab::General,
             SettingsTab::Appearance,
             SettingsTab::Account,
             SettingsTab::Playback,
             SettingsTab::Library,
             SettingsTab::Storage,
+            SettingsTab::Network,
             SettingsTab::About,
         ];
         let selected = match tab {
@@ -689,7 +746,8 @@ impl AppShell {
             SettingsTab::Playback => 3,
             SettingsTab::Library => 4,
             SettingsTab::Storage => 5,
-            SettingsTab::About => 6,
+            SettingsTab::Network => 6,
+            SettingsTab::About => 7,
         };
         let tabs = TabBar::new("settings-tabs")
             .underline()
@@ -700,6 +758,7 @@ impl AppShell {
             .child(settings_tab("settings-playback", "Playback"))
             .child(settings_tab("settings-library", "Library"))
             .child(settings_tab("settings-storage", "Storage"))
+            .child(settings_tab("settings-network", "Network"))
             .child(settings_tab("settings-about", "About"))
             .on_click(cx.listener(|shell, index: &usize, _, cx| {
                 if let Some(&tab) = TABS.get(*index) {
@@ -1451,6 +1510,345 @@ impl AppShell {
                         .child(Label::new(ODBL_CREDIT).text_sm())
                 })],
             ),
+            SettingsTab::Network => {
+                let shell = cx.entity();
+                let validation_error = self.network_error.clone();
+                let fixed_port = matches!(self.network.listen_port, settings::ListenPort::Fixed(_));
+                let mut items = vec![
+                    SettingItem::render(move |_, _, _| {
+                        Label::new(
+                            "Torrent listen port, upnp, DHT, global rate limits, torrent SOCKS5 proxy and bound interface apply to the torrent module. Changes other than rate limits restart it after playback stops.",
+                        )
+                        .text_sm()
+                        .into_any_element()
+                    }),
+                    SettingItem::render({
+                        move |_, _, _| {
+                            Label::new("Applies after playback stops").text_sm().into_any_element()
+                        }
+                    }),
+                    SettingItem::new(
+                        "Fixed listen port",
+                        SettingField::switch(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    matches!(
+                                        shell.read(cx).network.listen_port,
+                                        settings::ListenPort::Fixed(_)
+                                    )
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| {
+                                                settings.listen_port = if value {
+                                                    settings::ListenPort::Fixed(
+                                                        settings::DEFAULT_FIXED_LISTEN_PORT,
+                                                    )
+                                                } else {
+                                                    settings::ListenPort::Random
+                                                };
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("A random port per session unless fixed for a firewall rule."),
+                    SettingItem::new(
+                        "Port forwarding (upnp)",
+                        SettingField::switch(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| shell.read(cx).network.upnp
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(|settings| settings.upnp = value, cx);
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Ask the router to forward the torrent port. Off by default."),
+                    SettingItem::new(
+                        "DHT",
+                        SettingField::switch(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| shell.read(cx).network.dht
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(|settings| settings.dht = value, cx);
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Distributed peer discovery. On by default."),
+                    SettingItem::new(
+                        "Download rate limit (bytes/sec)",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell
+                                        .read(cx)
+                                        .network
+                                        .download_limit_bytes_per_sec
+                                        .map_or_else(String::new, |v| v.to_string())
+                                        .into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    let parsed = parse_rate_limit(&value);
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| {
+                                                settings.download_limit_bytes_per_sec = parsed;
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Global torrent download cap; empty is unlimited. Applies live."),
+                    SettingItem::new(
+                        "Upload rate limit (bytes/sec)",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell
+                                        .read(cx)
+                                        .network
+                                        .upload_limit_bytes_per_sec
+                                        .map_or_else(String::new, |v| v.to_string())
+                                        .into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    let parsed = parse_rate_limit(&value);
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| {
+                                                settings.upload_limit_bytes_per_sec = parsed;
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Global torrent upload cap; empty is unlimited. Applies live."),
+                    SettingItem::new(
+                        "Torrent SOCKS5 proxy",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell
+                                        .read(cx)
+                                        .network
+                                        .torrent_proxy
+                                        .clone()
+                                        .unwrap_or_default()
+                                        .into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    let proxy = optional_string(&value);
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| settings.torrent_proxy = proxy,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description(
+                        "socks5:// or socks5h://host:port, no embedded credentials.                          With a proxy set, peers leave through it.",
+                    ),
+                    SettingItem::new(
+                        "Nyaa base URL",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell.read(cx).network.nyaa_base_url.clone().into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| {
+                                                settings.nyaa_base_url = value.to_string();
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("Nyaa mirror; a bare host is normalized to https://."),
+                    SettingItem::new(
+                        "AnimeTosho base URL",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell.read(cx).network.animetosho_base_url.clone().into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| {
+                                                settings.animetosho_base_url = value.to_string();
+                                            },
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description("AnimeTosho feed mirror; a bare host is normalized to https://."),
+                    SettingItem::new(
+                        "Outbound HTTP proxy",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell
+                                        .read(cx)
+                                        .network
+                                        .http_proxy
+                                        .clone()
+                                        .unwrap_or_default()
+                                        .into()
+                                }
+                            },
+                            {
+                                let shell = shell.clone();
+                                move |value: SharedString, cx: &mut gpui_kit::App| {
+                                    let proxy = optional_string(&value);
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_network(
+                                            |settings| settings.http_proxy = proxy,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    )
+                    .description(
+                        "One global proxy for all app requests (indexers, AniList, metadata,                          posters). http:// or socks5://, no embedded credentials.",
+                    ),
+                ];
+
+                if fixed_port {
+                    let port = match self.network.listen_port {
+                        settings::ListenPort::Fixed(port) => port,
+                        settings::ListenPort::Random => settings::DEFAULT_FIXED_LISTEN_PORT,
+                    };
+                    items.push(
+                        SettingItem::new(
+                            "Listen port",
+                            SettingField::input(
+                                move |_cx: &gpui_kit::App| port.to_string().into(),
+                                {
+                                    let shell = shell.clone();
+                                    move |value: SharedString, cx: &mut gpui_kit::App| {
+                                        if let Ok(parsed) = value.parse::<u16>() {
+                                            shell.update(cx, |shell, cx| {
+                                                shell.update_network(
+                                                    |settings| {
+                                                        settings.listen_port =
+                                                            settings::ListenPort::Fixed(parsed);
+                                                    },
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    }
+                                },
+                            ),
+                        )
+                        .description("1024–65535."),
+                    );
+                }
+
+                // Bind-to-interface is macOS/Linux only; no inert field elsewhere.
+                #[cfg(any(target_os = "macos", target_os = "linux"))]
+                {
+                    items.push(SettingItem::new(
+                        "Bound interface",
+                        SettingField::input(
+                            {
+                                let shell = shell.clone();
+                                move |cx: &gpui_kit::App| {
+                                    shell
+                                        .read(cx)
+                                        .network
+                                        .bind_interface
+                                        .clone()
+                                        .unwrap_or_default()
+                                        .into()
+                                }
+                            },
+                            move |value: SharedString, cx: &mut gpui_kit::App| {
+                                let name = optional_string(&value);
+                                shell.update(cx, |shell, cx| {
+                                    shell.update_network(
+                                        |settings| settings.bind_interface = name,
+                                        cx,
+                                    );
+                                });
+                            },
+                        ),
+                    ).description(
+                        "Pin all torrent traffic to this interface (e.g. utun3). Fails closed:                          the torrent engine will not start if it can't bind. Blank disables.",
+                    ));
+                }
+
+                items.push(SettingItem::render(move |_, _, _| {
+                    validation_error.clone().map_or_else(
+                        || div().into_any_element(),
+                        |message| Label::new(message).text_sm().into_any_element(),
+                    )
+                }));
+
+                ("Network", items)
+            }
             SettingsTab::Storage => {
                 let status = self.storage_status;
                 let torrent_status = self.torrent_cache_status;
@@ -1801,6 +2199,21 @@ fn settings_tab(id: &'static str, label: &'static str) -> Tab {
     Tab::new()
         .aria_label(label)
         .child(div().id(id).test_support().child(label))
+}
+
+/// An empty or whitespace-only input means "unset".
+fn optional_string(value: &SharedString) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// A rate limit input: empty is unlimited, otherwise a positive byte rate.
+fn parse_rate_limit(value: &SharedString) -> Option<u32> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    value.parse::<u32>().ok().filter(|&v| v > 0)
 }
 
 #[cfg(test)]

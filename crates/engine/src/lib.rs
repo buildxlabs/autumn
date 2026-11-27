@@ -10,6 +10,7 @@
 mod auto_select;
 mod chapters;
 mod library;
+pub mod network;
 #[cfg(test)]
 mod phase2_exit;
 mod playback;
@@ -357,6 +358,11 @@ impl Engine {
         let builder = Client::builder().anilist();
         #[cfg(debug_assertions)]
         let builder = builder.host(DEBUG_HOST, 25, 5, net::HostKind::AniList);
+        // One global outbound HTTP proxy for all app requests (ADR-0010).
+        let builder = match settings.network.http_proxy.as_deref() {
+            Some(proxy) if !proxy.trim().is_empty() => builder.proxy(proxy)?,
+            _ => builder,
+        };
         let client = builder.build()?;
         let poster_cache = PosterCache::new(paths.cache_dir())?;
         let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());
@@ -439,6 +445,36 @@ impl Engine {
     #[must_use]
     pub fn auto_scan_running(&self) -> bool {
         self.watcher.lock().is_ok_and(|watcher| watcher.is_some())
+    }
+
+    /// Live Network reload (ADR-0010 §6). Rebuilds `net`'s shared client
+    /// proxy for new requests (in-flight requests finish on the old one) and
+    /// returns the [`network::TorrentSettingsChange`] diff-and-restart
+    /// decision; there is no running torrent module yet (#217), so the
+    /// caller applies rate limits and restarts the torrent module. Indexer
+    /// base URLs affect the next search via [`network::search_config`].
+    ///
+    /// # Errors
+    ///
+    /// [`EngineError::Client`] if the proxy URL is invalid or the client
+    /// cannot be rebuilt.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "one flag for whether a stream is currently playing"
+    )]
+    pub fn apply_network_settings(
+        &self,
+        old: &settings::NetworkSettings,
+        new: &settings::NetworkSettings,
+        stream_playing: bool,
+    ) -> Result<network::TorrentSettingsChange, EngineError> {
+        let proxy = new
+            .http_proxy
+            .as_deref()
+            .map(str::trim)
+            .filter(|proxy| !proxy.is_empty());
+        self.client.set_proxy(proxy)?;
+        Ok(network::torrent_settings_change(old, new, stream_playing))
     }
 
     /// Starts, restarts or stops the auto-scan watcher to match the Library

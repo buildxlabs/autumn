@@ -11,7 +11,7 @@ use std::{net::Ipv4Addr, path::Path, sync::Arc, time::Duration};
 use librqbit::{CreateTorrentOptions, ListenerOptions, Session, SessionOptions};
 use tempfile::TempDir;
 use tokio::time::timeout;
-use torrent::{PeerDiscovery, TorrentFile, TorrentSession, TorrentSource};
+use torrent::{PeerDiscovery, TorrentFile, TorrentSession, TorrentSessionOptions, TorrentSource};
 
 const LIMIT: Duration = Duration::from_secs(60);
 
@@ -65,9 +65,13 @@ async fn seed(dir: &Path, folder: &Path) -> (Arc<Session>, Vec<u8>, String) {
 }
 
 async fn leecher(root: &Path, discovery: PeerDiscovery) -> TorrentSession {
-    TorrentSession::start(root.to_path_buf(), discovery)
-        .await
-        .unwrap()
+    TorrentSession::start(
+        root.to_path_buf(),
+        discovery,
+        TorrentSessionOptions::default(),
+    )
+    .await
+    .unwrap()
 }
 
 #[tokio::test]

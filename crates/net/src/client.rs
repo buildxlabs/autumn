@@ -1,7 +1,7 @@
 //! The shared HTTP client: one `reqwest` client behind per-host limiters.
 
 use std::{
-    sync::{Arc, Once},
+    sync::{Arc, Once, PoisonError, RwLock},
     time::Duration,
 };
 
@@ -64,6 +64,7 @@ pub struct ClientBuilder {
     base_backoff: Duration,
     connect_timeout: Duration,
     request_timeout: Duration,
+    proxy_url: Option<String>,
 }
 
 impl Default for ClientBuilder {
@@ -74,6 +75,7 @@ impl Default for ClientBuilder {
             base_backoff: DEFAULT_BACKOFF,
             connect_timeout: CONNECT_TIMEOUT,
             request_timeout: REQUEST_TIMEOUT,
+            proxy_url: None,
         }
     }
 }
@@ -133,6 +135,19 @@ impl ClientBuilder {
         self
     }
 
+    /// Route all requests through one outbound proxy (`http://` or
+    /// `socks5://`, no embedded credentials); in-flight requests on a
+    /// rebuilt client finish on the old one. `None`-by-default.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Build`] if the proxy URL is invalid or the HTTP
+    /// client cannot be initialized.
+    pub fn proxy(mut self, proxy_url: impl Into<String>) -> Result<Self, Error> {
+        self.proxy_url = Some(validate_proxy(proxy_url.into())?);
+        Ok(self)
+    }
+
     /// Build the client with connect and per-request timeouts.
     ///
     /// # Errors
@@ -150,18 +165,19 @@ impl ClientBuilder {
         for (host, config) in self.hosts {
             limiters.insert(host, config);
         }
-        let http = reqwest::Client::builder()
-            .connect_timeout(self.connect_timeout)
-            .timeout(self.request_timeout)
-            .build()
-            .map_err(HttpError::new)?;
+        let connect_timeout = self.connect_timeout;
+        let request_timeout = self.request_timeout;
+        let proxy = self.proxy_url;
+        let http = build_reqwest(connect_timeout, request_timeout, proxy.as_deref())?;
         Ok(Client {
             inner: Arc::new(Inner {
-                http,
+                http: RwLock::new(http),
                 limiters,
                 activity: tokio::sync::watch::Sender::new(ActiveRequests::new()),
                 max_retries: self.max_retries,
                 base_backoff: self.base_backoff,
+                connect_timeout,
+                request_timeout,
             }),
         })
     }
@@ -169,11 +185,13 @@ impl ClientBuilder {
 
 #[derive(Debug)]
 struct Inner {
-    http: reqwest::Client,
+    http: RwLock<reqwest::Client>,
     limiters: HostLimiters,
     activity: tokio::sync::watch::Sender<ActiveRequests>,
     max_retries: u32,
     base_backoff: Duration,
+    connect_timeout: Duration,
+    request_timeout: Duration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,6 +220,32 @@ impl Client {
     #[must_use]
     pub fn builder() -> ClientBuilder {
         ClientBuilder::default()
+    }
+
+    /// Set or clear the global outbound proxy, rebuilding the underlying
+    /// `reqwest` client while keeping host limiters and activity; in-flight
+    /// requests finish on the old client (ADR-0010). `proxy_url` is
+    /// `http://` or `socks5://`, no embedded credentials.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Build`] if the proxy URL is invalid or the HTTP
+    /// client cannot be rebuilt.
+    pub fn set_proxy(&self, proxy_url: Option<&str>) -> Result<(), Error> {
+        let proxy = match proxy_url {
+            Some(url) => Some(validate_proxy(url.to_owned())?),
+            None => None,
+        };
+        let rebuilt = build_reqwest(
+            self.inner.connect_timeout,
+            self.inner.request_timeout,
+            proxy.as_deref(),
+        )?;
+        {
+            let mut http = write_http(&self.inner.http);
+            *http = rebuilt;
+        }
+        Ok(())
     }
 
     /// Observe in-flight requests across all clones of this client.
@@ -261,7 +305,8 @@ impl Client {
                 limiter.acquire().await;
             }
 
-            let response = match self.inner.http.execute(current).await {
+            let http = read_http(&self.inner.http).clone();
+            let response = match http.execute(current).await {
                 Ok(response) => response,
                 Err(source) => {
                     if !retryable || retry >= self.inner.max_retries {
@@ -384,3 +429,54 @@ const _: () = {
     const fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Client>();
 };
+
+/// Build a `reqwest` client with timeouts and an optional outbound proxy.
+fn build_reqwest(
+    connect_timeout: Duration,
+    request_timeout: Duration,
+    proxy: Option<&str>,
+) -> Result<reqwest::Client, Error> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout);
+    if let Some(url) = proxy {
+        let proxy = reqwest::Proxy::all(url)
+            .map_err(HttpError::new)
+            .map_err(|source| Error::Build { source })?;
+        builder = builder.proxy(proxy);
+    }
+    builder
+        .build()
+        .map_err(HttpError::new)
+        .map_err(|source| Error::Build { source })
+}
+
+/// Reject embedded credentials, require scheme + host, and only allow
+/// `http://` or `socks5://` for the global outbound proxy (ADR-0010).
+fn validate_proxy(url: String) -> Result<String, Error> {
+    let invalid = |message: &str| Error::Build {
+        source: HttpError::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            message.to_owned(),
+        )),
+    };
+    let parsed = reqwest::Url::parse(&url).map_err(|e| invalid(&e.to_string()))?;
+    if !matches!(parsed.scheme(), "http" | "socks5") {
+        return Err(invalid("unsupported proxy scheme"));
+    }
+    if parsed.host_str().is_none_or(str::is_empty) {
+        return Err(invalid("proxy URL needs a host"));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(invalid("proxy URLs with embedded credentials are rejected"));
+    }
+    Ok(url)
+}
+
+fn read_http(lock: &RwLock<reqwest::Client>) -> std::sync::RwLockReadGuard<'_, reqwest::Client> {
+    lock.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn write_http(lock: &RwLock<reqwest::Client>) -> std::sync::RwLockWriteGuard<'_, reqwest::Client> {
+    lock.write().unwrap_or_else(PoisonError::into_inner)
+}

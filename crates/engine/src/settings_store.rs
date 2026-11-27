@@ -172,8 +172,9 @@ mod tests {
         );
         assert_eq!(
             db.settings().rows().await.unwrap().len(),
-            6,
-            "six rows: appearance, library, playback, general, auto_select and torrent tabs"
+            7,
+            "seven rows: appearance, library, playback, general, auto_select,\
+             torrent and network tabs"
         );
     }
 
