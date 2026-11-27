@@ -4,7 +4,10 @@
 //! the foreground pump, and sends commands through the bridge so `render()`
 //! stays pure (ARCHITECTURE §4).
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use domain::{
     AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
@@ -44,6 +47,11 @@ pub struct PlaybackStore {
     upcoming: Option<(MediaId, u32)>,
     error: Option<PlaybackError>,
     preparing: Option<Preparing>,
+    /// When the current preparing phase began, for the elapsed counter.
+    preparing_since: Option<Instant>,
+    preparing_elapsed: Duration,
+    /// Peers and speed of the last preparing report, kept for the in-HUD chip.
+    stream_stats: Option<(u32, u64)>,
     buffering: bool,
     request: Option<Task<()>>,
     control: Option<Task<()>>,
@@ -76,6 +84,9 @@ impl PlaybackStore {
             upcoming: None,
             error: None,
             preparing: None,
+            preparing_since: None,
+            preparing_elapsed: Duration::ZERO,
+            stream_stats: None,
             buffering: false,
             request: None,
             control: None,
@@ -129,10 +140,25 @@ impl PlaybackStore {
         self.preparing
     }
 
+    /// How long the current preparing phase has run, for the overlay's
+    /// elapsed counter (#182 Q9).
+    #[must_use]
+    pub fn preparing_elapsed(&self) -> Duration {
+        self.preparing_elapsed
+    }
+
     /// Whether the running torrent stream is waiting on pieces.
     #[must_use]
     pub fn buffering(&self) -> bool {
         self.buffering
+    }
+
+    /// Peers and download speed for the in-HUD buffering chip, from the last
+    /// preparing report. Meaningful while [`Self::buffering`] is set; the
+    /// engine does not publish stats for a running stream (#182 Q10).
+    #[must_use]
+    pub fn buffering_stats(&self) -> (u32, u64) {
+        self.stream_stats.unwrap_or((0, 0))
     }
 
     /// Whether the HUD should show "Player closed" after an unexpected quit.
@@ -157,6 +183,11 @@ impl PlaybackStore {
                 cx.notify();
             }
             AppEvent::PlaybackPreparing(preparing) => {
+                if let Some(report) = preparing {
+                    let since = self.preparing_since.get_or_insert_with(Instant::now);
+                    self.preparing_elapsed = since.elapsed();
+                    self.stream_stats = Some((report.peers, report.download_bps));
+                }
                 self.preparing = preparing;
                 cx.notify();
             }
@@ -179,6 +210,9 @@ impl PlaybackStore {
             AppEvent::PlaybackStopped { unexpected } => {
                 self.state = None;
                 self.preparing = None;
+                self.preparing_since = None;
+                self.preparing_elapsed = Duration::ZERO;
+                self.stream_stats = None;
                 self.buffering = false;
                 self.details = None;
                 self.chapters.clear();
@@ -222,6 +256,9 @@ impl PlaybackStore {
     pub fn play(&mut self, request: PlayRequest, cx: &mut Context<'_, Self>) {
         self.details.clone_from(&request.details);
         self.upcoming = None;
+        self.preparing_since = None;
+        self.preparing_elapsed = Duration::ZERO;
+        self.stream_stats = None;
         self.closed = false;
         self.closed_task = None;
         let services = Arc::clone(&self.services);
@@ -444,6 +481,57 @@ mod tests {
             });
         });
         assert!(!store.read_with(cx, |store, _| store.buffering()));
+    }
+
+    #[gpui_kit::test]
+    fn keeps_the_last_stream_stats_for_the_buffering_chip(cx: &mut TestAppContext) {
+        let store = cx.new(|_| PlaybackStore::new(pending_services()));
+        let mut preparing = Preparing::new(MediaId::new(7), 3);
+        preparing.peers = 5;
+        preparing.download_bps = 1_500_000;
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackPreparing(Some(preparing)), cx);
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.buffering_stats()),
+            (5, 1_500_000),
+            "the last report feeds the chip"
+        );
+        assert!(
+            store.read_with(cx, |store, _| store.preparing_elapsed()) < Duration::from_secs(5),
+            "the elapsed counter starts with the phase"
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackPreparing(None), cx);
+                store.apply(AppEvent::PlaybackState(state()), cx);
+                store.apply(AppEvent::PlaybackBuffering(true), cx);
+            });
+        });
+        assert!(store.read_with(cx, |store, _| store.buffering()));
+        assert_eq!(
+            store.read_with(cx, |store, _| store.buffering_stats()),
+            (5, 1_500_000),
+            "the stats survive into playback"
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackStopped { unexpected: false }, cx);
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.buffering_stats()),
+            (0, 0)
+        );
+        assert_eq!(
+            store.read_with(cx, |store, _| store.preparing_elapsed()),
+            Duration::ZERO
+        );
     }
 
     #[gpui_kit::test]

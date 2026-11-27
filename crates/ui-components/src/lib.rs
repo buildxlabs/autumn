@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+pub mod buffer_overlay;
 pub mod carousel;
 pub mod episode_card;
 pub mod fetch_status;
@@ -12,6 +13,9 @@ pub mod playback_hud;
 mod poster_grid;
 mod rail;
 
+pub use buffer_overlay::{
+    BufferOverlay, BufferOverlayActions, BufferOverlayView, BufferStage, PieceProgressView,
+};
 pub use carousel::{
     CarouselWheel, MediaCarousel, PageDirection, WHEEL_PAGE_THRESHOLD, alt_wheel_delta, page,
 };
@@ -23,7 +27,7 @@ pub use media_card::{
     MEDIA_CARD_HEIGHT, MEDIA_POSTER_HEIGHT, MediaCard, MediaCardView, MediaFormat,
 };
 pub use playback_hud::{
-    AutoNextView, ChapterMark, PLAYBACK_HUD_HEIGHT, PlaybackHud, PlaybackHudActions,
+    AutoNextView, BufferingView, ChapterMark, PLAYBACK_HUD_HEIGHT, PlaybackHud, PlaybackHudActions,
     PlaybackHudView, SkipKind,
 };
 pub use poster_grid::{POSTER_GAP, POSTER_WIDTH, PosterGrid, poster_columns};
