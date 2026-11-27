@@ -4,7 +4,8 @@
 //! AniList id: [`Media::episodes`] holds numbered episodes, specials ("S1",
 //! "S2", …) and the opening/ending entries the API lists ("O1", "E1", …),
 //! keyed by the API's key. Each entry has its season and absolute numbers,
-//! titles, air date, length, thumbnail URL and overview; [`Media::mappings`]
+//! its AniDB episode id (AniDB eid), titles, air date, length, thumbnail
+//! URL and overview; [`Media::mappings`]
 //! holds the ids the API maps the media to (AniDB and other providers).
 //! Requests go through `net` (not the AniList rate limiter) into a
 //! stale-first disk cache: [`Aging::Airing`] responses stay fresh for 24 h,
@@ -104,6 +105,9 @@ pub struct Episode {
     /// The episode number within that season, when the API lists one.
     #[serde(default, rename = "episodeNumber")]
     pub season_episode: Option<u32>,
+    /// The AniDB episode id (**AniDB eid**), when the API lists one.
+    #[serde(default, rename = "anidbEid")]
+    pub anidb_eid: Option<u32>,
     /// Titles per language.
     #[serde(default, rename = "title")]
     pub titles: BTreeMap<String, String>,
@@ -261,6 +265,18 @@ impl AniZip {
         }
     }
 
+    /// The AniDB episode id (**AniDB eid**) of one episode: the episode-level
+    /// **Cross-reference** the `AniZip` response lists as `anidbEid`.
+    ///
+    /// `anilist_id` is the AniList media id; `episode_key` is the `AniZip`
+    /// key in [`Media::episodes`] ("1", "S1", "O1", …). `None` when the
+    /// response has no such key or lists no eid for it, or when no response
+    /// is available. Served from the same cache as [`AniZip::media`].
+    pub async fn anidb_eid(&self, anilist_id: u32, episode_key: &str, aging: Aging) -> Option<u32> {
+        let media = self.media(anilist_id, aging).await.ok().flatten()?;
+        media.episodes.get(episode_key)?.anidb_eid
+    }
+
     /// Fetch the media's response.
     async fn fetch(&self, anilist_id: u32) -> Result<Media, Error> {
         let request = Request::new(
@@ -393,6 +409,22 @@ mod tests {
     }
 
     #[test]
+    fn the_anizip_fixture_decodes_anidb_eids() {
+        let media: Media = serde_json::from_str(FIXTURE).unwrap();
+
+        let first = media.episodes.get("1").unwrap();
+        assert_eq!(first.anidb_eid, Some(271_418));
+        let special = media.episodes.get("S1").unwrap();
+        assert_eq!(special.anidb_eid, Some(273_428));
+    }
+
+    #[test]
+    fn a_payload_without_anidb_eid_still_parses() {
+        let episode: Episode = serde_json::from_str("{}").unwrap();
+        assert_eq!(episode.anidb_eid, None);
+    }
+
+    #[test]
     fn the_anizip_fixture_decodes_titles_and_episodes() {
         let media: Media = serde_json::from_str(FIXTURE).unwrap();
 
@@ -500,6 +532,37 @@ mod tests {
             mock.requests(),
             1,
             "the second call is served from the cache"
+        );
+    }
+
+    #[tokio::test]
+    async fn anidb_eid_covers_a_regular_episode_a_special_and_a_missing_key() {
+        let mock = Mock::new().await;
+
+        assert_eq!(
+            mock.anizip.anidb_eid(154_587, "1", Aging::Finished).await,
+            Some(271_418),
+            "a regular episode's AniDB eid"
+        );
+        assert_eq!(
+            mock.anizip.anidb_eid(154_587, "S1", Aging::Finished).await,
+            Some(273_428),
+            "a special's AniDB eid"
+        );
+        assert_eq!(
+            mock.anizip.anidb_eid(154_587, "999", Aging::Finished).await,
+            None,
+            "a missing key"
+        );
+        assert_eq!(mock.requests(), 1, "the response was cached");
+    }
+
+    #[tokio::test]
+    async fn anidb_eid_is_none_when_ani_zip_does_not_know_the_media() {
+        let mock = Mock::with_status(StatusCode::NOT_FOUND).await;
+        assert_eq!(
+            mock.anizip.anidb_eid(1234, "1", Aging::Finished).await,
+            None
         );
     }
 
