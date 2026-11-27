@@ -75,6 +75,129 @@ async fn a_missing_drive_shelves_files_and_keeps_their_matches() {
 }
 
 #[tokio::test]
+async fn an_emptied_mount_point_shelves_its_files_and_keeps_their_matches() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("mnt-anime");
+    fs::create_dir_all(&folder).unwrap();
+    let path = release(&folder, "Series Alpha", 1);
+    let library = Library::new(db.clone());
+    library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Alpha", 1001)],
+            |_| {},
+        )
+        .await
+        .unwrap();
+    library.lock_file(&path).await.unwrap();
+    let media = db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(1001)])
+        .await
+        .unwrap()
+        .unwrap();
+
+    // An unmounted fstab mount leaves the directory behind, empty.
+    fs::remove_file(&path).unwrap();
+    let summary = library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Bravo", 2002).with_alias("Series Alpha")],
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.shelved, 1);
+    let rows = db.local_file().all().await.unwrap();
+    let row = rows.iter().find(|row| row.path == path).unwrap();
+    assert!(row.shelved);
+    assert_eq!(row.media_id, Some(media), "the match is kept");
+    assert!(row.locked, "the lock is kept");
+}
+
+#[tokio::test]
+async fn files_return_matched_when_an_emptied_mount_point_fills_again() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("mnt-anime");
+    fs::create_dir_all(&folder).unwrap();
+    let path = release(&folder, "Series Alpha", 1);
+    let library = Library::new(db.clone());
+    library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Alpha", 1001)],
+            |_| {},
+        )
+        .await
+        .unwrap();
+    library.lock_file(&path).await.unwrap();
+    let media = db
+        .media()
+        .find(MediaKind::Anime, &[ExternalId::AniList(1001)])
+        .await
+        .unwrap()
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+    library
+        .scan(slice::from_ref(&folder), &[], |_| {})
+        .await
+        .unwrap();
+    fs::write(&path, b"").unwrap();
+    let summary = library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Bravo", 2002).with_alias("Series Alpha")],
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.shelved, 0);
+    let rows = db.local_file().all().await.unwrap();
+    assert_eq!(rows.len(), 1);
+    let row = rows.first().unwrap();
+    assert!(!row.shelved);
+    assert!(row.locked);
+    assert_eq!(
+        row.media_id,
+        Some(media),
+        "the old match survived the return"
+    );
+    assert_eq!(row.episode, Some(1));
+}
+
+#[tokio::test]
+async fn removing_an_emptied_folder_from_settings_drops_its_rows() {
+    let (dir, db) = database().await;
+    let folder = dir.path().join("mnt-anime");
+    fs::create_dir_all(&folder).unwrap();
+    let path = release(&folder, "Series Alpha", 1);
+    let library = Library::new(db.clone());
+    library
+        .scan(
+            slice::from_ref(&folder),
+            &[candidate("Series Alpha", 1001)],
+            |_| {},
+        )
+        .await
+        .unwrap();
+
+    fs::remove_file(&path).unwrap();
+    library
+        .scan(slice::from_ref(&folder), &[], |_| {})
+        .await
+        .unwrap();
+    let rows = db.local_file().all().await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert!(rows.first().unwrap().shelved);
+
+    library.scan(&[], &[], |_| {}).await.unwrap();
+    assert_eq!(db.local_file().all().await.unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn a_returning_drive_unshelves_without_rematching() {
     let (dir, db) = database().await;
     let folder = dir.path().join("drive");

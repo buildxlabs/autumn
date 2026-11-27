@@ -110,6 +110,60 @@ async fn a_rescan_adds_and_removes_files_without_changing_media_ids() {
 }
 
 #[tokio::test]
+async fn an_emptied_folder_leaves_other_folders_and_partial_deletes_alone() {
+    let (dir, db) = database().await;
+    let internal = dir.path().join("internal");
+    let mount = dir.path().join("mnt-anime");
+    fs::create_dir_all(&internal).unwrap();
+    fs::create_dir_all(&mount).unwrap();
+    let gone = internal.join("[Group] Series Alpha - 01 [1080p].mkv");
+    let kept = internal.join("[Group] Series Bravo - 01 [1080p].mkv");
+    let shelved = mount.join("[Group] Series Charlie - 01 [1080p].mkv");
+    release(&internal, "Series Alpha", 1);
+    release(&internal, "Series Bravo", 1);
+    release(&mount, "Series Charlie", 1);
+    let library = Library::new(db.clone());
+    let candidates = candidates();
+    library
+        .scan(&[internal.clone(), mount.clone()], &candidates, |_| {})
+        .await
+        .unwrap();
+    library.lock_file(&kept).await.unwrap();
+    library.lock_file(&shelved).await.unwrap();
+    let media = |id: u32| {
+        let db = db.clone();
+        async move {
+            db.media()
+                .find(MediaKind::Anime, &[ExternalId::AniList(1000 + id)])
+                .await
+                .unwrap()
+                .unwrap()
+        }
+    };
+    let (bravo, charlie) = (media(1).await, media(2).await);
+
+    fs::remove_file(&gone).unwrap();
+    fs::remove_file(&shelved).unwrap();
+    let summary = library
+        .scan(&[internal, mount], &candidates, |_| {})
+        .await
+        .unwrap();
+
+    assert_eq!(summary.shelved, 1, "only the emptied folder is shelved");
+    let rows = db.local_file().all().await.unwrap();
+    assert_eq!(rows.len(), 2, "only the partially deleted file is dropped");
+    assert!(!rows.iter().any(|row| row.path == gone));
+    let row = rows.iter().find(|row| row.path == kept).unwrap();
+    assert!(!row.shelved);
+    assert!(row.locked);
+    assert_eq!(row.media_id, Some(bravo));
+    let row = rows.iter().find(|row| row.path == shelved).unwrap();
+    assert!(row.shelved);
+    assert!(row.locked);
+    assert_eq!(row.media_id, Some(charlie));
+}
+
+#[tokio::test]
 async fn a_file_with_no_title_anywhere_stays_unmatched() {
     let (dir, db) = database().await;
     let folder = dir.path().join("Season 01");
