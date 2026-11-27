@@ -22,6 +22,10 @@ _Avoid_: source id, remote id
 A link saying that an external id names a particular media. An external id belongs to at most one media.
 _Avoid_: mapping, alias
 
+**AniDB eid**:
+An AniDB episode id, used as an episode-level **Cross-reference** to an **Episode**. It is not a **Media external id**: `ExternalId::AniDb` is AniDB's series aid.
+_Avoid_: AniDB id, episode number
+
 **Custom source**:
 A provider of media that are not in the AniList catalog, supplied by an extension.
 
@@ -51,9 +55,120 @@ _Avoid_: hidden file, excluded file
 A local file on a disconnected drive, kept with its match until the drive returns.
 _Avoid_: missing file, offline file
 
+**Missing episode**:
+An aired regular **Episode** with no **Local file** in the library; counted on the Entry Library tab's missing banner. A **Shelved file** on a disconnected drive counts as owned, not missing.
+_Avoid_: missing file, gap
+
 **Scan summary**:
 The outcome of one scan: files found, files matched and files left unmatched.
 _Avoid_: report, scan log
+
+### Torrents
+
+**Torrent**:
+A torrent identified by its infohash, whether found on an indexer or brought in by the user and tracked in Autumn's own session this run. An indexer result carries a **Release** name, links, size, seeders and an origin indexer; an in-session torrent adds a **Torrent state**, an origin and selected files.
+_Avoid_: magnet, link, download, hit
+
+**Release**:
+A fansub or scene name for one **Episode** or a **Batch**, carrying optional group, resolution, codec, audio, source, season, episode number and version; parsed by `release-parser` into a `Release`.
+_Avoid_: torrent name, filename, rip
+
+**Batch**:
+A **Torrent**/**Release** containing multiple **Episodes**: an explicit range, or flagged complete; matching and file pick treat it as covering an episode it contains.
+_Avoid_: pack, complete-series torrent, season pack
+
+**Incoming torrent**:
+A torrent the user brings in by paste, `/magnet`, `/droptorrent` or drop, rather than one found by search.
+_Avoid_: manual torrent, pasted torrent
+
+**Magnet link**:
+A torrent identifier carrying a v1 infohash and an optional display name, but no file list until metadata arrives.
+_Avoid_: magnet, link
+
+**Match review**:
+The step that attaches an incoming torrent to a Media and an Episode before it can stream.
+_Avoid_: auto-match, mapping
+
+**Torrent cache**:
+A disposable staging area for streamed torrent files, separate from the library.
+_Avoid_: download dir, temp folder
+
+**Disk read switch**:
+The point at which a completed stream is served from its file on disk instead of through the torrent stream.
+_Avoid_: disk handoff, completion switch
+
+**Stream drop**:
+The event that ends a streamed torrent and releases its partial files.
+_Avoid_: stop, cancel
+
+**Torrent stream**:
+Playing one file of a torrent while it is still downloading, delivered to the player through the relay.
+
+**Readiness gate**:
+The condition that must hold before the player is launched on a torrent stream: its head window and tail window are downloaded.
+
+**Head window / Tail window**:
+The first and last byte ranges of a streamed file that must be downloaded before playback starts.
+
+**Stream token**:
+The random secret in a relay URL; valid for one playback session and revoked when it ends.
+
+**Buffering**:
+A torrent stream waiting on pieces, either before launch (_Preparing_) or during playback.
+
+**Torrent List**:
+The screen listing every **Torrent** currently in Autumn's own embedded torrent session this run, with live state and stats.
+_Avoid_: downloads page, transfer list, queue, active torrents page
+
+**Torrent state**:
+The per-torrent lifecycle label in the Torrent List: `preparing`, `downloading`, `streaming`, `paused`, `seeding`; `paused` overrides, `seeding` means complete, no `complete`/`error` state.
+_Avoid_: status, phase
+
+**Preload**:
+Fetching the next Episode's torrent stream while the current Episode plays, so auto-next can start it without waiting.
+_Avoid_: prefetch, pre-download, prepared stream
+
+**Yield**:
+A preload pausing while the current torrent stream is buffering.
+_Avoid_: throttle, deprioritize
+
+**Auto-select**:
+Choosing the best **Torrent** and the correct in-torrent file for an **Episode** per an **Auto-select profile**, verifying the episode exists before playback; never silently relaxing.
+_Avoid_: smart search (for the matching stage), auto-pick
+
+**Auto-select profile**:
+A named, user-editable set of filters + ordered ranking criteria used by **auto-select**; one shipped `Default`; global default + optional per-**Media** override; per-episode override in the manual search sheet.
+_Avoid_: scoring profile, selection rules, autoselect settings
+
+**Release list**:
+The per-episode table of search results where the user picks a torrent and a file by hand.
+_Avoid_: manual search sheet, search results
+
+**Batch suggestion**:
+A batch covering every episode of a finished media, offered on the Torrent tab.
+_Avoid_: season pack
+
+**Availability badge**:
+A pill on an episode saying whether a matching release exists on the indexers right now.
+_Avoid_: torrent status
+
+**Buffer overlay**:
+The preparing state of a torrent stream, shown in the playback bar until the player launches.
+_Avoid_: loading screen
+
+### Network
+
+**Bound interface**:
+A network interface that all torrent traffic is pinned to. If it is unavailable, the torrent engine does not start rather than using another route.
+_Avoid_: VPN tunnel, bind device, kill switch
+
+**Indexer mirror**:
+A user-supplied base URL that serves one indexer's releases under the same query shape as its default host.
+_Avoid_: base URL, host, domain
+
+**Outbound proxy**:
+A relay Autumn sends traffic through when configured. Torrent peer traffic and other app requests are configured separately.
+_Avoid_: VPN, relay host
 
 ### Extensions
 
