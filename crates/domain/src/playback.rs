@@ -5,7 +5,7 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use crate::MediaId;
+use crate::{InfoHash, MediaId};
 
 /// What the player should open for one episode.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,13 @@ pub enum StreamSource {
         /// The path of the video on disk.
         path: PathBuf,
     },
+    /// One file of a torrent, streamed from the embedded session.
+    Torrent {
+        /// The torrent's v1 infohash.
+        info_hash: InfoHash,
+        /// The file's index in the torrent's file list.
+        file_index: usize,
+    },
 }
 
 impl StreamSource {
@@ -23,6 +30,15 @@ impl StreamSource {
     #[must_use]
     pub fn local(path: impl Into<PathBuf>) -> Self {
         Self::Local { path: path.into() }
+    }
+
+    /// File `file_index` of the torrent `info_hash`.
+    #[must_use]
+    pub const fn torrent(info_hash: InfoHash, file_index: usize) -> Self {
+        Self::Torrent {
+            info_hash,
+            file_index,
+        }
     }
 }
 

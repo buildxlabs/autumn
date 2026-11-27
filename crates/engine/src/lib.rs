@@ -7,6 +7,7 @@
 //! call its services through [`bridge::run`] (ARCHITECTURE §4). It grows
 //! into ARCHITECTURE's engine in Phase 2.
 
+mod auto_select;
 mod chapters;
 mod library;
 #[cfg(test)]
@@ -36,6 +37,10 @@ use settings::{AppPaths, LibrarySettings, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
 
+pub use auto_select::{
+    AniZipEpisodeIds, AutoSelectError, AutoSelectRequest, AutoSelection, AutoSelector, EpisodeIds,
+    FILE_LIST_TIMEOUT, FileListError, FileLister, SessionFiles, TorrentSearch, VERIFY_CANDIDATES,
+};
 pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
 };

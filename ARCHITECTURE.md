@@ -98,6 +98,8 @@ tracker        → metadata
 relay          → torrent
 auth           → metadata (the authenticated Viewer account lookup)
 engine         → mkv (chapter skip markers for local files)
+engine         → search (auto-select pipeline #218)
+engine         → torrent (auto-select file lists #218)
 ```
 
 Foundation, UI and binary edges in use (rules 1–3 already allow them; they're listed so a new one shows up in review):
@@ -110,6 +112,7 @@ library        → domain, db
 metadata      → domain, net
 player        → domain
 search        → net (indexer HTTP through the shared client, §6)
+search        → settings (ranks with the persisted AutoSelectProfile, #218)
 tracker       → domain, db
 ui-state      → domain, engine, metadata, tracker, db (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker)
 ui-components → (gpui-kit only)
