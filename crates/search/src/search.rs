@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
     future::Future,
     sync::{
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
@@ -373,14 +373,12 @@ fn net_error(indexer: Indexer, error: net::Error) -> Error {
     }
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "the query cache mutex is only held for short, infallible map operations"
-)]
+/// Locks the query cache. A poisoned lock still holds a usable map, since
+/// every write is a single insert or remove.
 fn lock_cache(
     cache: &Mutex<HashMap<Query, CacheEntry>>,
 ) -> MutexGuard<'_, HashMap<Query, CacheEntry>> {
-    cache.lock().expect("cache mutex is not poisoned")
+    cache.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 const _: () = {
