@@ -1,0 +1,125 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Entry Torrent prototype</title>
+<style>
+/* App tokens from crates/ui-theme (ARCHITECTURE §5). */
+.app{--bg:#070707;--paper:#0B0B0B;--elev:#0D0D0D;--line:rgba(255,255,255,.10);--acc:#6152DF;--fg:#D1D1D1;--mut:rgba(255,255,255,.45);--wash:rgba(255,255,255,.06);
+ background:var(--bg);color:var(--fg);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Inter",sans-serif;border-radius:8px;padding:16px;margin:0 0 20px;position:relative;overflow:hidden}
+.cap{font:600 12px/1.3 var(--font-sans,sans-serif);color:var(--muted-foreground,#888);margin:18px 0 6px;letter-spacing:.02em;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:10px}.col{display:flex;flex-direction:column;gap:8px}.grow{flex:1;min-width:0}
+.btn{border:1px solid var(--line);background:var(--wash);color:var(--fg);border-radius:6px;padding:4px 10px;font-size:12px;white-space:nowrap}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.g{background:none;border-color:transparent;color:var(--mut)}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin:10px 0 12px}.tabs span{padding:6px 0;color:var(--mut)}.tabs .on{color:var(--fg);border-bottom:2px solid var(--acc)}
+.mut{color:var(--mut)}.sm{font-size:11px}.b{font-weight:600}
+.pill{font-size:10.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.av{background:rgba(70,190,120,.16);color:#7fd8a3;border-color:transparent}.ck{background:rgba(97,82,223,.2);color:#b4abff;border-color:transparent}
+.wt{background:rgba(230,170,60,.15);color:#e8bf6a;border-color:transparent}.un{color:var(--mut)}.lib{background:var(--wash);color:var(--fg)}
+.ep{display:flex;gap:12px;align-items:center;padding:8px;border-radius:8px;background:var(--paper);border:1px solid var(--line)}
+.th{width:120px;height:68px;border-radius:6px;background:linear-gradient(135deg,#1d1a33,#0f1d24);position:relative;flex:none}
+.th i{position:absolute;left:6px;top:6px;font:600 10px sans-serif;background:rgba(0,0,0,.6);padding:1px 6px;border-radius:4px;font-style:normal}
+.pick{font-size:11.5px;color:var(--mut);font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batch{padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--elev);display:flex;gap:12px;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:12px}th{font-weight:500;color:var(--mut);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}td.n{max-width:240px;overflow:hidden;text-overflow:ellipsis}
+tr.best td{background:rgba(97,82,223,.10)}tr.fail td{opacity:.45}th.s::after{content:" ▾";color:var(--acc)}
+.sheet td.n{max-width:150px}.sheet{position:absolute;top:0;right:0;bottom:0;width:86%;overflow:auto;background:var(--elev);border-left:1px solid var(--line);padding:14px;box-shadow:-20px 0 40px rgba(0,0,0,.6)}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.chip{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--mut)}.chip.on{color:var(--fg);border-color:var(--acc);background:rgba(97,82,223,.15)}
+.files{margin:0 0 0 28px}.files td{border:none;padding:3px 6px;font-size:11.5px}
+.bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}.bar b{display:block;height:100%;background:var(--acc)}
+.hud{height:60px;display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--paper);border-top:1px solid var(--line);margin:0 -16px -16px}
+.post{width:36px;height:48px;border-radius:4px;background:linear-gradient(#3b2f6e,#14202b);flex:none}
+.stage{display:flex;gap:6px;font-size:11px}.stage span{color:var(--mut)}.stage .done{color:#7fd8a3}.stage .cur{color:var(--fg);font-weight:600}
+.modal{width:380px;margin:30px auto;background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:16px}
+.flag{font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(230,170,60,.15);color:#e8bf6a}
+.note{font:12px/1.45 var(--font-sans,sans-serif);color:var(--muted-foreground,#999);margin:-12px 0 16px}
+</style></head><body>
+
+<div class="cap">A · Entry → Torrents tab (media with no local files, airing)</div>
+<div class="app">
+ <div class="row"><div class="grow"><div class="b" style="font-size:18px">Kusuriya no Hitorigoto Season 3</div><div class="mut sm">TV · Airing · 8 of 12 aired</div></div>
+  <span class="btn p">▶ Stream episode 8</span><span class="btn">Browse library files</span></div>
+ <div class="tabs"><span>Overview</span><span class="on">Torrents</span></div>
+ <div class="row" style="margin-bottom:10px"><span class="mut sm">Profile</span><span class="btn">Default ▾</span><span class="grow"></span><span class="btn g">Search releases…</span></div>
+ <div class="col">
+  <div class="ep"><div class="th"><i>EP 8</i></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">The Jade Pendant</span><span class="pill av">available</span><span class="mut sm">aired 3 h ago</span></div>
+   <div class="mut sm">Press Stream to auto-select with Default</div></div><span class="btn p">▶ Stream</span><span class="btn">Choose…</span></div>
+  <div class="ep"><div class="th"><i>EP 7</i></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">A Letter from the West</span><span class="pill lib">✓ watched</span></div>
+   <div class="pick">last played: [SubsPlease] Kusuriya no Hitorigoto S3 - 07 (1080p) [A1B2C3D4].mkv</div></div><span class="btn">▶ Stream</span><span class="btn">Choose…</span></div>
+  <div class="ep" style="border-color:var(--acc)"><div class="th"><i>EP 6</i></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">Smoke</span></div>
+   <div class="stage"><span class="done">Searching ✓</span>›<span class="cur">Verifying files 2/3</span>›<span>Starting stream</span></div></div><span class="btn g">Cancel</span></div>
+  <div class="ep"><div class="th"><i>EP 5</i></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">Gourds</span></div>
+   <div class="sm" style="color:#e8bf6a">No release passed Default (all 9 had under 1 seeder). <u>Open release list</u></div></div><span class="btn">▶ Stream</span><span class="btn">Choose…</span></div>
+  <div class="ep" style="opacity:.55"><div class="th"><i>EP 9</i></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">Episode 9</span><span class="pill un">airs Sat 17:00</span></div></div><span class="btn" style="opacity:.5">▶ Stream</span></div>
+ </div>
+</div>
+
+<div class="cap">A2 · Same tab, finished media: batch suggestions above the list</div>
+<div class="app">
+ <div class="tabs"><span>Overview</span><span>Library</span><span class="on">Torrents</span></div>
+ <div class="mut sm" style="margin-bottom:6px">Batches covering every episode · ranked with Default</div>
+ <div class="col">
+  <div class="batch"><span class="pill" style="background:var(--acc);color:#fff;border:0">Best</span><div class="grow"><div class="b">[Judas] Frieren (Season 1) [BD 1080p][HEVC x265 10bit][Dual-Audio]</div><div class="mut sm">EP 1–28 · 1080p · HEVC · 31 GB · 412 seeders · Nyaa</div></div><span class="btn">Episodes ▾</span><span class="btn p">Use for this show</span></div>
+  <div class="batch"><div class="grow"><div class="b">[SubsPlease] Sousou no Frieren (01-28) (1080p) [Batch]</div><div class="mut sm">EP 1–28 · 1080p · H.264 · 39 GB · 188 seeders · AnimeTosho</div></div><span class="btn">Episodes ▾</span><span class="btn">Use for this show</span></div>
+ </div>
+ <div class="mut sm" style="margin:10px 0 6px">Episodes · “Use for this show” makes Stream on every row play from that batch until you change it</div>
+ <div class="ep"><div class="th"><i>EP 3</i></div><div class="grow col" style="gap:3px"><div class="b">Killing Magic</div><div class="pick">from batch: [Judas] Frieren … /Frieren - S01E03.mkv</div></div><span class="pill lib">in library</span><span class="btn p">▶ Stream</span><span class="btn">Choose…</span></div>
+</div>
+
+<div class="cap">B · Manual search sheet (from Choose…, or after auto-select fails)</div>
+<div class="app" style="height:470px;padding:0">
+ <div style="padding:16px" class="mut">… Entry page behind …</div><div class="dim"></div>
+ <div class="sheet">
+  <div class="row"><div class="grow"><div class="b" style="font-size:15px">Episode 5 · Gourds</div><div class="sm" style="color:#e8bf6a">Auto-select: no release passed Default (NoTorrentsMatch). Showing all results, failing ones dimmed with the reason.</div></div><span class="btn g">✕</span></div>
+  <div class="row" style="margin:10px 0"><span class="btn grow" style="text-align:left;color:var(--mut)">Kusuriya no Hitorigoto 05</span><span class="btn">Profile: Default ▾</span><span class="btn">Refresh</span></div>
+  <div class="row" style="gap:6px;margin-bottom:8px;flex-wrap:wrap"><span class="chip on">All</span><span class="chip">Single</span><span class="chip">Batch</span><span class="mut">|</span><span class="chip on">1080p</span><span class="chip on">720p</span><span class="chip">480p</span><span class="mut">|</span><span class="chip on">Nyaa</span><span class="chip on">AnimeTosho</span><span class="mut">|</span><span class="chip on">Show filtered-out</span></div>
+  <table>
+   <tr><th>Release</th><th>Res</th><th>Codec</th><th>Group</th><th class="s">Seeders</th><th>Size</th><th>Date</th><th></th><th>Status</th></tr>
+   <tr class="best"><td class="n">★ Kusuriya no Hitorigoto S3 - 05 (1080p) [E3F4]</td><td>1080p</td><td>H.264</td><td>SubsPlease</td><td>0</td><td>1.4 GB</td><td>2 d</td><td></td><td class="mut">min seeders</td></tr>
+   <tr><td class="n">▸ Kusuriya no Hitorigoto S3 (01-08) [Erai-raws]</td><td>1080p</td><td>HEVC</td><td>Erai-raws</td><td>3</td><td>9.8 GB</td><td>1 d</td><td><span class="pill">Batch 1–8</span></td><td class="mut">—</td></tr>
+   <tr><td colspan="9" style="padding:0;border:0"><table class="files">
+    <tr><td class="mut">Pick a file · fetched on expand</td></tr>
+    <tr><td>○ Kusuriya … - 04 [1080p].mkv</td><td class="mut">EP 4 · 1.2 GB</td></tr>
+    <tr style="background:rgba(97,82,223,.12)"><td>● Kusuriya … - 05 [1080p].mkv</td><td class="mut">EP 5 · 1.2 GB</td><td><span class="btn p">▶ Stream</span></td></tr>
+    <tr style="opacity:.4"><td>○ NCOP1.mkv</td><td class="mut">not an episode</td></tr></table></td></tr>
+   <tr class="fail"><td class="n">[ASW] Kusuriya no Hitorigoto - 29 [720p HEVC]</td><td>720p</td><td>HEVC</td><td>ASW</td><td>0</td><td>310 MB</td><td>2 d</td><td></td><td>min seeders</td></tr>
+   <tr class="fail"><td class="n">[Kawaiika] Kusuriya … S3E05 [480p]</td><td>480p</td><td>H.264</td><td>Kawaiika</td><td>0</td><td>180 MB</td><td>2 d</td><td></td><td>min seeders</td></tr>
+  </table>
+  <div class="mut sm" style="margin-top:8px">Click a single row → Stream. Click a batch row → expands its file list. Column headers sort; default sort = auto-select rank.</div>
+ </div>
+</div>
+
+<div class="cap">C1 · Buffer overlay, option “in the HUD slot” (pre-launch, non-blocking)</div>
+<div class="app" style="padding-bottom:16px">
+ <div class="mut" style="height:40px">… any screen, still usable …</div>
+ <div class="hud"><div class="post"></div><div class="grow col" style="gap:4px">
+  <div class="row"><span class="b">Kusuriya no Hitorigoto S3</span><span class="mut sm">EP 8 · The Jade Pendant</span><span class="grow"></span>
+   <span class="stage"><span class="done">metadata</span>›<span class="done">peers</span>›<span class="cur">buffering</span></span></div>
+  <div class="row sm"><span class="mut" style="width:30px">head</span><div class="bar grow"><b style="width:62%"></b></div><span class="mut" style="width:30px">tail</span><div class="bar" style="width:90px"><b style="width:100%"></b></div></div></div>
+  <span class="mut sm" style="width:110px;text-align:right">24 peers<br>4.8 MB/s</span><span class="btn">Cancel</span></div>
+</div>
+
+<div class="cap">C2 · Buffer overlay, option “modal dialog” (pre-launch, blocks the screen)</div>
+<div class="app" style="height:230px"><div class="dim"></div>
+ <div class="modal" style="position:relative">
+  <div class="row"><div class="post"></div><div><div class="b">Kusuriya no Hitorigoto S3 · EP 8</div><div class="mut sm">[SubsPlease] … - 08 (1080p).mkv</div></div></div>
+  <div class="stage" style="margin:10px 0"><span class="done">metadata ✓</span>›<span class="done">peers ✓</span>›<span class="cur">buffering</span></div>
+  <div class="sm mut">Head 5.0 / 8 MiB</div><div class="bar"><b style="width:62%"></b></div>
+  <div class="sm mut" style="margin-top:6px">Tail 4 / 4 MiB</div><div class="bar"><b style="width:100%"></b></div>
+  <div class="row" style="margin-top:12px"><span class="mut sm grow">24 peers · 4.8 MB/s</span><span class="btn g">Hide</span><span class="btn">Cancel</span></div>
+ </div>
+</div>
+
+<div class="cap">C3 · 60 s with no peers (either option)</div>
+<div class="app" style="padding-bottom:16px"><div style="height:10px"></div>
+ <div class="hud"><div class="post"></div><div class="grow col" style="gap:3px"><div class="row"><span class="b">Kusuriya no Hitorigoto S3</span><span class="mut sm">EP 5</span><span class="stage"><span class="done">metadata</span>›<span class="cur">peers</span></span></div>
+  <div class="sm" style="color:#e8bf6a">No peers found. Try another release.</div></div><span class="mut sm">0 peers · 1:02</span><span class="btn">Choose another release</span><span class="btn">Cancel</span></div>
+</div>
+
+<div class="cap">C4 · In-HUD Buffering flag while playing (#179: read blocked &gt; 2 s)</div>
+<div class="app" style="padding-bottom:16px"><div style="height:10px"></div>
+ <div class="hud"><div class="post"></div><div class="grow col" style="gap:5px"><div class="row"><span class="b">Kusuriya no Hitorigoto S3</span><span class="mut sm">EP 8 · The Jade Pendant</span><span class="flag">Buffering · 24 peers · 4.8 MB/s</span></div>
+  <div class="bar" style="height:4px;position:relative"><b style="width:41%"></b><span style="position:absolute;left:41%;top:0;height:4px;width:30%;background:rgba(255,255,255,.18)"></span></div></div>
+  <span class="mut sm" style="width:96px;text-align:right">9:52 / 23:40</span><span class="mut sm">mpv</span><span class="btn g">⟲</span><span class="btn">❚❚</span><span class="btn g">⟳</span><span class="btn g">■</span></div>
+ <div class="mut sm" style="margin-top:22px">Lighter band on the seek track = downloaded pieces ahead of the playhead (optional).</div>
+</div>
+</body></html>
