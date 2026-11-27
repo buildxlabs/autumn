@@ -1,0 +1,19 @@
+[package]
+name                   = "torrent"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[dependencies]
+librqbit.workspace  = true
+thiserror.workspace = true
+tokio               = { features = [ "fs", "io-util" ], workspace = true }
+tracing.workspace   = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
