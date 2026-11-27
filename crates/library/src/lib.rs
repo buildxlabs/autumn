@@ -344,7 +344,7 @@ impl Library {
             let Some(file) = scanned.get(first) else {
                 continue;
             };
-            let title = normalize(file.release.title.as_deref().unwrap_or(&file.group_key));
+            let title = file_title(file);
             let Some(found) = self.matcher.best(&title, candidates) else {
                 continue;
             };
@@ -542,6 +542,15 @@ fn summarize(
     }
 }
 
+/// The title a file is matched with. The parser moves a season marker
+/// (`S2`, `Season 2`) out of the title; it is put back so the matcher can
+/// prefer the candidate of that season.
+fn file_title(file: &ScannedFile) -> NormalizedTitle {
+    let mut title = normalize(file.release.title.as_deref().unwrap_or(&file.group_key));
+    title.season = title.season.or(file.release.season);
+    title
+}
+
 /// Why a scan left `file` without a media.
 fn unmatched_reason(
     matcher: Matcher,
@@ -551,7 +560,7 @@ fn unmatched_reason(
     if file.group_key.is_empty() {
         return UnmatchedReason::NoTitle;
     }
-    let title = normalize(file.release.title.as_deref().unwrap_or(&file.group_key));
+    let title = file_title(file);
     match matcher.best_candidate(&title, candidates) {
         Some(best) => UnmatchedReason::BelowThreshold {
             best_score: best.confidence,

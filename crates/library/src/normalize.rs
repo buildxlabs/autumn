@@ -157,6 +157,14 @@ pub fn normalize(title: &str) -> NormalizedTitle {
             i -= 1;
             continue;
         }
+        if word == "season"
+            && let Some(value) = words.get(i + 1).and_then(|next| next.parse::<u32>().ok())
+        {
+            season = Some(value);
+            words.remove(i + 1);
+            words.remove(i);
+            continue;
+        }
         if let Some(value) = ordinal(word)
             && words.get(i + 1).is_some_and(|next| next == "season")
         {
@@ -261,6 +269,13 @@ mod tests {
                 "Sword Art Online 2nd Season",
                 "sword art online",
                 "sword art online",
+                Some(2),
+                None,
+            ),
+            (
+                "Spy x Family Season 2",
+                "spy x family",
+                "spy x family",
                 Some(2),
                 None,
             ),
