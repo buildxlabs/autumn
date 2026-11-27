@@ -22,6 +22,7 @@ use std::{
     time::Duration,
 };
 
+use domain::InfoHash;
 use librqbit::{
     AddTorrent, AddTorrentOptions, AddTorrentResponse, Api, ConnectionOptions, DhtSessionConfig,
     ListenerOptions, Magnet, ManagedTorrent, Session, SessionOptions, api::TorrentIdOrHash,
@@ -80,32 +81,9 @@ fn session_err(e: impl Into<BoxError>) -> Error {
     Error::Session(e.into())
 }
 
-/// A v1 torrent infohash (SHA-1 of the info dictionary).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct InfoHash([u8; 20]);
-
-impl InfoHash {
-    fn id(self) -> TorrentIdOrHash {
-        TorrentIdOrHash::Hash(Id20::new(self.0))
-    }
-}
-
-impl fmt::Display for InfoHash {
-    /// Lowercase hex, the form used for cache directory names.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&Id20::new(self.0).as_string())
-    }
-}
-
-impl FromStr for InfoHash {
-    type Err = Error;
-
-    /// Parses 40 hex characters.
-    fn from_str(s: &str) -> Result<Self, Error> {
-        Id20::from_str(s)
-            .map(|id| Self(id.0))
-            .map_err(|e| Error::InvalidSource(e.into()))
-    }
+/// librqbit's name for a torrent in the session.
+fn id(info_hash: InfoHash) -> TorrentIdOrHash {
+    TorrentIdOrHash::Hash(Id20::new(*info_hash.as_bytes()))
 }
 
 /// Where a torrent comes from.
@@ -175,11 +153,13 @@ pub struct TorrentSessionOptions {
     pub bind_interface: Option<String>,
     /// Global rate limits; also settable live afterwards.
     pub rate_limits: RateLimits,
+    /// Never upload to peers (Settings → Storage, #180 Q4). Off by default.
+    pub disable_upload: bool,
 }
 
 impl Default for TorrentSessionOptions {
     /// The Phase 3 defaults: random port, upnp off, DHT on, no proxy, no
-    /// interface binding, no rate limits.
+    /// interface binding, no rate limits, uploads on.
     fn default() -> Self {
         Self {
             listen_port: 0,
@@ -188,6 +168,7 @@ impl Default for TorrentSessionOptions {
             proxy_url: None,
             bind_interface: None,
             rate_limits: RateLimits::default(),
+            disable_upload: false,
         }
     }
 }
@@ -273,6 +254,16 @@ pub struct TorrentStats {
     pub downloaded_bytes: u64,
     /// Bytes sent to peers this run.
     pub uploaded_bytes: u64,
+}
+
+/// One file of a torrent in the cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DiskFile {
+    /// Where the file is written, under `<root>/<infohash>/`.
+    pub path: PathBuf,
+    /// Size in bytes.
+    pub len: u64,
 }
 
 /// A readable, seekable view of one file of a torrent.
@@ -395,6 +386,7 @@ impl TorrentSession {
                 download_bps: options.rate_limits.download_bytes_per_sec,
                 upload_bps: options.rate_limits.upload_bytes_per_sec,
             },
+            disable_upload: options.disable_upload,
             ..SessionOptions::default()
         };
         let session = match Session::new_with_opts(root.clone(), session_options).await {
@@ -460,12 +452,15 @@ impl TorrentSession {
                 let id = magnet
                     .as_id20()
                     .ok_or_else(|| Error::InvalidSource("magnet link has no v1 infohash".into()))?;
-                (InfoHash(id.0), AddTorrent::from_url(url))
+                (InfoHash::from_bytes(id.0), AddTorrent::from_url(url))
             }
             TorrentSource::File(bytes) => {
                 let meta =
                     torrent_from_bytes(&bytes).map_err(|e| Error::InvalidSource(e.into()))?;
-                (InfoHash(meta.info_hash.0), AddTorrent::from_bytes(bytes))
+                (
+                    InfoHash::from_bytes(meta.info_hash.0),
+                    AddTorrent::from_bytes(bytes),
+                )
             }
         };
         let folder = self.dir(info_hash);
@@ -580,6 +575,32 @@ impl TorrentSession {
         Ok(FileStream(Box::new(stream)))
     }
 
+    /// Where one file of a torrent lands on disk and how long it is.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotFound`], or [`Error::NoSuchFile`] (also while a magnet's
+    /// metadata is unknown).
+    pub fn file_on_disk(&self, info_hash: InfoHash, file_index: usize) -> Result<DiskFile, Error> {
+        let handle = self.handle(info_hash)?;
+        let no_file = || Error::NoSuchFile {
+            info_hash,
+            file_index,
+        };
+        let (relative, len) = handle
+            .with_metadata(|meta| {
+                meta.file_infos
+                    .get(file_index)
+                    .map(|file| (file.relative_filename.clone(), file.len))
+            })
+            .map_err(|_| no_file())?
+            .ok_or_else(no_file)?;
+        Ok(DiskFile {
+            path: self.dir(info_hash).join(relative),
+            len,
+        })
+    }
+
     /// Head and tail window progress of one file.
     ///
     /// # Errors
@@ -606,7 +627,7 @@ impl TorrentSession {
             .ok_or_else(no_file)?;
         let (haves, _) = self
             .api
-            .api_dump_haves(info_hash.id())
+            .api_dump_haves(id(info_hash))
             .map_err(session_err)?;
         let progress = |pieces: std::ops::Range<u32>| {
             let total = pieces.end - pieces.start;
@@ -704,7 +725,7 @@ impl TorrentSession {
     pub async fn delete(&self, info_hash: InfoHash) -> Result<(), Error> {
         self.api
             .session()
-            .delete(info_hash.id(), true)
+            .delete(id(info_hash), true)
             .await
             .map_err(session_err)?;
         remove_dir_if_present(&self.dir(info_hash)).await
@@ -786,7 +807,7 @@ impl TorrentSession {
     fn handle(&self, info_hash: InfoHash) -> Result<Arc<ManagedTorrent>, Error> {
         self.api
             .session()
-            .get(info_hash.id())
+            .get(id(info_hash))
             .ok_or(Error::NotFound(info_hash))
     }
 }

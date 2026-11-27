@@ -1,7 +1,7 @@
 //! Playback inputs and the state the engine publishes for the HUD.
 //!
-//! See ARCHITECTURE §6 and ticket #128. Only a local file is a source in
-//! Phase 2; torrent, debrid and online sources land in Phases 3 and 5.
+//! See ARCHITECTURE §6 and tickets #128 and #217. Local files and torrent
+//! streams are sources; debrid and online sources land in Phase 5.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -163,4 +163,74 @@ pub struct PlaybackState {
     pub duration: Option<Duration>,
     /// Whether the player is paused.
     pub paused: bool,
+}
+
+/// How far a torrent stream is from launching the player (#179 Q2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PrepareStage {
+    /// Waiting for the torrent's metadata from peers.
+    Metadata,
+    /// The metadata is known, but no peer is connected.
+    Peers,
+    /// Downloading the head and tail windows.
+    Buffering,
+}
+
+/// Downloaded pieces of one readiness window.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PieceProgress {
+    /// Pieces downloaded and verified.
+    pub done: u32,
+    /// Pieces in the window; zero when the window is empty.
+    pub total: u32,
+}
+
+impl PieceProgress {
+    /// `done` of `total` pieces.
+    #[must_use]
+    pub const fn new(done: u32, total: u32) -> Self {
+        Self { done, total }
+    }
+}
+
+/// The `Preparing` playback phase of a torrent stream: what the buffer
+/// overlay shows before the player opens, at most 4 Hz.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Preparing {
+    /// The media being prepared.
+    pub media: MediaId,
+    /// The episode being prepared.
+    pub episode: u32,
+    /// Metadata, peers or buffering.
+    pub stage: PrepareStage,
+    /// Connected peers.
+    pub peers: u32,
+    /// Download speed in bytes per second.
+    pub download_bps: u64,
+    /// Progress of the head window.
+    pub head: PieceProgress,
+    /// Progress of the tail window.
+    pub tail: PieceProgress,
+    /// No peer has connected for 60 s: "No peers found. Try another release."
+    pub no_peers: bool,
+}
+
+impl Preparing {
+    /// The first report for `episode` of `media`: waiting for metadata.
+    #[must_use]
+    pub const fn new(media: MediaId, episode: u32) -> Self {
+        Self {
+            media,
+            episode,
+            stage: PrepareStage::Metadata,
+            peers: 0,
+            download_bps: 0,
+            head: PieceProgress::new(0, 0),
+            tail: PieceProgress::new(0, 0),
+            no_peers: false,
+        }
+    }
 }

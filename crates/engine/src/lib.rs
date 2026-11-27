@@ -15,6 +15,7 @@ pub mod network;
 mod phase2_exit;
 mod playback;
 mod settings_store;
+mod torrent_streams;
 
 use std::{
     collections::HashSet,
@@ -50,6 +51,7 @@ pub use playback::{
     PlaybackManager, PlaybackSession, PlayerLaunch, PlayerLauncher, ProgressSync, SyncError,
     sidecar_subtitles,
 };
+pub use torrent_streams::TorrentStreams;
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
@@ -333,6 +335,30 @@ pub struct Engine {
     scanner: Arc<LibraryScanner>,
     watcher: Arc<Mutex<Option<AutoScan>>>,
     playback: Arc<PlaybackManager>,
+    /// The torrent session and relay, started by the first stream (#217).
+    torrent: Arc<TorrentStreams>,
+    /// Auto-select over the indexers and the torrent session (#218); rebuilt
+    /// when the Network tab changes an indexer base URL.
+    auto_select: Arc<RwLock<AutoSelector>>,
+}
+
+/// Auto-select over both indexers (with `network`'s base URLs), the
+/// session's file lists and `AniZip` eids.
+fn auto_selector(
+    client: &Client,
+    poster_cache: &PosterCache,
+    network: &settings::NetworkSettings,
+    torrent: &Arc<TorrentStreams>,
+) -> AutoSelector {
+    let transport = search::NetTransport::new(client.clone(), network::search_config(network));
+    AutoSelector::new(
+        Arc::new(Arc::new(search::Searcher::new(transport))),
+        Arc::new(SessionFiles::new(Arc::clone(torrent))),
+        Arc::new(AniZipEpisodeIds::new(AniZip::new(
+            client.clone(),
+            poster_cache.clone(),
+        ))),
+    )
 }
 
 /// The loopback host of debug fetches; `fetch_status::observe` watches its rate limits.
@@ -387,14 +413,30 @@ impl Engine {
             Arc::clone(&events_slot),
             runtime.handle().clone(),
         ));
-        let playback = Arc::new(PlaybackManager::new(
-            db.clone(),
-            catalog.clone(),
-            Arc::new(LocalProgressSync::new(db.clone())),
-            events,
-            &settings.playback,
-            paths.cache_dir().to_path_buf(),
+        let mut torrent_options = network::torrent_options(&settings.network);
+        torrent_options.disable_upload = settings.torrent.disable_upload;
+        let torrent = Arc::new(TorrentStreams::new(
+            settings.torrent_folder(paths),
+            torrent::PeerDiscovery::Public,
+            torrent_options,
         ));
+        let auto_select = Arc::new(RwLock::new(auto_selector(
+            &client,
+            &poster_cache,
+            &settings.network,
+            &torrent,
+        )));
+        let playback = Arc::new(
+            PlaybackManager::new(
+                db.clone(),
+                catalog.clone(),
+                Arc::new(LocalProgressSync::new(db.clone())),
+                events,
+                &settings.playback,
+                paths.cache_dir().to_path_buf(),
+            )
+            .with_torrent(Arc::clone(&torrent)),
+        );
         Ok(Self {
             db,
             client,
@@ -409,6 +451,8 @@ impl Engine {
             scanner,
             watcher: Arc::new(Mutex::new(None)),
             playback,
+            torrent,
+            auto_select,
         })
     }
 
@@ -450,9 +494,7 @@ impl Engine {
     /// Live Network reload (ADR-0010 §6). Rebuilds `net`'s shared client
     /// proxy for new requests (in-flight requests finish on the old one) and
     /// returns the [`network::TorrentSettingsChange`] diff-and-restart
-    /// decision; there is no running torrent module yet (#217), so the
-    /// caller applies rate limits and restarts the torrent module. Indexer
-    /// base URLs affect the next search via [`network::search_config`].
+    /// decision. [`Self::reload_network`] also acts on it.
     ///
     /// # Errors
     ///
@@ -475,6 +517,44 @@ impl Engine {
             .filter(|proxy| !proxy.is_empty());
         self.client.set_proxy(proxy)?;
         Ok(network::torrent_settings_change(old, new, stream_playing))
+    }
+
+    /// Applies a Network save: the HTTP proxy and indexer base URLs for the
+    /// next request, rate limits live, and a torrent session restart now or
+    /// after the last stream ends ("Applies after playback stops").
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::apply_network_settings`].
+    pub async fn reload_network(
+        &self,
+        old: &settings::NetworkSettings,
+        new: &settings::NetworkSettings,
+    ) -> Result<network::TorrentSettingsChange, EngineError> {
+        let change = self.apply_network_settings(old, new, self.torrent.is_streaming())?;
+        let selector = auto_selector(&self.client, &self.poster_cache, new, &self.torrent);
+        if let Ok(mut current) = self.auto_select.write() {
+            *current = selector;
+        }
+        self.torrent
+            .apply_network(&change, network::torrent_options(new))
+            .await;
+        Ok(change)
+    }
+
+    /// The torrent session and relay behind torrent streams.
+    #[must_use]
+    pub fn torrent_streams(&self) -> &Arc<TorrentStreams> {
+        &self.torrent
+    }
+
+    /// The auto-select pipeline with the current Network settings.
+    #[must_use]
+    pub fn auto_selector(&self) -> Option<AutoSelector> {
+        self.auto_select
+            .read()
+            .ok()
+            .map(|selector| selector.clone())
     }
 
     /// Starts, restarts or stops the auto-scan watcher to match the Library

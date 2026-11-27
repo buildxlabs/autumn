@@ -7,8 +7,9 @@
 
 use std::{path::Path, str::FromStr};
 
+use domain::InfoHash;
 use tempfile::TempDir;
-use torrent::{InfoHash, TorrentCache};
+use torrent::TorrentCache;
 
 const LIVE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const IDLE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

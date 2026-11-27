@@ -1,6 +1,6 @@
 //! IINA on macOS, driven through its embedded mpv's JSON IPC.
 
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 use crate::{
     Endpoint, LaunchOptions, Result, Retry, Session,
@@ -30,21 +30,25 @@ pub fn launch_iina(
     };
     mpv::launch(
         executable,
-        |endpoint| iina_args(endpoint, file),
+        |endpoint| iina_args(endpoint, file, options.network_timeout),
         &options,
         ChildPolicy::LeaveOnIpcClose,
     )
 }
 
 /// The exact arguments `iina-cli` is launched with, kept pure for testing.
-fn iina_args(endpoint: &Endpoint, file: &str) -> Vec<String> {
-    vec![
+fn iina_args(endpoint: &Endpoint, file: &str, network_timeout: Option<Duration>) -> Vec<String> {
+    let mut args = vec![
         "--keep-running".to_owned(),
         "--no-stdin".to_owned(),
         format!("--mpv-input-ipc-server={endpoint}"),
         "--mpv-keep-open=yes".to_owned(),
-        file.to_owned(),
-    ]
+    ];
+    if let Some(timeout) = network_timeout {
+        args.push(format!("--mpv-network-timeout={}", timeout.as_secs()));
+    }
+    args.push(file.to_owned());
+    args
 }
 
 #[cfg(test)]
@@ -58,10 +62,30 @@ mod tests {
     use crate::PlayerEvent;
 
     #[test]
+    fn iina_passes_the_stream_network_timeout_to_its_mpv() {
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = crate::fresh_endpoint(dir.path()).unwrap();
+        let args = iina_args(
+            &endpoint,
+            "http://127.0.0.1:1/t/token/hash/0",
+            Some(Duration::from_secs(300)),
+        );
+
+        assert!(
+            args.contains(&"--mpv-network-timeout=300".to_owned()),
+            "{args:?}"
+        );
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("http://127.0.0.1:1/t/token/hash/0")
+        );
+    }
+
+    #[test]
     fn iina_launch_arguments_forward_the_fresh_ipc_path() {
         let dir = tempfile::tempdir().unwrap();
         let endpoint = crate::fresh_endpoint(dir.path()).unwrap();
-        let args = iina_args(&endpoint, "file:///media/ep.mkv");
+        let args = iina_args(&endpoint, "file:///media/ep.mkv", None);
 
         assert_eq!(
             args,

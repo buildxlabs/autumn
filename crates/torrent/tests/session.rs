@@ -16,6 +16,7 @@ use std::{
     time::Duration,
 };
 
+use domain::InfoHash;
 use librqbit::{
     CreateTorrentOptions, ListenerOptions, Session, SessionOptions, limits::LimitsConfig,
 };
@@ -25,8 +26,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 use torrent::{
-    Error, InfoHash, PeerDiscovery, TorrentSession, TorrentSessionOptions, TorrentSource,
-    TorrentStats,
+    Error, PeerDiscovery, TorrentSession, TorrentSessionOptions, TorrentSource, TorrentStats,
 };
 
 const MIB: u64 = 1024 * 1024;

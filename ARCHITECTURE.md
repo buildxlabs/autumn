@@ -95,17 +95,19 @@ debrid         → search (for the shared result type)
 onlinestream   → extensions
 autodownloader → search, torrent, debrid, tracker
 tracker        → metadata
-relay          → torrent
 auth           → metadata (the authenticated Viewer account lookup)
 engine         → mkv (chapter skip markers for local files)
 engine         → search (auto-select pipeline #218, indexer base URLs from Network settings #225)
-engine         → torrent (auto-select file lists #218, live rate limits #225)
+engine         → torrent (auto-select file lists #218, live rate limits #225, the torrent stream session #217)
+engine         → relay (relay URLs and the Buffering flag for torrent streams #217)
 ```
 
 Foundation, UI and binary edges in use (rules 1–3 already allow them; they're listed so a new one shows up in review):
 
 ```text
 db            → domain
+torrent       → domain (the shared InfoHash, #217)
+relay         → domain (the shared InfoHash, #217)
 auth           → domain, net
 engine         → domain, net, db, metadata, tracker, settings, library, player, mkv (library watcher #123, scan module + playback manager #127/#128, chapter skip #131)
 library        → domain, db

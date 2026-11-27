@@ -34,6 +34,8 @@ pub(crate) struct FakeLauncher {
     pub(crate) relaunch: Arc<AtomicBool>,
     /// Makes every seek fail, as a player that rejects the command.
     pub(crate) fail_seeks: Arc<AtomicBool>,
+    /// What each launch was asked to open.
+    pub(crate) launched: Arc<Mutex<Vec<PlayerLaunch>>>,
 }
 
 impl FakeLauncher {
@@ -65,6 +67,11 @@ impl FakeLauncher {
         lock(&self.loads).clone()
     }
 
+    /// The launch requests seen so far, oldest first.
+    pub(crate) fn launched(&self) -> Vec<PlayerLaunch> {
+        lock(&self.launched).clone()
+    }
+
     pub(crate) fn launches(&self) -> usize {
         self.launches.load(Ordering::SeqCst)
     }
@@ -91,8 +98,9 @@ impl FakeLauncher {
 impl PlayerLauncher for FakeLauncher {
     fn launch(
         &self,
-        _launch: PlayerLaunch,
+        launch: PlayerLaunch,
     ) -> BoxFuture<Result<Box<dyn PlaybackSession>, PlayerError>> {
+        lock(&self.launched).push(launch);
         self.launches.fetch_add(1, Ordering::SeqCst);
         let (session, _) = self.session();
         let gate = lock(&self.gate).take();

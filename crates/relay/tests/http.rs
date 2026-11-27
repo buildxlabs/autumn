@@ -9,13 +9,13 @@ use std::{
     time::Duration,
 };
 
+use domain::InfoHash;
 use reqwest::{
     Client, StatusCode,
     header::{ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
 };
 use tempfile::TempDir;
 use tokio::io::{AsyncRead, AsyncSeek, ReadBuf};
-use torrent::InfoHash;
 
 use relay::{BufferingEvent, Relay, StreamSpec};
 

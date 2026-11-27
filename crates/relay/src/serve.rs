@@ -24,6 +24,7 @@ use axum::{
     },
     response::Response,
 };
+use domain::InfoHash;
 use futures::Stream;
 use tokio::{
     fs::File,
@@ -31,7 +32,6 @@ use tokio::{
     sync::{OwnedMutexGuard, broadcast},
     time::{Sleep, sleep},
 };
-use torrent::InfoHash;
 
 use crate::{
     BoxedReader, BufferingEvent, State as RelayState, Stream as LiveStream, StreamToken,
@@ -165,9 +165,9 @@ fn server_error() -> Response {
     response
 }
 
-/// Parses exactly `/t/<token>/<40-hex hash>/<u32 index>`, with no extra
+/// Parses exactly `/t/<token>/<40-hex hash>/<index>`, with no extra
 /// segments, following the `VortX` strict gate (see module comment).
-fn parse_route(uri: &Uri) -> Option<(StreamToken, InfoHash, u32)> {
+fn parse_route(uri: &Uri) -> Option<(StreamToken, InfoHash, usize)> {
     let mut parts = uri.path().split('/');
     let (Some(""), Some("t"), Some(token), Some(hash), Some(index), None) = (
         parts.next(),
@@ -184,7 +184,7 @@ fn parse_route(uri: &Uri) -> Option<(StreamToken, InfoHash, u32)> {
     if index.is_empty() || !index.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
-    let index = index.parse::<u32>().ok()?;
+    let index = index.parse::<usize>().ok()?;
     Some((token, hash, index))
 }
 
