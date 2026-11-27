@@ -17,9 +17,9 @@ use domain::{InfoHash, StreamSource};
 use metadata::{Aging, AniZip};
 use search::{EpisodeTarget, SearchRequest, Searcher, Torrent, Transport};
 use settings::AutoSelectProfile;
-use torrent::{TorrentFile, TorrentSession, TorrentSource};
+use torrent::{TorrentFile, TorrentSource};
 
-use crate::BoxFuture;
+use crate::{BoxFuture, TorrentStreams};
 
 /// How many ranked candidates are verified before giving up (Seanime's
 /// `MaxTorrentCandidatesToCheck`, #181 Q11).
@@ -223,24 +223,26 @@ impl<T: Transport + 'static> TorrentSearch for Arc<Searcher<T>> {
     }
 }
 
-/// Lists files through the embedded torrent session, by magnet.
+/// Lists files through the engine's torrent session, by magnet. The session
+/// starts on the first list.
 #[derive(Debug, Clone)]
 pub struct SessionFiles {
-    session: Arc<TorrentSession>,
+    streams: Arc<TorrentStreams>,
 }
 
 impl SessionFiles {
-    /// List through `session`.
+    /// List through the session of `streams`.
     #[must_use]
-    pub const fn new(session: Arc<TorrentSession>) -> Self {
-        Self { session }
+    pub const fn new(streams: Arc<TorrentStreams>) -> Self {
+        Self { streams }
     }
 }
 
 impl FileLister for SessionFiles {
     fn files(&self, torrent: Torrent) -> BoxFuture<Result<Vec<TorrentFile>, FileListError>> {
-        let session = Arc::clone(&self.session);
+        let streams = Arc::clone(&self.streams);
         Box::pin(async move {
+            let session = streams.session().await?;
             let magnet = torrent
                 .magnet_url
                 .unwrap_or_else(|| format!("magnet:?xt=urn:btih:{}", torrent.infohash));

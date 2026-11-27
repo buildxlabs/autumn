@@ -26,6 +26,7 @@ use axum::{
     Router,
     routing::{MethodFilter, on},
 };
+use domain::InfoHash;
 use futures::task::AtomicWaker;
 use rand::random;
 use tokio::{
@@ -34,7 +35,6 @@ use tokio::{
     sync::{RwLock, broadcast, oneshot},
     task::JoinHandle,
 };
-use torrent::InfoHash;
 
 mod range;
 mod serve;
@@ -108,7 +108,7 @@ pub struct StreamSpec {
     /// Identifies the torrent whose file is streamed.
     pub info_hash: InfoHash,
     /// The selected file's index in the torrent.
-    pub file_index: u32,
+    pub file_index: usize,
     /// The file's length in bytes, for `Content-Range` and `Content-Length`.
     pub len: u64,
     /// Where the file lands in the torrent cache once it is complete.
@@ -125,7 +125,7 @@ pub(crate) type BoxedReader = Box<dyn ReadSeek>;
 /// One live stream in the gate's registry.
 pub(crate) struct Stream {
     pub(crate) info_hash: InfoHash,
-    pub(crate) file_index: u32,
+    pub(crate) file_index: usize,
     pub(crate) len: u64,
     pub(crate) disk_path: PathBuf,
     pub(crate) complete: AtomicBool,

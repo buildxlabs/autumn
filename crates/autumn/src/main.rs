@@ -159,7 +159,11 @@ fn main() -> ExitCode {
     let general = engine.settings().general.clone();
     let library_settings = engine.settings().library.clone();
     let network_settings = engine.settings().network.clone();
-    let network_services = network::saver(engine.db().clone(), engine.settings().clone());
+    let network_services = network::saver(
+        engine.db().clone(),
+        engine.settings().clone(),
+        engine.clone(),
+    );
     let library_services = library::saver(
         engine.db().clone(),
         engine.clone(),
@@ -176,6 +180,7 @@ fn main() -> ExitCode {
         engine.db().clone(),
         engine.settings().clone(),
         started.paths.torrent_dir(),
+        Arc::clone(engine.torrent_streams()),
     );
     let storage_request = poster_cache_request(engine.poster_cache());
     let save_prefs = rail_prefs::saver(engine.db().clone(), engine.settings().clone());

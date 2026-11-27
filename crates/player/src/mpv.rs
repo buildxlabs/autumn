@@ -1,6 +1,6 @@
 //! Detached, supervised mpv launch and the public [`Session`] handle.
 
-use std::{path::PathBuf, process::Stdio, sync::OnceLock};
+use std::{path::PathBuf, process::Stdio, sync::OnceLock, time::Duration};
 
 use domain::MediaId;
 use futures::{SinkExt, StreamExt, channel::mpsc};
@@ -43,6 +43,9 @@ pub struct LaunchOptions {
     pub media: Option<MediaId>,
     /// Sidecar subtitle files to load alongside the video (#128).
     pub subtitles: Vec<PathBuf>,
+    /// mpv's `network-timeout` for a URL source; `None` keeps the
+    /// player's default. Torrent streams pass 300 s (#179 Q4).
+    pub network_timeout: Option<Duration>,
 }
 
 impl LaunchOptions {
@@ -53,6 +56,7 @@ impl LaunchOptions {
             ipc_retry: Retry::mpv(),
             media: None,
             subtitles: Vec::new(),
+            network_timeout: None,
         }
     }
 
@@ -248,7 +252,7 @@ pub fn launch_mpv(
 ) -> Result<Session> {
     launch(
         executable,
-        |endpoint| mpv_args(endpoint, file, &options.subtitles),
+        |endpoint| mpv_args(endpoint, file, &options.subtitles, options.network_timeout),
         options,
         ChildPolicy::KillOnIpcClose,
     )
@@ -310,12 +314,20 @@ pub(crate) fn launch(
 }
 
 /// The exact arguments mpv is launched with, kept pure for testing.
-fn mpv_args(endpoint: &Endpoint, file: &str, subtitles: &[PathBuf]) -> Vec<String> {
+fn mpv_args(
+    endpoint: &Endpoint,
+    file: &str,
+    subtitles: &[PathBuf],
+    network_timeout: Option<Duration>,
+) -> Vec<String> {
     let mut args = vec![
         "--force-window=immediate".to_owned(),
         "--keep-open=yes".to_owned(),
         format!("--input-ipc-server={endpoint}"),
     ];
+    if let Some(timeout) = network_timeout {
+        args.push(format!("--network-timeout={}", timeout.as_secs()));
+    }
     for subtitle in subtitles {
         args.push(format!("--sub-file={}", subtitle.display()));
     }
@@ -529,7 +541,7 @@ mod tests {
     fn mpv_launch_arguments_are_minimal_and_have_no_resume_position() {
         let cache = tempfile::tempdir().unwrap();
         let endpoint = fresh_endpoint(cache.path()).unwrap();
-        let args = mpv_args(&endpoint, "file:///media/ep.mkv", &[]);
+        let args = mpv_args(&endpoint, "file:///media/ep.mkv", &[], None);
 
         assert_eq!(
             args,
@@ -549,8 +561,8 @@ mod tests {
     #[test]
     fn two_launches_use_different_ipc_arguments() {
         let cache = tempfile::tempdir().unwrap();
-        let a = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "a.mkv", &[]);
-        let b = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "b.mkv", &[]);
+        let a = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "a.mkv", &[], None);
+        let b = mpv_args(&fresh_endpoint(cache.path()).unwrap(), "b.mkv", &[], None);
         assert_ne!(a.get(2), b.get(2), "each launch needs its own IPC endpoint");
     }
 
@@ -562,7 +574,7 @@ mod tests {
             PathBuf::from("/media/Subs/ep.ass"),
             PathBuf::from("/media/ep.srt"),
         ];
-        let args = mpv_args(&endpoint, "/media/ep.mkv", &subs);
+        let args = mpv_args(&endpoint, "/media/ep.mkv", &subs, None);
 
         assert_eq!(
             args,
@@ -573,6 +585,25 @@ mod tests {
                 "--sub-file=/media/Subs/ep.ass",
                 "--sub-file=/media/ep.srt",
                 "/media/ep.mkv",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_stream_url_waits_out_a_long_network_stall() {
+        let cache = tempfile::tempdir().unwrap();
+        let endpoint = fresh_endpoint(cache.path()).unwrap();
+        let url = "http://127.0.0.1:1/t/token/hash/0";
+        let args = mpv_args(&endpoint, url, &[], Some(Duration::from_secs(300)));
+
+        assert_eq!(
+            args,
+            vec![
+                "--force-window=immediate",
+                "--keep-open=yes",
+                &format!("--input-ipc-server={endpoint}"),
+                "--network-timeout=300",
+                url,
             ]
         );
     }

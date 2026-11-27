@@ -3,10 +3,9 @@
 //! The only Network fields that apply live are the global torrent rate
 //! limits; listen port, upnp, DHT, torrent proxy and bound interface are
 //! construction-time `SessionOptions`, so a change requires a torrent-module
-//! restart. **This module is not yet wired to a running torrent module**
-//! (#217 adds it): [`torrent_settings_change`] is a small pure decision the
-//! engine calls on save; restart is deferred while a stream is playing
-//! ("Applies after playback stops"). The global HTTP proxy rebuilds `net`'s
+//! restart. [`torrent_settings_change`] is a small pure decision the engine
+//! calls on save and the engine's torrent module acts on; restart is
+//! deferred while a stream is playing ("Applies after playback stops"). The global HTTP proxy rebuilds `net`'s
 //! shared client immediately for new requests; indexer base URLs affect the
 //! next search.
 
@@ -111,6 +110,8 @@ pub fn torrent_options(network: &NetworkSettings) -> torrent::TorrentSessionOpti
         proxy_url: cleaned(&network.torrent_proxy),
         bind_interface: cleaned(&network.bind_interface),
         rate_limits: rate_limits(network),
+        // A Storage setting; the engine fills it from `settings.torrent`.
+        disable_upload: false,
     }
 }
 

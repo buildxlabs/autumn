@@ -10,6 +10,9 @@
 //! inside the same session loop (#131). At zero the next file replaces the
 //! current one in the same player, or in a fresh launch for players that
 //! cannot replace a file.
+//!
+//! A torrent source first goes through the `Preparing` phase (#217, #179):
+//! see the `stream` submodule.
 
 use std::{
     ffi::OsStr,
@@ -42,7 +45,11 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
-use crate::{BoxFuture, chapters, library};
+use crate::{BoxFuture, TorrentStreams, chapters, library};
+
+mod stream;
+
+use stream::LiveStream;
 
 /// How long a saved position is worth resuming. Home uses the same cutoff
 /// when it puts an in-progress episode first.
@@ -392,6 +399,8 @@ pub struct PlayerLaunch {
     pub choice: PlayerChoice,
     /// The source to open.
     pub source: StreamSource,
+    /// The relay URL the player opens for a torrent source.
+    pub stream_url: Option<String>,
     /// Sidecar subtitles found next to the video.
     pub subtitles: Vec<PathBuf>,
     /// The app cache dir, where per-launch IPC sockets live.
@@ -470,13 +479,16 @@ impl PlayerLauncher for MpvLauncher {
         launch: PlayerLaunch,
     ) -> BoxFuture<Result<Box<dyn PlaybackSession>, PlayerError>> {
         Box::pin(async move {
-            let StreamSource::Local { path } = &launch.source else {
-                return Err(PlayerError::Endpoint(
-                    "only local files can be played in Phase 2".to_owned(),
-                ));
+            let file = match (&launch.source, launch.stream_url) {
+                (StreamSource::Local { path }, _) => path.to_string_lossy().into_owned(),
+                (StreamSource::Torrent { .. }, Some(url)) => url,
+                _ => {
+                    return Err(PlayerError::Endpoint(
+                        "this source has no URL the player can open".to_owned(),
+                    ));
+                }
             };
             let (kind, executable) = Self::resolve(&launch.choice).await?;
-            let file = path.to_string_lossy().into_owned();
             let mut options = if kind == PlayerKind::Iina {
                 LaunchOptions::iina(launch.cache_dir)
             } else {
@@ -484,6 +496,11 @@ impl PlayerLauncher for MpvLauncher {
             };
             options.media = Some(launch.media);
             options.subtitles = launch.subtitles;
+            // mpv and IINA wait out a long stall on missing pieces; VLC and
+            // MPC-HC keep their defaults (#179 Q4).
+            if matches!(launch.source, StreamSource::Torrent { .. }) {
+                options.network_timeout = Some(stream::NETWORK_TIMEOUT);
+            }
             let boxed: Box<dyn PlaybackSession> = match kind {
                 PlayerKind::Mpv => Box::new(launch_mpv(&executable, &file, &options)?),
                 PlayerKind::Iina => Box::new(launch_iina(&executable, &file, &options)?),
@@ -519,6 +536,18 @@ pub enum PlaybackError {
     /// The resume position could not be read.
     #[error("could not read continuity: {0}")]
     Db(#[from] db::DbError),
+    /// The torrent could not be added, buffered or streamed.
+    #[error("could not stream the torrent: {0}")]
+    Torrent(#[from] torrent::Error),
+    /// The loopback relay could not start.
+    #[error("could not start the stream relay: {0}")]
+    Relay(#[from] relay::Error),
+    /// This manager has no torrent session to stream from.
+    #[error("torrent streaming is not available")]
+    TorrentUnavailable,
+    /// The source kind cannot be played yet.
+    #[error("this source cannot be played yet")]
+    UnsupportedSource,
 }
 
 /// Sidecar subtitles with the video's stem, in its folder or `Subs/` (#128).
@@ -585,6 +614,13 @@ enum SessionControl {
         id: u64,
         settled: oneshot::Receiver<()>,
     },
+    /// A torrent stream is preparing (#179 Q2); `cancel` drops it, and
+    /// `settled` fires once it is cleaned up or running.
+    Preparing {
+        id: u64,
+        cancel: oneshot::Sender<()>,
+        settled: oneshot::Receiver<()>,
+    },
     /// A running session; stopping it waits for its final save.
     Running {
         id: u64,
@@ -597,7 +633,9 @@ enum SessionControl {
 impl SessionControl {
     fn id(&self) -> u64 {
         match self {
-            Self::Launching { id, .. } | Self::Running { id, .. } => *id,
+            Self::Launching { id, .. } | Self::Preparing { id, .. } | Self::Running { id, .. } => {
+                *id
+            }
         }
     }
 }
@@ -712,6 +750,12 @@ pub struct PlaybackManager {
     /// Serializes play and stop so a stop during a launch is never lost.
     commands: Arc<tokio::sync::Mutex<()>>,
     current: Arc<Mutex<Option<SessionControl>>>,
+    /// The torrent session and relay; `None` refuses torrent sources.
+    torrent: Option<Arc<TorrentStreams>>,
+    /// How often the `Preparing` phase is reported: 4 Hz.
+    prepare_tick: Duration,
+    /// How long without a peer before "No peers found" (#179 Q2).
+    no_peers_after: Duration,
 }
 
 impl PlaybackManager {
@@ -775,7 +819,17 @@ impl PlaybackManager {
             next_id: AtomicU64::new(1),
             commands: Arc::new(tokio::sync::Mutex::new(())),
             current: Arc::new(Mutex::new(None)),
+            torrent: None,
+            prepare_tick: stream::PREPARE_TICK,
+            no_peers_after: stream::NO_PEERS_AFTER,
         }
+    }
+
+    /// Streams torrent sources through `streams`.
+    #[must_use]
+    pub fn with_torrent(mut self, streams: Arc<TorrentStreams>) -> Self {
+        self.torrent = Some(streams);
+        self
     }
 
     /// Replaces the progress sync, as when the active platform changes.
@@ -792,21 +846,26 @@ impl PlaybackManager {
     pub async fn play(self: &Arc<Self>, request: PlayRequest) -> Result<(), PlaybackError> {
         let _command = self.commands.lock().await;
         self.stop_inner().await;
-        let StreamSource::Local { path } = &request.source else {
-            return Err(PlaybackError::Player(PlayerError::Endpoint(
-                "only local files can be played in Phase 2".to_owned(),
-            )));
-        };
         let resume = self
             .db
             .continuity()
             .get(request.media, request.continuity_key)
             .await?;
+        if let StreamSource::Torrent {
+            info_hash,
+            file_index,
+        } = request.source
+        {
+            return self.start_torrent(request, info_hash, file_index, resume);
+        }
+        let StreamSource::Local { path } = &request.source else {
+            return Err(PlaybackError::UnsupportedSource);
+        };
         let container_chapters = self.container_chapters(path).await;
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (settle, settled) = oneshot::channel();
         *lock(&self.current) = Some(SessionControl::Launching { id, settled });
-        let launch = self.player_launch(&request, path);
+        let launch = self.player_launch(&request, sidecar_subtitles(path));
         let session = match self.launcher.launch(launch).await {
             Ok(session) => session,
             Err(error) => {
@@ -837,6 +896,7 @@ impl PlaybackManager {
                     stopped,
                     controls,
                     done,
+                    None,
                 )
                 .await;
         });
@@ -857,12 +917,13 @@ impl PlaybackManager {
         .unwrap_or_default()
     }
 
-    /// What the launcher needs to open `request`, whose local file is `path`.
-    fn player_launch(&self, request: &PlayRequest, path: &Path) -> PlayerLaunch {
+    /// What the launcher needs to open `request` with `subtitles`.
+    fn player_launch(&self, request: &PlayRequest, subtitles: Vec<PathBuf>) -> PlayerLaunch {
         PlayerLaunch {
             choice: self.player.clone(),
             source: request.source.clone(),
-            subtitles: sidecar_subtitles(path),
+            stream_url: None,
+            subtitles,
             cache_dir: self.cache_dir.clone(),
             media: request.media,
             mpchc_host: self.mpchc_host.clone(),
@@ -881,6 +942,12 @@ impl PlaybackManager {
         let control = lock(&self.current).take();
         match control {
             Some(SessionControl::Launching { settled, .. }) => {
+                let _ = settled.await;
+            }
+            Some(SessionControl::Preparing {
+                cancel, settled, ..
+            }) => {
+                let _ = cancel.send(());
                 let _ = settled.await;
             }
             Some(SessionControl::Running { stop, done, .. }) => {
@@ -934,7 +1001,7 @@ impl PlaybackManager {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the session loop owns its player, stop signal, HUD commands and completion signal"
+        reason = "the session loop owns its player, stop signal, HUD commands, completion signal and torrent stream"
     )]
     async fn drive(
         self: &Arc<Self>,
@@ -946,6 +1013,7 @@ impl PlaybackManager {
         mut stopped: oneshot::Receiver<()>,
         mut controls: mpsc::UnboundedReceiver<Control>,
         done: oneshot::Sender<()>,
+        mut stream: Option<LiveStream>,
     ) {
         let mut state = SessionState::new(resume);
         let mut chapter_state = ChapterState::new(container_chapters);
@@ -961,6 +1029,7 @@ impl PlaybackManager {
                 Control(Control),
                 Tick,
                 Countdown,
+                Buffering(bool),
             }
             let step = tokio::select! {
                 event = session.next_event() => Step::Event(event),
@@ -973,6 +1042,7 @@ impl PlaybackManager {
                 Some(control) = controls.recv() => Step::Control(control),
                 _ = tick.tick() => Step::Tick,
                 () = countdown_step(&mut countdown) => Step::Countdown,
+                stalled = stream::buffering_change(stream.as_mut()) => Step::Buffering(stalled),
             };
             let play_next = match step {
                 Step::Event(None) => {
@@ -1010,9 +1080,11 @@ impl PlaybackManager {
                     None
                 }
                 Step::Tick => {
-                    if !state.watched {
-                        self.save_position(&state, &request).await;
-                    }
+                    self.on_tick(&state, &request, stream.as_mut()).await;
+                    None
+                }
+                Step::Buffering(stalled) => {
+                    let _ = self.events.send(AppEvent::PlaybackBuffering(stalled));
                     None
                 }
                 Step::Countdown => self.count_down(&mut countdown),
@@ -1037,7 +1109,7 @@ impl PlaybackManager {
             }
         }
         if self
-            .end_session(id, session.as_ref(), &state, &request)
+            .end_session(id, session.as_ref(), &state, &request, stream)
             .await
         {
             let _ = self.events.send(AppEvent::PlaybackStopped { unexpected });
@@ -1045,15 +1117,32 @@ impl PlaybackManager {
         let _ = done.send(());
     }
 
-    /// Saves or clears the position, quits the player and releases the slot.
-    /// Returns whether this was still the current session, so the HUD
-    /// should hear that it ended.
+    /// Saves the position, and for a torrent stream moves the relay to the
+    /// finished file on disk.
+    async fn on_tick(
+        &self,
+        state: &SessionState,
+        request: &PlayRequest,
+        stream: Option<&mut LiveStream>,
+    ) {
+        if !state.watched {
+            self.save_position(state, request).await;
+        }
+        if let Some(stream) = stream {
+            stream.switch_to_disk_when_complete().await;
+        }
+    }
+
+    /// Saves or clears the position, quits the player, ends a torrent
+    /// stream and releases the slot. Returns whether this was still the
+    /// current session, so the HUD should hear that it ended.
     async fn end_session(
         &self,
         id: u64,
         session: &dyn PlaybackSession,
         state: &SessionState,
         request: &PlayRequest,
+        stream: Option<LiveStream>,
     ) -> bool {
         if state.watched {
             self.clear_position(request).await;
@@ -1062,6 +1151,10 @@ impl PlaybackManager {
         }
         if let Err(error) = session.quit().await {
             debug!(%error, "player quit after the session ended");
+        }
+        if let Some(stream) = stream {
+            stream.end().await;
+            let _ = self.events.send(AppEvent::PlaybackBuffering(false));
         }
         let is_current = lock(&self.current)
             .as_ref()
@@ -1163,6 +1256,15 @@ impl PlaybackManager {
                 self.publish(state, request);
             }
             PlayerEvent::Eof => {
+                if !stream::eof_is_the_end(&request.source, state) {
+                    // A torrent read failed mid-file: keep the position.
+                    warn!(
+                        position = state.position,
+                        duration = state.duration,
+                        "the torrent stream ended before the end of the file"
+                    );
+                    return true;
+                }
                 state.eof = true;
                 state.finish();
                 self.mark_watched(state, request).await;
@@ -1261,7 +1363,9 @@ impl PlaybackManager {
     /// Looks up the next regular episode in the library and, when auto-next
     /// is on and it exists, starts its countdown.
     async fn offer_next(&self, request: &PlayRequest) -> Option<Countdown> {
-        if !request.kind.is_regular() {
+        // Auto-next for a torrent stream (library, then the same batch) is
+        // #224.
+        if !request.kind.is_regular() || !matches!(request.source, StreamSource::Local { .. }) {
             return None;
         }
         let seconds = self.auto_next?;
@@ -1365,7 +1469,11 @@ impl PlaybackManager {
             if let Err(error) = session.quit().await {
                 debug!(%error, "player quit before the next episode");
             }
-            match self.launcher.launch(self.player_launch(&next, path)).await {
+            match self
+                .launcher
+                .launch(self.player_launch(&next, sidecar_subtitles(path)))
+                .await
+            {
                 Ok(fresh) => *session = fresh,
                 Err(error) => {
                     warn!(%error, "could not launch the next episode");
@@ -1871,7 +1979,7 @@ mod tests {
             tokio::spawn(async move {
                 manager
                     .drive(
-                        1, session, request, resume, chapters, stopped, controls, done,
+                        1, session, request, resume, chapters, stopped, controls, done, None,
                     )
                     .await;
             });
@@ -2492,6 +2600,7 @@ mod tests {
                     stopped,
                     controls,
                     done,
+                    None,
                 )
                 .await;
         });

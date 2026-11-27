@@ -19,8 +19,8 @@ pub use info_hash::{InfoHash, InfoHashError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
 pub use playback::{
-    AutoNext, ChapterKind, PlaybackChapter, PlaybackControl, PlaybackDetails, PlaybackState,
-    StreamSource,
+    AutoNext, ChapterKind, PieceProgress, PlaybackChapter, PlaybackControl, PlaybackDetails,
+    PlaybackState, PrepareStage, Preparing, StreamSource,
 };
 pub use score::{Score, ScoreError};
 pub use transfer::{
@@ -79,6 +79,12 @@ pub enum AppEvent {
     TransferPreview(Option<TransferPreview>),
     /// A background list transfer processed another entry.
     TransferProgress(TransferProgress),
+    /// A torrent stream is preparing, or `None` once the player opens or
+    /// the request ends.
+    PlaybackPreparing(Option<Preparing>),
+    /// A relay read of the running torrent stream has waited over 2 s
+    /// (`true`), or bytes flow again (`false`).
+    PlaybackBuffering(bool),
     /// The one active session's position changed.
     PlaybackState(PlaybackState),
     /// The chapters of the playing file and the current chapter, if any.

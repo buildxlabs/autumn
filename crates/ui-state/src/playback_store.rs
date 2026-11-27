@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 
 use domain::{
     AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
-    PlaybackState,
+    PlaybackState, Preparing,
 };
 use engine::{EngineServices, PlayRequest};
 use gpui_kit::{Context, Task, WeakEntity};
@@ -43,6 +43,8 @@ pub struct PlaybackStore {
     /// The episode the last countdown offered, until it starts playing.
     upcoming: Option<(MediaId, u32)>,
     error: Option<PlaybackError>,
+    preparing: Option<Preparing>,
+    buffering: bool,
     request: Option<Task<()>>,
     control: Option<Task<()>>,
     closed: bool,
@@ -73,6 +75,8 @@ impl PlaybackStore {
             auto_next: None,
             upcoming: None,
             error: None,
+            preparing: None,
+            buffering: false,
             request: None,
             control: None,
             closed: false,
@@ -118,6 +122,19 @@ impl PlaybackStore {
         self.error.as_ref()
     }
 
+    /// The `Preparing` phase of a torrent stream, until the player opens:
+    /// what the buffer overlay shows (#217).
+    #[must_use]
+    pub fn preparing(&self) -> Option<Preparing> {
+        self.preparing
+    }
+
+    /// Whether the running torrent stream is waiting on pieces.
+    #[must_use]
+    pub fn buffering(&self) -> bool {
+        self.buffering
+    }
+
     /// Whether the HUD should show "Player closed" after an unexpected quit.
     #[must_use]
     pub fn closed(&self) -> bool {
@@ -139,6 +156,14 @@ impl PlaybackStore {
                 self.state = Some(state);
                 cx.notify();
             }
+            AppEvent::PlaybackPreparing(preparing) => {
+                self.preparing = preparing;
+                cx.notify();
+            }
+            AppEvent::PlaybackBuffering(buffering) => {
+                self.buffering = buffering;
+                cx.notify();
+            }
             AppEvent::PlaybackAutoNext(next) => {
                 if let Some(next) = next {
                     self.upcoming = Some((next.media, next.episode));
@@ -153,6 +178,8 @@ impl PlaybackStore {
             }
             AppEvent::PlaybackStopped { unexpected } => {
                 self.state = None;
+                self.preparing = None;
+                self.buffering = false;
                 self.details = None;
                 self.chapters.clear();
                 self.current_chapter = None;
@@ -216,7 +243,8 @@ impl PlaybackStore {
             ));
     }
 
-    /// Stops the active session.
+    /// Stops the active session, or cancels a torrent stream that is still
+    /// preparing (the overlay's Cancel).
     pub fn stop(&mut self, cx: &mut Context<'_, Self>) {
         self.closed = false;
         self.closed_task = None;
@@ -341,7 +369,7 @@ mod tests {
 
     use domain::{
         AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl,
-        PlaybackDetails, PlaybackState, StreamSource,
+        PlaybackDetails, PlaybackState, Preparing, StreamSource,
     };
     use engine::PlayRequest;
     use gpui_kit::{AppContext, TestAppContext};
@@ -383,6 +411,39 @@ mod tests {
         });
         assert_eq!(store.read_with(cx, |store, _| store.state()), None);
         assert!(!store.read_with(cx, |store, _| store.closed()));
+    }
+
+    #[gpui_kit::test]
+    fn mirrors_the_preparing_phase_and_the_buffering_flag(cx: &mut TestAppContext) {
+        let store = cx.new(|_| PlaybackStore::new(pending_services()));
+        let preparing = Preparing::new(MediaId::new(7), 3);
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackPreparing(Some(preparing)), cx);
+            });
+        });
+        assert_eq!(
+            store.read_with(cx, |store, _| store.preparing()),
+            Some(preparing)
+        );
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackPreparing(None), cx);
+                store.apply(AppEvent::PlaybackState(state()), cx);
+                store.apply(AppEvent::PlaybackBuffering(true), cx);
+            });
+        });
+        assert_eq!(store.read_with(cx, |store, _| store.preparing()), None);
+        assert!(store.read_with(cx, |store, _| store.buffering()));
+
+        cx.update(|cx| {
+            store.update(cx, |store, cx| {
+                store.apply(AppEvent::PlaybackStopped { unexpected: false }, cx);
+            });
+        });
+        assert!(!store.read_with(cx, |store, _| store.buffering()));
     }
 
     #[gpui_kit::test]

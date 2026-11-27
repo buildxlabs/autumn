@@ -25,7 +25,10 @@ gpui-kit = "=0.10.0"
 httpdate = "1.0"
 keyring = { features = [ "v1" ], version = "4" }
 library = { path = "crates/library" }
-librqbit = { default-features = false, features = [ "rust-tls" ], version = "9.1" }
+librqbit = { default-features = false, features = [
+  "disable-upload",
+  "rust-tls",
+], version = "9.1" }
 metadata = { path = "crates/metadata" }
 mkv = { path = "crates/mkv" }
 net = { path = "crates/net" }
@@ -35,6 +38,7 @@ player = { path = "crates/player" }
 quick-xml = "0.41"
 rand = "0.10"
 regex = "1"
+relay = { path = "crates/relay" }
 release-parser = { path = "crates/release-parser" }
 reqwest = { default-features = false, features = [
   "rustls-no-provider",

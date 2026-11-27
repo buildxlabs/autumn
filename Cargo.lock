@@ -2217,11 +2217,14 @@ dependencies = [
  "flume",
  "futures",
  "library",
+ "librqbit",
  "metadata",
  "mkv",
  "net",
  "player",
  "regex",
+ "relay",
+ "reqwest",
  "search",
  "settings",
  "tempfile",
@@ -7696,13 +7699,13 @@ name = "relay"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "domain",
  "futures",
  "rand 0.10.4",
  "reqwest",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "torrent",
  "tracing",
 ]
 
@@ -9628,6 +9631,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 name = "torrent"
 version = "0.1.0"
 dependencies = [
+ "domain",
  "librqbit",
  "tempfile",
  "thiserror 2.0.21",
