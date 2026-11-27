@@ -83,6 +83,9 @@ impl Library {
     /// one row per file. Locked files keep their media and episode, ignored
     /// files stay unmatched, and every scan writes a summary.
     ///
+    /// A folder that is missing or yields no files is treated as absent: its
+    /// rows are shelved until a scan finds files in it again.
+    ///
     /// `progress` is called as files are walked and as groups are matched; the
     /// engine throttles it before reporting to the UI.
     ///
@@ -110,13 +113,20 @@ impl Library {
             .collect();
         let mut scanned = Vec::new();
         let matched = 0;
+        let mut empty_folders = Vec::new();
         for folder in folders.iter().filter(|folder| folder.is_dir()) {
+            let mut found = false;
             for file in walk(folder)? {
                 progress(ScanProgress {
                     files_walked: scanned.len() + 1,
                     files_matched: matched,
                 });
                 scanned.push(file);
+                found = true;
+            }
+            if !found {
+                // An unmounted mount point stays behind as an empty folder.
+                empty_folders.push(folder);
             }
         }
         let walked: HashSet<String> = scanned
@@ -125,11 +135,15 @@ impl Library {
             .collect();
         let mut preserved: HashMap<String, LocalFile> = HashMap::new();
         for (key, row) in &existing {
-            let under_missing = folders
+            let under_absent = folders
                 .iter()
-                .any(|folder| !folder.is_dir() && Path::new(key).starts_with(folder));
-            if under_missing {
-                // A missing drive shelves its files instead of losing them.
+                .any(|folder| !folder.is_dir() && Path::new(key).starts_with(folder))
+                || empty_folders
+                    .iter()
+                    .any(|folder| Path::new(key).starts_with(folder));
+            if under_absent {
+                // A missing drive or empty mount shelves its files instead
+                // of losing them.
                 let mut shelved = row.clone();
                 shelved.shelved = true;
                 preserved.insert(key.clone(), shelved);
