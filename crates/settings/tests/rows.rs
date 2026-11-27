@@ -16,6 +16,7 @@ fn pinned() -> Settings {
             ..PlaybackSettings::default()
         },
         general: GeneralSettings::default(),
+        auto_select: settings::AutoSelectSettings::default(),
     }
 }
 
@@ -35,7 +36,16 @@ fn there_is_one_row_per_tab() {
 
     let mut tabs: Vec<&str> = rows.iter().map(|(tab, _)| tab.as_str()).collect();
     tabs.sort_unstable();
-    assert_eq!(tabs, ["appearance", "general", "library", "playback"]);
+    assert_eq!(
+        tabs,
+        [
+            "appearance",
+            "auto_select",
+            "general",
+            "library",
+            "playback"
+        ]
+    );
 }
 
 #[test]

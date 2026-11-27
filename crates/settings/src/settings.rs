@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::SettingsError;
+use crate::{AutoSelectSettings, SettingsError};
 
 /// The default title-similarity a file needs to match a candidate, in percent (#127).
 pub const DEFAULT_MATCH_THRESHOLD: u8 = 50;
@@ -32,6 +32,8 @@ pub struct Settings {
     pub library: LibrarySettings,
     /// The General tab, including the first-run wizard flag.
     pub general: GeneralSettings,
+    /// Auto-select profiles, the global default and per-media overrides.
+    pub auto_select: AutoSelectSettings,
 }
 
 /// The General tab. A new install and a Phase 1 install both start with

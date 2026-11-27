@@ -29,6 +29,7 @@ fn a_valid_file_reads_its_values() {
         library: LibrarySettings::default(),
         playback: settings::PlaybackSettings::default(),
         general: settings::GeneralSettings::default(),
+        auto_select: settings::AutoSelectSettings::default(),
     };
     assert_eq!(read, Some(expected));
 }

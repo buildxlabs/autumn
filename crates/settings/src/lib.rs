@@ -2,10 +2,14 @@
 //!
 //! See ARCHITECTURE §2 and §6.
 
+mod auto_select;
 mod error;
 mod paths;
 mod settings;
 
+pub use auto_select::{
+    AutoSelectProfile, AutoSelectSettings, Codec, DEFAULT_PROFILE_NAME, Preference, Source,
+};
 pub use error::SettingsError;
 pub use paths::AppPaths;
 pub use settings::{
