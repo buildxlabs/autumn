@@ -1615,12 +1615,45 @@ mod tests {
 
     use domain::{ChapterKind, ExternalId, ListStatus, MediaKind};
     use futures::{SinkExt, channel::mpsc};
+    use metadata::{MediaDetail, MediaSummary, MediaTitle};
     use settings::PlaybackSettings;
 
     use super::{fakes::FakeLauncher, *};
 
     fn entry(media: MediaId, progress: u32, status: ListStatus) -> ListEntry {
         new_entry(media, progress, status)
+    }
+
+    /// The Entry detail a test's catalog cache serves, with an episode count.
+    fn detail(anilist_id: u32) -> MediaDetail {
+        MediaDetail {
+            summary: MediaSummary {
+                anilist_id,
+                mal_id: None,
+                kind: Some(MediaKind::Anime),
+                title: MediaTitle::default(),
+                poster: None,
+                banner: None,
+                format: None,
+                status: None,
+                season: None,
+                season_year: None,
+                episodes: Some(12),
+                chapters: None,
+                mean_score: None,
+                genres: Vec::new(),
+                is_adult: false,
+            },
+            description: None,
+            start_date: domain::FuzzyDate::UNKNOWN,
+            end_date: domain::FuzzyDate::UNKNOWN,
+            duration: None,
+            studios: Vec::new(),
+            popularity: None,
+            characters: Vec::new(),
+            relations: Vec::new(),
+            recommendations: Vec::new(),
+        }
     }
 
     #[derive(Debug, Default)]
@@ -1685,6 +1718,7 @@ mod tests {
     struct Fixture {
         _dir: tempfile::TempDir,
         db: Db,
+        catalog: CatalogCache,
         manager: Arc<PlaybackManager>,
         sync: Arc<FakeSync>,
         launcher: FakeLauncher,
@@ -1753,16 +1787,19 @@ mod tests {
             let db = Db::open(&dir.path().join("autumn.db")).await.unwrap();
             let cache = dir.path().join("cache");
             fs::create_dir_all(&cache).unwrap();
-            let client = net::Client::new().unwrap();
+            // A cache miss fails at once rather than reaching AniList. Tests
+            // seed the entry count through `media()` below.
+            let client = net::Client::builder().max_retries(0).build().unwrap();
+            let anilist = metadata::AniList::with_endpoint(client, "http://127.0.0.1:1/");
             let poster = net::PosterCache::new(&cache).unwrap();
-            let catalog = CatalogCache::new(metadata::AniList::new(client), poster);
+            let catalog = CatalogCache::new(anilist, poster);
             let (events, receiver) = flume::unbounded();
             let sync = Arc::new(FakeSync::default());
             let launcher = FakeLauncher::default();
             let progress: Arc<dyn ProgressSync> = Arc::<FakeSync>::clone(&sync);
             let mut manager = PlaybackManager::with_launcher(
                 db.clone(),
-                catalog,
+                catalog.clone(),
                 progress,
                 events,
                 &settings,
@@ -1774,6 +1811,7 @@ mod tests {
             Self {
                 _dir: dir,
                 db,
+                catalog,
                 manager,
                 sync,
                 launcher,
@@ -1783,6 +1821,16 @@ mod tests {
         }
 
         async fn media(&self, id: u32) -> MediaId {
+            // Opening the Entry page would cache the count watched sync reads.
+            let detail = detail(id);
+            self.catalog
+                .section(
+                    format!("media:{id}"),
+                    Duration::from_hours(24),
+                    async move { Ok(detail) },
+                )
+                .await
+                .unwrap();
             self.db
                 .media()
                 .find_or_mint(MediaKind::Anime, &[ExternalId::AniList(id)])
