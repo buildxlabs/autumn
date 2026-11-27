@@ -16,7 +16,7 @@ fn pinned() -> Settings {
             ..PlaybackSettings::default()
         },
         general: GeneralSettings::default(),
-        auto_select: settings::AutoSelectSettings::default(),
+        ..Settings::default()
     }
 }
 
@@ -43,7 +43,8 @@ fn there_is_one_row_per_tab() {
             "auto_select",
             "general",
             "library",
-            "playback"
+            "playback",
+            "torrent"
         ]
     );
 }

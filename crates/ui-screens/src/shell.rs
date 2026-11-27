@@ -49,12 +49,12 @@ use ui_state::{
 };
 
 use ::settings::PlayerChoice;
-pub use ::settings::{GeneralSettings, LibrarySettings, PlaybackSettings};
+pub use ::settings::{GeneralSettings, LibrarySettings, PlaybackSettings, TorrentSettings};
 pub use settings::{
     GeneralServices, LibraryServices, PlaybackServices, PlaybackTestError, PlayerOption,
-    PosterCacheAction,
+    PosterCacheAction, TorrentCacheAction, TorrentServices,
 };
-use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus};
+use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus, TorrentCacheStatus};
 
 mod onboarding;
 mod settings;
@@ -211,6 +211,14 @@ pub struct AppShell {
     library_error: Option<String>,
     library_pick_task: Option<Task<()>>,
     save_library_task: Option<Task<()>>,
+    /// The Storage tab's torrent values and composition-root callbacks (#229).
+    torrent: TorrentSettings,
+    torrent_services: TorrentServices,
+    torrent_error: Option<String>,
+    torrent_pick_task: Option<Task<()>>,
+    save_torrent_task: Option<Task<()>>,
+    torrent_cache_status: TorrentCacheStatus,
+    torrent_cache_task: Option<Task<()>>,
     /// The scan log screen, built once startup has an AniList client (#134).
     scan_summaries: Entity<ScanSummariesStore>,
     scan_summaries_screen: Option<Entity<ScanSummariesScreen>>,
@@ -260,9 +268,8 @@ impl AppShell {
     /// Storage requests.
     #[expect(
         clippy::too_many_arguments,
-        clippy::too_many_lines,
         clippy::fn_params_excessive_bools,
-        reason = "the shell receives its engine-side collaborators and builds every store and subscription at construction"
+        reason = "the shell receives its engine-side collaborators once"
     )]
     pub fn new(
         prefs: RailPrefs,
@@ -270,6 +277,71 @@ impl AppShell {
         playback_services: PlaybackServices,
         library: LibrarySettings,
         library_services: LibraryServices,
+        library_store: Entity<LibraryStore>,
+        scan_summaries: Entity<ScanSummariesStore>,
+        explorer: Entity<ui_state::LibraryExplorerStore>,
+        fetch_status: Entity<FetchStatus>,
+        account: Entity<AccountStore>,
+        login_url: impl Into<SharedString>,
+        save_prefs: impl Fn(&RailPrefs, &mut App) -> Task<()> + 'static,
+        poster_cache: impl Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+        account_request: impl Fn(AccountCommand, &mut App) -> Task<()> + 'static,
+        discover_loader: DiscoverLoader,
+        entry_store: Entity<EntryStore>,
+        entry_library: Entity<EntryLibraryStore>,
+        home_store: Entity<HomeStore>,
+        playback_store: Entity<PlaybackStore>,
+        general: GeneralSettings,
+        general_services: GeneralServices,
+        keychain_available: bool,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> Self {
+        Self::new_with_torrent(
+            prefs,
+            playback,
+            playback_services,
+            library,
+            library_services,
+            TorrentSettings::default(),
+            TorrentServices::inert(),
+            library_store,
+            scan_summaries,
+            explorer,
+            fetch_status,
+            account,
+            login_url,
+            save_prefs,
+            poster_cache,
+            account_request,
+            discover_loader,
+            entry_store,
+            entry_library,
+            home_store,
+            playback_store,
+            general,
+            general_services,
+            keychain_available,
+            window,
+            cx,
+        )
+    }
+
+    /// The full constructor, including the torrent controls on Storage.
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        clippy::fn_params_excessive_bools,
+        reason = "the shell receives its engine-side collaborators and builds every store and subscription at construction"
+    )]
+    pub fn new_with_torrent(
+        prefs: RailPrefs,
+        playback: PlaybackSettings,
+        playback_services: PlaybackServices,
+        library: LibrarySettings,
+        library_services: LibraryServices,
+        torrent: TorrentSettings,
+        torrent_services: TorrentServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
         explorer: Entity<ui_state::LibraryExplorerStore>,
@@ -463,6 +535,13 @@ impl AppShell {
             library_error: None,
             library_pick_task: None,
             save_library_task: None,
+            torrent,
+            torrent_services,
+            torrent_error: None,
+            torrent_pick_task: None,
+            save_torrent_task: None,
+            torrent_cache_status: TorrentCacheStatus::Measuring,
+            torrent_cache_task: None,
             scan_summaries,
             scan_summaries_screen: None,
             explorer,
@@ -500,6 +579,8 @@ impl AppShell {
         playback_services: PlaybackServices,
         library: LibrarySettings,
         library_services: LibraryServices,
+        torrent: TorrentSettings,
+        torrent_services: TorrentServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
         explorer: Entity<ui_state::LibraryExplorerStore>,
@@ -525,12 +606,14 @@ impl AppShell {
         cx: &mut Context<'_, Self>,
     ) -> Self {
         let explorer_folders = library.folders.clone();
-        let mut shell = Self::new(
+        let mut shell = Self::new_with_torrent(
             prefs,
             playback,
             playback_services,
             library,
             library_services,
+            torrent,
+            torrent_services,
             library_store,
             scan_summaries,
             explorer,
@@ -913,6 +996,7 @@ impl AppShell {
                 }
             ) {
                 self.request_poster_cache(PosterCacheAction::Measure, cx);
+                self.request_torrent_cache(TorrentCacheAction::Measure, cx);
             }
             if let (Route::Lists { status }, Some(lists)) = (self.route(), &self.lists) {
                 lists.update(cx, |lists, cx| lists.set_tab(status, cx));
@@ -1738,6 +1822,7 @@ mod tests {
 
     use std::{
         cell::{Cell, RefCell},
+        path::PathBuf,
         rc::Rc,
         sync::{
             Arc,
@@ -1775,7 +1860,10 @@ mod tests {
         fetch_status::{FetchCommand, FetchStatus, HOME_POSTERS},
     };
 
-    use super::{AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs, SearchScreen};
+    use super::{
+        AppShell, HOVER_OPEN_DELAY, PosterCacheAction, RailMode, RailPrefs, SearchScreen,
+        TorrentCacheAction, TorrentServices, TorrentSettings,
+    };
     use crate::palette::Mode;
 
     // Must match `NAVIGATION_KEYS` in ui-state's actions.rs.
@@ -1805,6 +1893,8 @@ mod tests {
         users: Rc<RefCell<Vec<Option<String>>>>,
         /// Every account command emitted by the shell, oldest first.
         commands: Rc<RefCell<Vec<AccountCommand>>>,
+        /// Every torrent settings save requested by the shell, oldest first.
+        torrent_saved: Rc<RefCell<Vec<TorrentSettings>>>,
     }
 
     impl Shell {
@@ -1833,6 +1923,10 @@ mod tests {
             Self::open_playback_state(cx, prefs, session, PlaybackServices::default())
         }
 
+        #[expect(
+            clippy::too_many_lines,
+            reason = "the test shell builds every store and fake once"
+        )]
         fn open_playback_state(
             cx: &mut TestAppContext,
             prefs: RailPrefs,
@@ -1845,6 +1939,8 @@ mod tests {
             let seen = Rc::clone(&users);
             let commands = Rc::new(RefCell::new(Vec::new()));
             let sent = Rc::clone(&commands);
+            let torrent_saved = Rc::new(RefCell::new(Vec::new()));
+            let recorded = Rc::clone(&torrent_saved);
             let (window, view) = cx.update(|cx| {
                 gpui_kit::init(cx);
                 ui_theme::init(cx);
@@ -1867,12 +1963,29 @@ mod tests {
                     let entry_store = cx.new(|_| EntryStore::new(pending_services()));
                     let home_store = cx.new(|_| HomeStore::new(pending_services()));
                     cx.new(|cx| {
-                        AppShell::new(
+                        AppShell::new_with_torrent(
                             prefs,
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
+                            TorrentSettings::default(),
+                            TorrentServices::new(
+                                move |settings, _| {
+                                    recorded.borrow_mut().push(settings.clone());
+                                    Task::ready(())
+                                },
+                                {
+                                    let bytes = Cell::new(84);
+                                    move |action, _| {
+                                        if action == TorrentCacheAction::Clear {
+                                            bytes.set(0);
+                                        }
+                                        Task::ready(Ok(bytes.get()))
+                                    }
+                                },
+                                PathBuf::from("/cache/torrents"),
+                            ),
                             cx.new(|_| ui_state::LibraryStore::new(pending_services())),
                             cx.new(|_| ui_state::ScanSummariesStore::new(pending_services())),
                             cx.new(|_| ui_state::LibraryExplorerStore::new(pending_services())),
@@ -1927,6 +2040,7 @@ mod tests {
                 saved,
                 users,
                 commands,
+                torrent_saved,
             }
         }
 
@@ -2538,6 +2652,51 @@ mod tests {
                 "the settings tab is part of navigation history"
             );
         });
+    }
+
+    #[gpui_kit::test]
+    fn storage_tab_shows_the_torrent_cache_and_clears_it(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-storage");
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                gpui_kit::base::test_support::texts(window)
+                    .iter()
+                    .any(|text| text.visible() && text.text() == "84 bytes"),
+                "Storage should display the current torrent cache size"
+            );
+        });
+
+        shell.click(cx, "clear-torrent-cache");
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                gpui_kit::base::test_support::texts(window)
+                    .iter()
+                    .any(|text| text.visible() && text.text() == "0 bytes"),
+                "Storage should display the size after clear"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_disable_upload_toggle_saves_the_torrent_tab(cx: &mut TestAppContext) {
+        let shell = Shell::open(cx);
+        shell.click(cx, "rail-settings");
+        shell.click(cx, "settings-storage");
+
+        shell.click(cx, "setting-disable-upload");
+        cx.run_until_parked();
+
+        let saved = shell.torrent_saved.borrow();
+        assert_eq!(saved.len(), 1, "one save for the toggle");
+        assert!(saved[0].disable_upload, "upload is switched off");
+        assert_eq!(
+            saved[0].download_folder, None,
+            "the folder keeps its default"
+        );
     }
 
     #[gpui_kit::test]
@@ -3324,6 +3483,8 @@ mod tests {
                             crate::shell::PlaybackServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
+                            TorrentSettings::default(),
+                            TorrentServices::inert(),
                             cx.new(|_| {
                                 ui_state::LibraryStore::new(
                                     ui_state::test_support::pending_services(),

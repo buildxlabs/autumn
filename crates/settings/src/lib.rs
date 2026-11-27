@@ -15,5 +15,5 @@ pub use paths::AppPaths;
 pub use settings::{
     AppearanceSettings, DEFAULT_MATCH_THRESHOLD, DEFAULT_MPCHC_HOST, DEFAULT_MPCHC_PORT,
     GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice, Settings,
-    WATCHED_THRESHOLD_RANGE,
+    TorrentSettings, WATCHED_THRESHOLD_RANGE, validate_torrent_folder,
 };

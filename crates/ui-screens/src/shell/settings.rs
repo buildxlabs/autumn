@@ -28,7 +28,10 @@ use gpui_kit::{
     px,
 };
 use metadata::ODBL_CREDIT;
-use settings::{GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice};
+use settings::{
+    GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice,
+    TorrentSettings, validate_torrent_folder,
+};
 use ui_state::{
     LibraryStore, Route, ScanState, SettingsTab,
     account::{AccountCommand, AccountStore},
@@ -77,6 +80,8 @@ impl std::fmt::Display for PlaybackTestError {
 type SaveGeneral = Rc<dyn Fn(&GeneralSettings, &mut App) -> Task<()>>;
 type SavePlayback = Rc<dyn Fn(&PlaybackSettings, &mut App) -> Task<()>>;
 type SaveLibrary = Rc<dyn Fn(&LibrarySettings, &mut App) -> Task<()>>;
+type SaveTorrent = Rc<dyn Fn(&TorrentSettings, &mut App) -> Task<()>>;
+type TorrentCacheRequest = Rc<dyn Fn(TorrentCacheAction, &mut App) -> Task<gpui_kit::Result<u64>>>;
 type DetectPlayers = Rc<dyn Fn(&mut App) -> Task<Vec<PlayerOption>>>;
 type ValidatePlayer = Rc<dyn Fn(PathBuf, &mut App) -> Task<Result<PlayerOption, String>>>;
 type TestPlayer = Rc<dyn Fn(PlaybackSettings, &mut App) -> Task<Result<(), PlaybackTestError>>>;
@@ -188,6 +193,47 @@ impl LibraryServices {
     }
 }
 
+/// The composition-root calls behind the torrent controls on the Storage tab.
+#[derive(Clone)]
+pub struct TorrentServices {
+    save: SaveTorrent,
+    cache: TorrentCacheRequest,
+    default_folder: PathBuf,
+}
+
+impl std::fmt::Debug for TorrentServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TorrentServices")
+            .field("default_folder", &self.default_folder)
+            .finish_non_exhaustive()
+    }
+}
+
+impl TorrentServices {
+    /// Creates the save and cache callbacks, and the default download folder.
+    pub fn new(
+        save: impl Fn(&TorrentSettings, &mut App) -> Task<()> + 'static,
+        cache: impl Fn(TorrentCacheAction, &mut App) -> Task<gpui_kit::Result<u64>> + 'static,
+        default_folder: PathBuf,
+    ) -> Self {
+        Self {
+            save: Rc::new(save),
+            cache: Rc::new(cache),
+            default_folder,
+        }
+    }
+
+    /// Inert callbacks for embedding the shell without a torrent backend.
+    #[must_use]
+    pub fn inert() -> Self {
+        Self::new(
+            |_, _| Task::ready(()),
+            |_, _| Task::ready(Ok(0)),
+            PathBuf::from("<cache>/torrents"),
+        )
+    }
+}
+
 /// The outcome of the last Test click.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum PlaybackTestStatus {
@@ -217,6 +263,16 @@ pub enum PosterCacheAction {
     Clear,
 }
 
+/// A request from Settings → Storage for the on-disk torrent cache.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TorrentCacheAction {
+    /// Read the current size.
+    Measure,
+    /// Clear idle torrents and then read the remaining size.
+    Clear,
+}
+
 pub(super) type PosterCacheRequest =
     Box<dyn Fn(PosterCacheAction, &mut App) -> Task<gpui_kit::Result<u64>>>;
 
@@ -238,6 +294,32 @@ impl StorageStatus {
                 "Could not read the poster cache size.".into()
             }
             Self::Failed(PosterCacheAction::Clear) => "Could not clear the poster cache.".into(),
+        }
+    }
+
+    fn busy(self) -> bool {
+        matches!(self, Self::Measuring | Self::Clearing)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum TorrentCacheStatus {
+    Measuring,
+    Clearing,
+    Size(u64),
+    Failed(TorrentCacheAction),
+}
+
+impl TorrentCacheStatus {
+    fn label(self) -> SharedString {
+        match self {
+            Self::Measuring => "Reading torrent cache size…".into(),
+            Self::Clearing => "Clearing torrent cache…".into(),
+            Self::Size(bytes) => size_label(bytes).into(),
+            Self::Failed(TorrentCacheAction::Measure) => {
+                "Could not read the torrent cache size.".into()
+            }
+            Self::Failed(TorrentCacheAction::Clear) => "Could not clear the torrent cache.".into(),
         }
     }
 
@@ -430,6 +512,11 @@ impl AppShell {
             self.library_error = Some(error.to_string());
             return;
         }
+        // A library folder added later must not swallow the torrent cache.
+        if let Err(error) = self.validate_torrent_folder() {
+            self.library_error = Some(error.to_string());
+            return;
+        }
         self.library_error = None;
         let task = (self.library_services.save)(&self.library, cx);
         self.save_library_task = Some(cx.spawn(async move |_, _| {
@@ -479,6 +566,98 @@ impl AppShell {
                     Err(_) => StorageStatus::Failed(action),
                 };
                 shell.storage_task = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    /// The effective folder: the chosen one or the cache default.
+    fn torrent_folder(&self) -> PathBuf {
+        self.torrent
+            .download_folder
+            .clone()
+            .unwrap_or_else(|| self.torrent_services.default_folder.clone())
+    }
+
+    fn validate_torrent_folder(&self) -> Result<(), settings::SettingsError> {
+        validate_torrent_folder(&self.torrent_folder(), &self.library.folders)
+    }
+
+    /// Picks a torrent download folder and saves it unless it overlaps the
+    /// library folders.
+    pub(super) fn pick_torrent_folder(&mut self, cx: &mut Context<'_, Self>) {
+        if self.torrent_pick_task.is_some() {
+            return;
+        }
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Choose a torrent download folder".into()),
+        });
+        let shell = cx.entity().downgrade();
+        self.torrent_pick_task = Some(cx.spawn(async move |_, cx| {
+            let picked = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = shell.update(cx, |shell, cx| {
+                shell.torrent_pick_task = None;
+                if let Some(path) = picked {
+                    shell.update_torrent(|settings| settings.download_folder = Some(path), cx);
+                }
+            });
+        }));
+        cx.notify();
+    }
+
+    /// Applies one torrent change and saves it without waiting.
+    pub(super) fn update_torrent(
+        &mut self,
+        change: impl FnOnce(&mut TorrentSettings),
+        cx: &mut Context<'_, Self>,
+    ) {
+        change(&mut self.torrent);
+        self.commit_torrent(cx);
+        cx.notify();
+    }
+
+    fn commit_torrent(&mut self, cx: &mut Context<'_, Self>) {
+        if let Err(error) = self.validate_torrent_folder() {
+            self.torrent_error = Some(error.to_string());
+            return;
+        }
+        self.torrent_error = None;
+        let task = (self.torrent_services.save)(&self.torrent, cx);
+        self.save_torrent_task = Some(cx.spawn(async move |_, _| {
+            task.await;
+        }));
+    }
+
+    pub(super) fn request_torrent_cache(
+        &mut self,
+        action: TorrentCacheAction,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if matches!(self.torrent_cache_status, TorrentCacheStatus::Clearing)
+            && self.torrent_cache_task.is_some()
+        {
+            return;
+        }
+        self.torrent_cache_status = match action {
+            TorrentCacheAction::Measure => TorrentCacheStatus::Measuring,
+            TorrentCacheAction::Clear => TorrentCacheStatus::Clearing,
+        };
+        let task = (self.torrent_services.cache)(action, cx);
+        self.torrent_cache_task = Some(cx.spawn(async move |shell, cx| {
+            let result = task.await;
+            let _ = shell.update(cx, |shell, cx| {
+                shell.torrent_cache_status = match result {
+                    Ok(bytes) => TorrentCacheStatus::Size(bytes),
+                    Err(_) => TorrentCacheStatus::Failed(action),
+                };
+                shell.torrent_cache_task = None;
                 cx.notify();
             });
         }));
@@ -1274,37 +1453,138 @@ impl AppShell {
             ),
             SettingsTab::Storage => {
                 let status = self.storage_status;
+                let torrent_status = self.torrent_cache_status;
+                let folder = self.torrent_folder();
+                let disable_upload = self.torrent.disable_upload;
+                let pick_busy = self.torrent_pick_task.is_some();
+                let validation_error = self.torrent_error.clone();
                 let shell = cx.entity().downgrade();
+                let folder_shell = shell.clone();
+                let cache_shell = shell.clone();
+                let upload_shell = cx.entity().downgrade();
                 (
                     "Storage",
-                    vec![SettingItem::render(move |_, _, _| {
-                        let shell = shell.clone();
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .flex_wrap()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child("Poster cache")
-                                    .child(Label::new(status.label()).text_sm()),
-                            )
-                            .child(
-                                Button::new("clear-poster-cache")
-                                    .label("Clear poster cache")
-                                    .disabled(status.busy())
-                                    .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
-                                        let _ = shell.update(cx, |shell, cx| {
-                                            shell
-                                                .request_poster_cache(PosterCacheAction::Clear, cx);
-                                        });
-                                    }),
-                            )
-                    })],
+                    vec![
+                        SettingItem::render(move |_, _, _| {
+                            let shell = shell.clone();
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .flex_wrap()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child("Poster cache")
+                                        .child(Label::new(status.label()).text_sm()),
+                                )
+                                .child(
+                                    Button::new("clear-poster-cache")
+                                        .label("Clear poster cache")
+                                        .disabled(status.busy())
+                                        .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
+                                            let _ = shell.update(cx, |shell, cx| {
+                                                shell.request_poster_cache(
+                                                    PosterCacheAction::Clear,
+                                                    cx,
+                                                );
+                                            });
+                                        }),
+                                )
+                        }),
+                        SettingItem::render(move |_, _, _| {
+                            let pick = folder_shell.clone();
+                            let reset = folder_shell.clone();
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child("Torrent download folder")
+                                .child(Label::new(folder.to_string_lossy().to_string()).text_sm())
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap_3()
+                                        .child(
+                                            Button::new("pick-torrent-folder")
+                                                .label(if pick_busy {
+                                                    "Choosing…"
+                                                } else {
+                                                    "Choose folder…"
+                                                })
+                                                .disabled(pick_busy)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = pick
+                                                        .update(cx, AppShell::pick_torrent_folder);
+                                                }),
+                                        )
+                                        .child(
+                                            Button::new("reset-torrent-folder")
+                                                .label("Use default")
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = reset.update(cx, |shell, cx| {
+                                                        shell.update_torrent(
+                                                            |settings| {
+                                                                settings.download_folder = None;
+                                                            },
+                                                            cx,
+                                                        );
+                                                    });
+                                                }),
+                                        ),
+                                )
+                                .when_some(validation_error.clone(), |column, message| {
+                                    column.child(Label::new(message).text_sm())
+                                })
+                        }),
+                        SettingItem::render(move |_, _, _| {
+                            let shell = cache_shell.clone();
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .flex_wrap()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child("Torrent cache")
+                                        .child(Label::new(torrent_status.label()).text_sm()),
+                                )
+                                .child(
+                                    Button::new("clear-torrent-cache")
+                                        .label("Clear torrent cache")
+                                        .disabled(torrent_status.busy())
+                                        .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
+                                            let _ = shell.update(cx, |shell, cx| {
+                                                shell.request_torrent_cache(
+                                                    TorrentCacheAction::Clear,
+                                                    cx,
+                                                );
+                                            });
+                                        }),
+                                )
+                        }),
+                        SettingItem::render(move |_, _, _| {
+                            let shell = upload_shell.clone();
+                            Switch::new("setting-disable-upload")
+                                .label("Disable upload (advanced)")
+                                .checked(disable_upload)
+                                .on_click(move |checked, _, cx| {
+                                    let _ = shell.update(cx, |shell, cx| {
+                                        shell.update_torrent(
+                                            |settings| settings.disable_upload = *checked,
+                                            cx,
+                                        );
+                                    });
+                                })
+                        }),
+                    ],
                 )
             }
         };
