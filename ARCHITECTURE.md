@@ -98,8 +98,8 @@ tracker        → metadata
 relay          → torrent
 auth           → metadata (the authenticated Viewer account lookup)
 engine         → mkv (chapter skip markers for local files)
-engine         → search (auto-select pipeline #218)
-engine         → torrent (auto-select file lists #218)
+engine         → search (auto-select pipeline #218, indexer base URLs from Network settings #225)
+engine         → torrent (auto-select file lists #218, live rate limits #225)
 ```
 
 Foundation, UI and binary edges in use (rules 1–3 already allow them; they're listed so a new one shows up in review):

@@ -24,7 +24,10 @@ use tokio::{
     io::{AsyncReadExt, AsyncSeekExt},
     time::{sleep, timeout},
 };
-use torrent::{Error, InfoHash, PeerDiscovery, TorrentSession, TorrentSource, TorrentStats};
+use torrent::{
+    Error, InfoHash, PeerDiscovery, TorrentSession, TorrentSessionOptions, TorrentSource,
+    TorrentStats,
+};
 
 const MIB: u64 = 1024 * 1024;
 /// Upload limits are `u32` bytes per second.
@@ -104,9 +107,13 @@ async fn seeder(len: u64, upload_bps: u32) -> Seeder {
 
 /// An Autumn session that only knows `peer`, with the seeder's torrent added.
 async fn leecher(root: &Path, peer: SocketAddr, torrent: &[u8]) -> (TorrentSession, InfoHash) {
-    let session = TorrentSession::start(root.to_path_buf(), PeerDiscovery::Only(vec![peer]))
-        .await
-        .unwrap();
+    let session = TorrentSession::start(
+        root.to_path_buf(),
+        PeerDiscovery::Only(vec![peer]),
+        TorrentSessionOptions::default(),
+    )
+    .await
+    .unwrap();
     let hash = session
         .add(TorrentSource::File(torrent.to_vec()), 0)
         .await
@@ -283,9 +290,13 @@ async fn next_launch_sweeps_orphaned_dirs() {
     let unrelated = cache.path().join("keep");
     std::fs::create_dir(&unrelated).unwrap();
 
-    let session = TorrentSession::start(cache.path().to_path_buf(), PeerDiscovery::Only(vec![]))
-        .await
-        .unwrap();
+    let session = TorrentSession::start(
+        cache.path().to_path_buf(),
+        PeerDiscovery::Only(vec![]),
+        TorrentSessionOptions::default(),
+    )
+    .await
+    .unwrap();
 
     assert!(!orphan.exists(), "the crashed run's torrent dir is swept");
     assert!(unrelated.exists(), "non-infohash dirs are left alone");

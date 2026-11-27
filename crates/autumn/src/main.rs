@@ -6,6 +6,7 @@ mod general;
 mod http_client;
 mod library;
 mod logging;
+mod network;
 mod playback;
 mod playback_sync;
 mod rail_prefs;
@@ -157,6 +158,8 @@ fn main() -> ExitCode {
     let playback = engine.settings().playback.clone();
     let general = engine.settings().general.clone();
     let library_settings = engine.settings().library.clone();
+    let network_settings = engine.settings().network.clone();
+    let network_services = network::saver(engine.db().clone(), engine.settings().clone());
     let library_services = library::saver(
         engine.db().clone(),
         engine.clone(),
@@ -237,6 +240,8 @@ fn main() -> ExitCode {
                 general,
                 general_services,
                 keychain_available,
+                network_settings,
+                network_services,
                 library_settings,
                 library_services,
                 torrent,
@@ -309,6 +314,8 @@ fn open_main_window(
     general: ui_screens::GeneralSettings,
     general_services: ui_screens::GeneralServices,
     keychain_available: bool,
+    network_settings: ui_screens::NetworkSettings,
+    network_services: ui_screens::NetworkServices,
     library_settings: ui_screens::LibrarySettings,
     library_services: ui_screens::LibraryServices,
     torrent: TorrentSettings,
@@ -341,6 +348,8 @@ fn open_main_window(
                 prefs,
                 playback,
                 playback_services,
+                network_settings,
+                network_services,
                 library_settings,
                 library_services,
                 torrent,
@@ -456,6 +465,8 @@ mod tests {
                 },
                 ui_screens::GeneralServices::inert(),
                 true,
+                ui_screens::NetworkSettings::default(),
+                ui_screens::NetworkServices::inert(),
                 settings::LibrarySettings::default(),
                 ui_screens::LibraryServices::inert(),
                 TorrentSettings::default(),

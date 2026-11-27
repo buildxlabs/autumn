@@ -49,10 +49,12 @@ use ui_state::{
 };
 
 use ::settings::PlayerChoice;
-pub use ::settings::{GeneralSettings, LibrarySettings, PlaybackSettings, TorrentSettings};
+pub use ::settings::{
+    GeneralSettings, LibrarySettings, NetworkSettings, PlaybackSettings, TorrentSettings,
+};
 pub use settings::{
-    GeneralServices, LibraryServices, PlaybackServices, PlaybackTestError, PlayerOption,
-    PosterCacheAction, TorrentCacheAction, TorrentServices,
+    GeneralServices, LibraryServices, NetworkServices, PlaybackServices, PlaybackTestError,
+    PlayerOption, PosterCacheAction, TorrentCacheAction, TorrentServices,
 };
 use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus, TorrentCacheStatus};
 
@@ -201,6 +203,11 @@ pub struct AppShell {
     playback_test_task: Option<Task<()>>,
     playback_error: Option<String>,
     save_playback_task: Option<Task<()>>,
+    /// The Network tab's values and its composition-root callback (#210).
+    network: NetworkSettings,
+    network_services: NetworkServices,
+    network_error: Option<String>,
+    save_network_task: Option<Task<()>>,
     /// The Library tab's values, store and composition-root callback (#127).
     library: LibrarySettings,
     library_services: LibraryServices,
@@ -275,6 +282,8 @@ impl AppShell {
         prefs: RailPrefs,
         playback: PlaybackSettings,
         playback_services: PlaybackServices,
+        network: NetworkSettings,
+        network_services: NetworkServices,
         library: LibrarySettings,
         library_services: LibraryServices,
         library_store: Entity<LibraryStore>,
@@ -301,6 +310,8 @@ impl AppShell {
             prefs,
             playback,
             playback_services,
+            network,
+            network_services,
             library,
             library_services,
             TorrentSettings::default(),
@@ -338,6 +349,8 @@ impl AppShell {
         prefs: RailPrefs,
         playback: PlaybackSettings,
         playback_services: PlaybackServices,
+        network: NetworkSettings,
+        network_services: NetworkServices,
         library: LibrarySettings,
         library_services: LibraryServices,
         torrent: TorrentSettings,
@@ -526,6 +539,10 @@ impl AppShell {
             playback_test_task: None,
             playback_error: None,
             save_playback_task: None,
+            network,
+            network_services,
+            network_error: None,
+            save_network_task: None,
             library,
             library_services,
             library_store,
@@ -577,6 +594,8 @@ impl AppShell {
         prefs: RailPrefs,
         playback: PlaybackSettings,
         playback_services: PlaybackServices,
+        network: NetworkSettings,
+        network_services: NetworkServices,
         library: LibrarySettings,
         library_services: LibraryServices,
         torrent: TorrentSettings,
@@ -610,6 +629,8 @@ impl AppShell {
             prefs,
             playback,
             playback_services,
+            network,
+            network_services,
             library,
             library_services,
             torrent,
@@ -1967,6 +1988,8 @@ mod tests {
                             prefs,
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::NetworkSettings::default(),
+                            crate::shell::NetworkServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
                             TorrentSettings::default(),
@@ -3481,6 +3504,8 @@ mod tests {
                             RailPrefs::default(),
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::NetworkSettings::default(),
+                            crate::shell::NetworkServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
                             TorrentSettings::default(),

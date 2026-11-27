@@ -13,7 +13,9 @@ pub use auto_select::{
 pub use error::SettingsError;
 pub use paths::AppPaths;
 pub use settings::{
-    AppearanceSettings, DEFAULT_MATCH_THRESHOLD, DEFAULT_MPCHC_HOST, DEFAULT_MPCHC_PORT,
-    GeneralSettings, LibrarySettings, PlaybackKind, PlaybackSettings, PlayerChoice, Settings,
-    TorrentSettings, WATCHED_THRESHOLD_RANGE, validate_torrent_folder,
+    AppearanceSettings, DEFAULT_ANIMETOSHO_BASE_URL, DEFAULT_FIXED_LISTEN_PORT,
+    DEFAULT_MATCH_THRESHOLD, DEFAULT_MPCHC_HOST, DEFAULT_MPCHC_PORT, DEFAULT_NYAA_BASE_URL,
+    GeneralSettings, LibrarySettings, ListenPort, MAX_LISTEN_PORT, MIN_FIXED_LISTEN_PORT,
+    NetworkSettings, PlaybackKind, PlaybackSettings, PlayerChoice, Settings, TorrentSettings,
+    WATCHED_THRESHOLD_RANGE, normalize_base_url, validate_torrent_folder,
 };

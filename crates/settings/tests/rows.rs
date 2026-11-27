@@ -43,6 +43,7 @@ fn there_is_one_row_per_tab() {
             "auto_select",
             "general",
             "library",
+            "network",
             "playback",
             "torrent"
         ]

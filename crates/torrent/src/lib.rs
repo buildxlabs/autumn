@@ -12,7 +12,8 @@ use std::{
     ffi::OsStr,
     fmt,
     io::{self, SeekFrom},
-    net::{Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    num::NonZeroU32,
     path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
@@ -22,9 +23,9 @@ use std::{
 };
 
 use librqbit::{
-    AddTorrent, AddTorrentOptions, AddTorrentResponse, Api, DhtSessionConfig, ListenerOptions,
-    Magnet, ManagedTorrent, Session, SessionOptions, api::TorrentIdOrHash, dht::Id20,
-    torrent_from_bytes,
+    AddTorrent, AddTorrentOptions, AddTorrentResponse, Api, ConnectionOptions, DhtSessionConfig,
+    ListenerOptions, Magnet, ManagedTorrent, Session, SessionOptions, api::TorrentIdOrHash,
+    dht::Id20, limits::LimitsConfig, torrent_from_bytes,
 };
 use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt, ReadBuf};
 
@@ -62,6 +63,17 @@ pub enum Error {
     /// Creating or sweeping the torrent cache failed.
     #[error("torrent cache I/O failed")]
     Io(#[from] io::Error),
+    /// A bound network interface could not be found or used; the session
+    /// refuses to start rather than fall back to the default route
+    /// (ADR-0010 fail-closed). `<name>` is the configured interface.
+    #[error("Torrent engine could not start — interface `{name}` not found")]
+    BindInterface {
+        /// The configured interface name.
+        name: String,
+        /// The underlying cause.
+        #[source]
+        source: BoxError,
+    },
 }
 
 fn session_err(e: impl Into<BoxError>) -> Error {
@@ -139,6 +151,73 @@ pub enum PeerDiscovery {
     /// Only these peers: no DHT, trackers or local discovery, listening on
     /// loopback. For tests against an in-process seeder.
     Only(Vec<SocketAddr>),
+}
+
+/// Construction-time network options for a [`TorrentSession`] (#210 /
+/// ADR-0010). Rate-limit-only changes apply live via
+/// [`TorrentSession::set_rate_limits`]; changing any other field needs a
+/// session restart, which the engine defers until no stream is playing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TorrentSessionOptions {
+    /// Torrent listen port; `0` (default) picks a random port per session.
+    pub listen_port: u16,
+    /// upnp IGD forwarding of the listen port. Off by default.
+    pub upnp: bool,
+    /// DHT peer discovery. On by default.
+    pub dht: bool,
+    /// SOCKS5 proxy URL for the whole session (`socks5://`/`socks5h://`,
+    /// no embedded credentials); `None` connects directly. Peers then leave
+    /// through the proxy and interface binding governs only DHT/tracker/LSD.
+    pub proxy_url: Option<String>,
+    /// Network interface name all torrent traffic is pinned to (macOS
+    /// `IP(V6)_BOUND_IF`, Linux `SO_BINDTODEVICE`); `None` does not bind.
+    /// Fails closed: the session refuses to start if it cannot bind.
+    pub bind_interface: Option<String>,
+    /// Global rate limits; also settable live afterwards.
+    pub rate_limits: RateLimits,
+}
+
+impl Default for TorrentSessionOptions {
+    /// The Phase 3 defaults: random port, upnp off, DHT on, no proxy, no
+    /// interface binding, no rate limits.
+    fn default() -> Self {
+        Self {
+            listen_port: 0,
+            upnp: false,
+            dht: true,
+            proxy_url: None,
+            bind_interface: None,
+            rate_limits: RateLimits::default(),
+        }
+    }
+}
+
+impl TorrentSessionOptions {
+    /// The Phase 3 defaults (see [`Default`]).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Global torrent rate limits in bytes per second; `None` is unlimited.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RateLimits {
+    /// Download rate limit.
+    pub download_bytes_per_sec: Option<NonZeroU32>,
+    /// Upload rate limit.
+    pub upload_bytes_per_sec: Option<NonZeroU32>,
+}
+
+impl RateLimits {
+    /// Converts optional plain byte rates (`None`/`Some(0)` = unlimited).
+    #[must_use]
+    pub fn from_bytes_per_sec(download: Option<u32>, upload: Option<u32>) -> Self {
+        Self {
+            download_bytes_per_sec: download.and_then(NonZeroU32::new),
+            upload_bytes_per_sec: upload.and_then(NonZeroU32::new),
+        }
+    }
 }
 
 /// Progress of one readiness window, in whole pieces.
@@ -258,22 +337,43 @@ impl TorrentSession {
     /// Infohash directories left in `root` by an earlier run are deleted first:
     /// nothing resumes across launches.
     ///
+    /// `options` are construction-time (#210 / ADR-0010); a change to any
+    /// field but [`RateLimits`] needs a restart. Rate limits in `options`
+    /// are also applied live afterwards via [`Self::set_rate_limits`].
+    ///
     /// # Errors
     ///
     /// [`Error::Io`] if `root` can't be created or swept, [`Error::Session`]
-    /// if librqbit fails to start.
-    pub async fn start(root: PathBuf, discovery: PeerDiscovery) -> Result<Self, Error> {
+    /// if librqbit fails to start, [`Error::BindInterface`] if
+    /// `options.bind_interface` names an interface that cannot be bound
+    /// (fail closed; no fallback to the default route).
+    pub async fn start(
+        root: PathBuf,
+        discovery: PeerDiscovery,
+        options: TorrentSessionOptions,
+    ) -> Result<Self, Error> {
         tokio::fs::create_dir_all(&root).await?;
         sweep(&root).await?;
         let local = matches!(discovery, PeerDiscovery::Only(_));
+        let bind_interface = options.bind_interface.and_then(|name| {
+            let name = name.trim().to_owned();
+            (!name.is_empty()).then_some(name)
+        });
         let listen_addr = if local {
             (Ipv4Addr::LOCALHOST, 0).into()
         } else {
-            ListenerOptions::default().listen_addr
+            (Ipv6Addr::UNSPECIFIED, options.listen_port).into()
         };
-        let options = SessionOptions {
+        let proxy_url = if local {
+            None
+        } else {
+            options
+                .proxy_url
+                .and_then(|url| (!url.trim().is_empty()).then_some(url))
+        };
+        let session_options = SessionOptions {
             // Without persistence, so librqbit writes nothing outside `root`.
-            dht: (!local).then(|| DhtSessionConfig {
+            dht: (if local { false } else { options.dht }).then(|| DhtSessionConfig {
                 persistence: None,
                 ..DhtSessionConfig::default()
             }),
@@ -281,20 +381,61 @@ impl TorrentSession {
             disable_local_service_discovery: local,
             fastresume: false,
             persistence: None,
+            bind_device_name: bind_interface.clone(),
             listen: Some(ListenerOptions {
                 listen_addr,
+                enable_upnp_port_forwarding: !local && options.upnp,
                 ..ListenerOptions::default()
             }),
+            connect: Some(ConnectionOptions {
+                proxy_url,
+                ..ConnectionOptions::default()
+            }),
+            ratelimits: LimitsConfig {
+                download_bps: options.rate_limits.download_bytes_per_sec,
+                upload_bps: options.rate_limits.upload_bytes_per_sec,
+            },
             ..SessionOptions::default()
         };
-        let session = Session::new_with_opts(root.clone(), options)
-            .await
-            .map_err(session_err)?;
+        let session = match Session::new_with_opts(root.clone(), session_options).await {
+            Ok(session) => session,
+            Err(source) => {
+                // Fail closed on a bound interface that cannot be found or
+                // used; never fall back to the default route (ADR-0010).
+                if let Some(name) = bind_interface
+                    && bind_failed(&name, &format!("{source:#}"))
+                {
+                    return Err(Error::BindInterface {
+                        name,
+                        source: source.into(),
+                    });
+                }
+                return Err(session_err(source));
+            }
+        };
         Ok(Self {
             api: Api::new(session, None),
             root,
             discovery,
         })
+    }
+
+    /// Sets the global torrent rate limits live, without restarting the
+    /// session or interrupting streams (ADR-0010); `None` is unlimited.
+    pub fn set_rate_limits(&self, limits: RateLimits) {
+        let ratelimits = &self.api.session().ratelimits;
+        ratelimits.set_download_bps(limits.download_bytes_per_sec);
+        ratelimits.set_upload_bps(limits.upload_bytes_per_sec);
+    }
+
+    /// The current global torrent rate limits.
+    #[must_use]
+    pub fn rate_limits(&self) -> RateLimits {
+        let config = self.api.session().ratelimits.get_config();
+        RateLimits {
+            download_bytes_per_sec: config.download_bps,
+            upload_bytes_per_sec: config.upload_bps,
+        }
     }
 
     /// The address peers can connect to for this session's uploads.
@@ -775,4 +916,15 @@ async fn remove_dir_if_present(dir: &Path) -> Result<(), Error> {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e.into()),
         _ => Ok(()),
     }
+}
+
+/// Whether `chain` (a rendered error chain) is a failure to create or bind
+/// `name`, so a set bound interface fails closed with [`Error::BindInterface`].
+fn bind_failed(name: &str, chain: &str) -> bool {
+    let lower = chain.to_ascii_lowercase();
+    lower.contains("bind device")
+        || lower.contains("binddevice")
+        || lower.contains("no such device")
+        || lower.contains("not found")
+        || lower.contains(&name.to_ascii_lowercase())
 }

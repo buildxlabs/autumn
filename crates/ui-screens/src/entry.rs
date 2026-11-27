@@ -950,6 +950,8 @@ mod tests {
                             RailPrefs::default(),
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::NetworkSettings::default(),
+                            crate::shell::NetworkServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
                             cx.new(|_| {
@@ -1095,6 +1097,8 @@ mod tests {
                             RailPrefs::default(),
                             settings::PlaybackSettings::default(),
                             crate::shell::PlaybackServices::inert(),
+                            settings::NetworkSettings::default(),
+                            crate::shell::NetworkServices::inert(),
                             settings::LibrarySettings::default(),
                             crate::shell::LibraryServices::inert(),
                             cx.new(|_| ui_state::LibraryStore::new(pending_services())),

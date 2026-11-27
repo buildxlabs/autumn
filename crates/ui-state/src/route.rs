@@ -24,6 +24,8 @@ pub enum SettingsTab {
     Library,
     /// Disk cache usage and controls.
     Storage,
+    /// Torrent networking, proxies and indexer mirrors (#210 / ADR-0010).
+    Network,
     /// Data-source attribution and licences.
     About,
 }

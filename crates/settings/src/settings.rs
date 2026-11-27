@@ -36,6 +36,8 @@ pub struct Settings {
     pub auto_select: AutoSelectSettings,
     /// The torrent controls shown on the Storage tab.
     pub torrent: TorrentSettings,
+    /// The Network tab.
+    pub network: NetworkSettings,
 }
 
 /// The General tab. A new install and a Phase 1 install both start with
@@ -417,4 +419,261 @@ impl Settings {
         let settings = serde_json::from_value(Value::Object(tabs)).unwrap_or_default();
         (settings, errors)
     }
+}
+
+/// The lowest fixed torrent listen port (#210 / ADR-0010).
+pub const MIN_FIXED_LISTEN_PORT: u16 = 1024;
+/// The highest torrent listen port.
+pub const MAX_LISTEN_PORT: u16 = 65535;
+/// The fixed-port prefill; ignored unless [`ListenPort::Fixed`].
+pub const DEFAULT_FIXED_LISTEN_PORT: u16 = 6881;
+/// The default Nyaa base URL (`search::NYAA_BASE_URL`).
+pub const DEFAULT_NYAA_BASE_URL: &str = "https://nyaa.si";
+/// The default `AnimeTosho` base URL (`search::ANIMETOSHO_BASE_URL`, live feed).
+pub const DEFAULT_ANIMETOSHO_BASE_URL: &str = "https://feed.animetosho.net";
+
+/// The torrent listen port (#210 / ADR-0010).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the Network tab handles every listen-port mode"
+)]
+#[serde(tag = "mode", content = "port", rename_all = "snake_case")]
+pub enum ListenPort {
+    /// A random port per session; nothing is announced or forwarded.
+    Random,
+    /// A fixed port for a firewall rule, 1024–65535.
+    Fixed(u16),
+}
+
+impl Default for ListenPort {
+    /// Random per session.
+    fn default() -> Self {
+        Self::Random
+    }
+}
+
+/// The Settings → Network tab (#210 / ADR-0010).
+///
+/// Serde defaults let an older row load without losing the other tabs.
+/// [`Self::validate`] checks ranges, URL schemes and hosts and rejects
+/// embedded credentials. Construction-time torrent fields restart the torrent
+/// module after playback stops; global rate limits apply live.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetworkSettings {
+    /// Torrent listen port; random per session unless fixed.
+    pub listen_port: ListenPort,
+    /// upnp IGD forwarding of the torrent port. Off by default.
+    pub upnp: bool,
+    /// DHT peer discovery. On by default.
+    pub dht: bool,
+    /// Global torrent download rate limit in bytes/sec; `None` is unlimited.
+    pub download_limit_bytes_per_sec: Option<u32>,
+    /// Global torrent upload rate limit in bytes/sec; `None` is unlimited.
+    pub upload_limit_bytes_per_sec: Option<u32>,
+    /// SOCKS5 proxy for the whole torrent session; `None` connects directly.
+    /// `socks5://` / `socks5h://`, no embedded credentials.
+    pub torrent_proxy: Option<String>,
+    /// Network interface name all torrent traffic is pinned to; `None` (or
+    /// blank) does not bind. Shown on macOS/Linux only. Fails closed.
+    pub bind_interface: Option<String>,
+    /// Nyaa base URL; a bare host is normalized to `https://`. No userinfo,
+    /// path, query or fragment.
+    pub nyaa_base_url: String,
+    /// `AnimeTosho` base URL; a bare host is normalized to `https://`. No
+    /// userinfo, path, query or fragment.
+    pub animetosho_base_url: String,
+    /// One global outbound HTTP proxy for all app requests; `None` connects
+    /// directly. `http://` / `socks5://`, no embedded credentials.
+    pub http_proxy: Option<String>,
+}
+
+impl Default for NetworkSettings {
+    fn default() -> Self {
+        Self {
+            listen_port: ListenPort::Random,
+            upnp: false,
+            dht: true,
+            download_limit_bytes_per_sec: None,
+            upload_limit_bytes_per_sec: None,
+            torrent_proxy: None,
+            bind_interface: None,
+            nyaa_base_url: DEFAULT_NYAA_BASE_URL.to_owned(),
+            animetosho_base_url: DEFAULT_ANIMETOSHO_BASE_URL.to_owned(),
+            http_proxy: None,
+        }
+    }
+}
+
+impl NetworkSettings {
+    /// Checks the values the Network tab must keep in range.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SettingsError::Validation`] when a fixed listen port is
+    /// outside 1024–65535, a rate limit is zero, a base URL is not an
+    /// http(s) URL with a host and no userinfo/path/query/fragment, a proxy
+    /// URL has an unsupported scheme or embedded credentials, or a bound
+    /// interface name is empty.
+    pub fn validate(&self) -> Result<(), SettingsError> {
+        if let ListenPort::Fixed(port) = self.listen_port
+            && !(MIN_FIXED_LISTEN_PORT..=MAX_LISTEN_PORT).contains(&port)
+        {
+            return Err(SettingsError::Validation {
+                field: "network.listen_port",
+                message: "a fixed port must be between 1024 and 65535",
+            });
+        }
+        if self.download_limit_bytes_per_sec == Some(0) {
+            return Err(SettingsError::Validation {
+                field: "network.download_limit_bytes_per_sec",
+                message: "a rate limit must be at least one byte per second, or unset",
+            });
+        }
+        if self.upload_limit_bytes_per_sec == Some(0) {
+            return Err(SettingsError::Validation {
+                field: "network.upload_limit_bytes_per_sec",
+                message: "a rate limit must be at least one byte per second, or unset",
+            });
+        }
+        if let Some(proxy) = self.torrent_proxy.as_deref()
+            && !proxy.trim().is_empty()
+        {
+            validate_torrent_proxy(proxy)?;
+        }
+        // Blank means no binding; a name that is set must not be blank.
+        // `None` also disables binding. `normalized()` clears blank values.
+        if matches!(self.bind_interface.as_deref(), Some(name) if name.trim().is_empty()) {
+            return Err(SettingsError::Validation {
+                field: "network.bind_interface",
+                message: "an interface name must not be blank; clear it to disable binding",
+            });
+        }
+        normalize_base_url(&self.nyaa_base_url).map_err(|_| SettingsError::Validation {
+            field: "network.nyaa_base_url",
+            message: "must be an http(s) URL with a host and no userinfo, path, query or fragment",
+        })?;
+        normalize_base_url(&self.animetosho_base_url).map_err(|_| SettingsError::Validation {
+            field: "network.animetosho_base_url",
+            message: "must be an http(s) URL with a host and no userinfo, path, query or fragment",
+        })?;
+        if let Some(proxy) = self.http_proxy.as_deref()
+            && !proxy.trim().is_empty()
+        {
+            validate_http_proxy(proxy)?;
+        }
+        Ok(())
+    }
+
+    /// A copy with normalized base URLs, blank optionals cleared and
+    /// whitespace trimmed. [`Self::validate`] is checked first.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::validate`].
+    pub fn normalized(&self) -> Result<Self, SettingsError> {
+        self.validate()?;
+        let mut out = self.clone();
+        out.nyaa_base_url = normalize_base_url(&self.nyaa_base_url)?;
+        out.animetosho_base_url = normalize_base_url(&self.animetosho_base_url)?;
+        out.torrent_proxy = trimmed_optional(self.torrent_proxy.as_deref());
+        out.bind_interface = trimmed_optional(self.bind_interface.as_deref());
+        out.http_proxy = trimmed_optional(self.http_proxy.as_deref());
+        Ok(out)
+    }
+}
+
+fn trimmed_optional(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+/// Normalizes a bare host to `https://`, trims, and requires an http(s)
+/// scheme + host with no userinfo, path, query or fragment (#210 / ADR-0010).
+///
+/// # Errors
+///
+/// Returns [`SettingsError::Validation`] when the value is not a usable
+/// indexer base URL. `field` is `"network"`; callers re-label.
+pub fn normalize_base_url(raw: &str) -> Result<String, SettingsError> {
+    let invalid = || SettingsError::Validation {
+        field: "network.base_url",
+        message: "must be an http(s) URL with a host and no userinfo, path, query or fragment",
+    };
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err(invalid());
+    }
+    let candidate = if raw.contains("://") {
+        raw.to_owned()
+    } else {
+        format!("https://{raw}")
+    };
+    let url = url::Url::parse(&candidate).map_err(|_| invalid())?;
+    let valid = matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some_and(|host| !host.is_empty())
+        && url.username().is_empty()
+        && url.password().is_none()
+        && (url.path().is_empty() || url.path() == "/")
+        && url.query().is_none()
+        && url.fragment().is_none();
+    if !valid {
+        return Err(invalid());
+    }
+    Ok(url.to_string())
+}
+
+/// Rejects embedded credentials, requires scheme + host + port and only
+/// `socks5`/`socks5h`, matching librqbit (#210 / ADR-0010).
+fn validate_torrent_proxy(raw: &str) -> Result<(), SettingsError> {
+    let invalid = |message: &'static str| SettingsError::Validation {
+        field: "network.torrent_proxy",
+        message,
+    };
+    let url = url::Url::parse(raw.trim())
+        .map_err(|_| invalid("must be a socks5:// or socks5h:// URL with a host and port"))?;
+    if !matches!(url.scheme(), "socks5" | "socks5h") {
+        return Err(invalid(
+            "only socks5:// or socks5h:// proxies are supported",
+        ));
+    }
+    if url.host_str().is_none_or(str::is_empty) {
+        return Err(invalid("proxy URL needs a host"));
+    }
+    if url.port().is_none() {
+        return Err(invalid("proxy URL needs a port"));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(invalid("proxy URLs with embedded credentials are rejected"));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(invalid("proxy URL must not have a query or fragment"));
+    }
+    Ok(())
+}
+
+/// One global outbound HTTP proxy: `http://` or `socks5://`, no embedded
+/// credentials, a host required (#210 / ADR-0010).
+fn validate_http_proxy(raw: &str) -> Result<(), SettingsError> {
+    let invalid = |message: &'static str| SettingsError::Validation {
+        field: "network.http_proxy",
+        message,
+    };
+    let url = url::Url::parse(raw.trim()).map_err(|_| invalid("must be a valid proxy URL"))?;
+    if !matches!(url.scheme(), "http" | "socks5") {
+        return Err(invalid("only http:// or socks5:// proxies are supported"));
+    }
+    if url.host_str().is_none_or(str::is_empty) {
+        return Err(invalid("proxy URL needs a host"));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(invalid("proxy URLs with embedded credentials are rejected"));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(invalid("proxy URL must not have a query or fragment"));
+    }
+    Ok(())
 }
