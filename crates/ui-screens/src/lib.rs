@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §5.
 
+mod batch_suggestions;
 mod discover;
 mod entry;
 mod entry_library;

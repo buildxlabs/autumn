@@ -48,6 +48,7 @@ pub(crate) fn render(
         .flex()
         .flex_col()
         .gap_3()
+        .children(crate::batch_suggestions::render(screen.torrents, cx))
         .child(profile_row(screen, cx))
         .children(
             episodes

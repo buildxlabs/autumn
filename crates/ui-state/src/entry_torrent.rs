@@ -127,6 +127,18 @@ pub struct EntryTorrentStore {
     /// A failed auto-select to auto-open the release list for (#182 Q2).
     pending_open: Option<(u32, String)>,
     load_task: Option<Task<()>>,
+    /// Whether this media is finished releasing (#227).
+    finished: bool,
+    /// Total regular episodes (#227).
+    total_episodes: u32,
+    /// Whether the Torrents tab is currently visible (#227 Q4).
+    torrents_tab_visible: bool,
+    /// Batch suggestion strip state (#227, new module `batch_suggestions`).
+    batch: crate::batch_suggestions::BatchSuggestions,
+    /// The one batch-suggestion search task (#227).
+    batch_task: Option<Task<()>>,
+    /// The on-demand batch file-list task (#227).
+    batch_file_task: Option<Task<()>>,
 }
 
 impl std::fmt::Debug for EntryTorrentStore {
@@ -163,6 +175,12 @@ impl EntryTorrentStore {
             torrents_enabled: true,
             pending_open: None,
             load_task: None,
+            finished: false,
+            total_episodes: 0,
+            torrents_tab_visible: false,
+            batch: crate::batch_suggestions::BatchSuggestions::default(),
+            batch_task: None,
+            batch_file_task: None,
         }
     }
 
@@ -175,6 +193,12 @@ impl EntryTorrentStore {
         self.tasks.clear();
         self.tracker = AvailabilityTracker::new();
         self.availability_tasks.clear();
+        self.finished = false;
+        self.total_episodes = 0;
+        self.torrents_tab_visible = false;
+        self.batch = crate::batch_suggestions::BatchSuggestions::default();
+        self.batch_task = None;
+        self.batch_file_task = None;
         let services = Arc::clone(&self.services);
         let today = today.to_owned();
         self.load_task = Some(cx.spawn(async move |store, cx| {
@@ -228,6 +252,8 @@ impl EntryTorrentStore {
                 .and_then(|s| s.episodes)
                 .or_else(|| ep_meta.as_ref().and_then(|m| m.episode_count))
                 .unwrap_or(0);
+            let finished =
+                summary.and_then(|s| s.status.clone()) == Some(metadata::MediaStatus::Finished);
             let owned = owned_episodes(&files);
             let episodes = build_episodes(ep_meta.as_ref(), total, &owned, progress, &today);
 
@@ -236,6 +262,7 @@ impl EntryTorrentStore {
                     return;
                 }
                 store.media = media;
+                store.total_episodes = u32::try_from(episodes.len()).unwrap_or(u32::MAX);
                 store.episodes = episodes;
                 store.titles = titles;
                 store.media_title = media_title;
@@ -245,7 +272,11 @@ impl EntryTorrentStore {
                 store.anidb_aid = anidb_aid;
                 store.auto_select = auto_select;
                 store.restore_availability(&availability);
+                store.finished = finished;
                 store.start_availability(cx);
+                if store.torrents_tab_visible {
+                    store.start_batch_suggestions(cx);
+                }
                 cx.notify();
             });
         }));
@@ -330,6 +361,7 @@ impl EntryTorrentStore {
             }
         }
         cx.notify();
+        self.re_rank_batch_suggestions();
         let services = Arc::clone(&self.services);
         let key = media.get();
         cx.spawn(async move |_, cx| {
@@ -590,6 +622,226 @@ impl EntryTorrentStore {
         for (episode, checks) in by_episode {
             self.tracker.restore(media.get(), episode, checks);
         }
+    }
+
+    /// Whether the batch suggestion strip shows (#227, #182 Q4): finished
+    /// media with more than one episode.
+    #[must_use]
+    pub fn should_show_batch_suggestions(&self) -> bool {
+        crate::batch_suggestions::should_show(self.finished, self.total_episodes)
+    }
+
+    /// Top batch suggestions by the effective profile (#227).
+    #[must_use]
+    pub fn batch_suggestions(&self) -> &[crate::batch_suggestions::BatchSuggestion] {
+        &self.batch.suggestions
+    }
+
+    /// The one batch search is in flight (#227).
+    #[must_use]
+    pub fn batch_suggestions_loading(&self) -> bool {
+        self.batch.loading
+    }
+
+    /// The last batch search error (#227).
+    #[must_use]
+    pub fn batch_suggestions_error(&self) -> Option<&str> {
+        self.batch.error.as_deref()
+    }
+
+    /// Expanded suggestion infohash (#227 **Episodes ▾**).
+    #[must_use]
+    pub fn batch_expanded(&self) -> Option<&str> {
+        self.batch.expanded.as_deref()
+    }
+
+    /// A suggestion's on-demand file-list state (#227); reuses the release
+    /// list's batch pick.
+    #[must_use]
+    pub fn batch_state(&self, infohash: &str) -> &crate::batch_suggestions::BatchState {
+        self.batch
+            .batches
+            .get(infohash)
+            .unwrap_or(&crate::batch_suggestions::BatchState::Loading)
+    }
+
+    /// Called when the Torrents tab is first shown (#227, #182 Q4): runs
+    /// one batch search if not already started.
+    pub fn open_torrents_tab(&mut self, cx: &mut Context<'_, Self>) {
+        self.torrents_tab_visible = true;
+        self.start_batch_suggestions(cx);
+    }
+
+    /// Runs one batch search on first visit (within #181's budget and 60 s
+    /// cache); no-op unless finished media with more than one episode.
+    fn start_batch_suggestions(&mut self, cx: &mut Context<'_, Self>) {
+        if self.batch.started || !self.should_show_batch_suggestions() {
+            return;
+        }
+        self.batch.started = true;
+        self.batch.loading = true;
+        self.batch.error = None;
+        let request = self.batch_search_request();
+        let services = Arc::clone(&self.services);
+        let task = cx.spawn(async move |store, cx| {
+            let run = services.search_torrents(request);
+            let result = match cx.update(|app| bridge::run(app, run)).await {
+                Ok(result) => result,
+                Err(error) => {
+                    let _ = store.update(cx, |store, cx| {
+                        store.batch.loading = false;
+                        store.batch.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+            let _ = store.update(cx, |store, cx| {
+                store.batch.loading = false;
+                match result {
+                    Ok(torrents) => {
+                        store.batch.raw = torrents;
+                        store.re_rank_batch_suggestions();
+                    }
+                    Err(error) => {
+                        store.batch.error = Some(error.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        });
+        self.batch_task = Some(task);
+    }
+
+    /// Recomputes top-3 suggestions from raw results with the effective
+    /// profile (#227).
+    fn re_rank_batch_suggestions(&mut self) {
+        let profile = self.effective_profile();
+        self.batch.suggestions = crate::batch_suggestions::batch_suggestions(
+            self.batch.raw.clone(),
+            self.season,
+            self.total_episodes,
+            &profile,
+            crate::batch_suggestions::BATCH_SUGGESTION_COUNT,
+        );
+    }
+
+    /// One batch search request: titles + season, no per-episode ids, so
+    /// batches are not filtered to one episode (#227). `plan` still adds
+    /// `romaji batch` queries within #181's budget.
+    fn batch_search_request(&self) -> search::SearchRequest {
+        let mut request = search::SearchRequest::new(self.titles.clone(), self.season, 1);
+        if let Some(anidb_aid) = self.anidb_aid {
+            request = request.with_anidb_ids(anidb_aid, None);
+        }
+        request
+    }
+
+    /// **Episodes ▾**: expand inline, fetching the file list on demand;
+    /// reuses the release list's batch file pick (#227, #182 Q7).
+    pub fn toggle_batch_episodes(&mut self, infohash: &str, cx: &mut Context<'_, Self>) {
+        if self.batch.expanded.as_deref() == Some(infohash) {
+            self.batch.expanded = None;
+            cx.notify();
+            return;
+        }
+        self.batch.expanded = Some(infohash.to_owned());
+        cx.notify();
+        if matches!(
+            self.batch.batches.get(infohash),
+            Some(crate::batch_suggestions::BatchState::Loaded(_))
+        ) {
+            return;
+        }
+        let Some(torrent) = self
+            .batch
+            .suggestions
+            .iter()
+            .find(|s| s.infohash == infohash)
+            .map(|s| s.torrent.clone())
+        else {
+            return;
+        };
+        let services = Arc::clone(&self.services);
+        let infohash = infohash.to_owned();
+        let season = self.season;
+        self.batch.batches.insert(
+            infohash.clone(),
+            crate::batch_suggestions::BatchState::Loading,
+        );
+        // AnimeTosho file list when present, else the indexer's torrent file.
+        let pre = crate::batch_suggestions::indexer_files(&torrent);
+        self.batch_file_task = Some(cx.spawn(async move |store, cx| {
+            let rows = if pre.is_empty() {
+                cx.update(|app| bridge::run(app, services.torrent_files(torrent)))
+                    .await
+                    .map_err(|error| error.to_string())
+                    .and_then(|inner| inner.map_err(|error| error.to_string()))
+            } else {
+                Ok(pre)
+            };
+            let _ = store.update(cx, |store, cx| {
+                let key = infohash.clone();
+                match rows {
+                    Ok(rows) => {
+                        let files = crate::batch_suggestions::suggestion_files(rows, season);
+                        store
+                            .batch
+                            .batches
+                            .insert(key, crate::batch_suggestions::BatchState::Loaded(files));
+                    }
+                    Err(_) => {
+                        store
+                            .batch
+                            .batches
+                            .insert(key, crate::batch_suggestions::BatchState::Failed);
+                    }
+                }
+                cx.notify();
+            });
+        }));
+    }
+
+    /// Picking a file in **Episodes ▾** streams it (#227); reuses the
+    /// release list's batch file pick. Fills `StreamSource::Torrent`
+    /// `magnet` + `trackers` (#250). Other episode files play as their own
+    /// episode.
+    pub fn stream_batch_suggestion_file(
+        &mut self,
+        hash: &str,
+        file_index: usize,
+        path: &str,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let Some(media) = self.media else { return };
+        let Some((info_hash, magnet_url)) = self
+            .batch
+            .suggestions
+            .iter()
+            .find(|s| s.infohash == hash)
+            .and_then(|s| {
+                s.torrent
+                    .infohash
+                    .parse::<domain::InfoHash>()
+                    .ok()
+                    .map(|hash| (hash, s.torrent.magnet_url.clone()))
+            })
+        else {
+            return;
+        };
+        let trackers = magnet_url
+            .as_deref()
+            .map_or_else(Vec::new, search::trackers_from_magnet);
+        let source = StreamSource::torrent_with_source(info_hash, file_index, magnet_url, trackers);
+        let episode = crate::batch_suggestions::file_episode(path, 1);
+        let request = PlayRequest::new(media, episode, source).with_details(PlaybackDetails::new(
+            self.media_title.clone(),
+            None,
+            self.poster.clone(),
+        ));
+        self.playback.update(cx, |playback, playback_cx| {
+            playback.play(request, playback_cx);
+        });
     }
 
     /// Register the aired episodes and fill the check budget (#226).
@@ -1062,6 +1314,10 @@ mod tests {
                 stage: TorrentStage::Searching
             }
         );
+        // The bridge completes on Tokio, then posts back to GPUI: a second
+        // park lets the posted update land before the assertion.
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(50));
         cx.run_until_parked();
         // ...then failed (no fake auto-select in `PendingServices`).
         assert!(

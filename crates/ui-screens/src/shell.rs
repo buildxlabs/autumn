@@ -1118,6 +1118,11 @@ impl AppShell {
             self.router.replace(Route::Entry { id, tab: Some(tab) });
             cx.notify();
         }
+        if tab == EntryTab::Torrents {
+            // One batch search on first visit to the Torrents tab (#227, #182 Q4).
+            self.entry_torrents
+                .update(cx, ui_state::EntryTorrentStore::open_torrents_tab);
+        }
     }
 
     /// The offset to save for the route being left. Search scrolls inside its
@@ -1304,13 +1309,19 @@ impl AppShell {
             self.scan_summaries.update(cx, ScanSummariesStore::open);
         }
         match self.route() {
-            Route::Entry { id, .. } => {
+            Route::Entry { id, tab } => {
                 self.entry_store.update(cx, |store, cx| store.open(id, cx));
                 self.entry_library
                     .update(cx, |store, cx| store.open(id, cx));
                 let today = crate::entry::iso_today();
                 self.entry_torrents
                     .update(cx, |store, cx| store.open(id, &today, cx));
+                if tab == Some(EntryTab::Torrents) {
+                    // The tab is visible on arrival; the search starts when
+                    // `open` finishes loading the media (#227, #182 Q4).
+                    self.entry_torrents
+                        .update(cx, ui_state::EntryTorrentStore::open_torrents_tab);
+                }
             }
             Route::Home => {
                 self.home_store.update(cx, HomeStore::open);

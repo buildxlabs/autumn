@@ -103,7 +103,7 @@ Phases 2 and 3 also overlap: the remaining Phase 2 screens are built while the P
 ### Phase 3: Torrent streaming and search
 
 - [x] `torrent` (librqbit session, head+tail priority, batch file pick, disk handoff, cleanup on drop) and `relay` torrent endpoint (token-gated `Range`).
-- [ ] `search`: Nyaa (+ mirror base URL, proxy) and AnimeTosho, analyzer, batch detection, auto-select profiles, availability badges.
+- [x] `search`: Nyaa (+ mirror base URL, proxy) and AnimeTosho, analyzer, batch detection, auto-select profiles, availability badges.
 - [x] Screens: Entry Torrent tab (auto-select, manual search sheet with sortable table), buffer overlay (peers, speeds, readiness), Torrent List with live badges.
 - [x] Magnet paste interception + `/magnet` and `/droptorrent` palette commands. Next-episode preload.
 - **Exit:** pick an airing episode, press auto-select, and playback starts in mpv while downloading. Seeking near the end works before the download finishes. An end-to-end engine test covers auto-select → play while downloading → seek near the end (#230). (Waits on the real-hardware run.)
