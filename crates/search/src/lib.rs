@@ -22,8 +22,8 @@ pub use availability::{
     RECHECK_INTERVAL, SystemWallClock, WallClock, parse_air_date,
 };
 pub use error::Error;
-pub use file_pick::pick_file;
-pub use matching::{EpisodeTarget, matches, matches_torrent};
+pub use file_pick::{is_video_path, pick_file};
+pub use matching::{EpisodeTarget, episode_suggestion, match_titles, matches, matches_torrent};
 pub use query::{
     MAX_REQUESTS_PER_INDEXER, MAX_TITLES, Query, QueryPlan, SearchRequest, clean_title,
     episode_season, plan,

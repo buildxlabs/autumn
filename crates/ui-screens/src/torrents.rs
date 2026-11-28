@@ -8,7 +8,7 @@ use domain::{TorrentListRow, TorrentState};
 use gpui_kit::{
     AnyElement, App, ClipboardItem, Context, Entity, InteractiveElement, IntoElement,
     ParentElement, SharedString, Styled, WeakEntity, Window,
-    component::{ActiveTheme, Disableable, WindowExt, button::Button, label::Label},
+    component::{ActiveTheme, WindowExt, button::Button, label::Label},
     div, px,
 };
 use ui_state::{EntryTab, PlaybackStore, Route, TorrentStore};
@@ -177,8 +177,7 @@ fn render_row(
 }
 
 /// Per-file Play on completed files; Open entry when the media is linked. An
-/// unlinked row gets a disabled Match & play: #223 wires it to the matching
-/// pipeline later.
+/// unlinked row gets **Match & play** (#223): opens match review.
 fn file_actions(
     row: &TorrentListRow,
     playback: &Entity<PlaybackStore>,
@@ -186,10 +185,24 @@ fn file_actions(
 ) -> Vec<AnyElement> {
     let mut actions = Vec::new();
     let Some(link) = row.link.as_ref() else {
+        let shell = shell.clone();
+        let info_hash = row.info_hash;
+        let name = row.name.clone();
+        let files: Vec<ui_state::IncomingFile> = row
+            .files
+            .iter()
+            .map(|file| ui_state::IncomingFile::new(file.index, file.path.clone(), file.len, true))
+            .collect();
         actions.push(
-            Button::new(format!("torrent-match-{}", row.info_hash))
+            Button::new(format!("torrent-match-{info_hash}"))
                 .label("Match & play")
-                .disabled(true)
+                .on_click(move |_, _, cx| {
+                    let files = files.clone();
+                    let name = name.clone();
+                    let _ = shell.update(cx, |shell, cx| {
+                        shell.open_match_review(info_hash, name.clone(), files.clone(), cx);
+                    });
+                })
                 .into_any_element(),
         );
         return actions;

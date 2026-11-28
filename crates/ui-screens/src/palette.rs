@@ -66,11 +66,21 @@ pub(crate) enum Mode {
     Anime,
     /// `/library scan`.
     Library,
+    /// `/magnet`: paste a v1 magnet link (#223, #209 Q1).
+    Magnet,
+    /// `/droptorrent`: open a `.torrent`-filtered native picker (#223, #209 Q1).
+    DropTorrent,
 }
 
 impl Mode {
     /// The modes a slash command selects, in the order they are listed.
-    const SLASH: [Self; 3] = [Self::Search, Self::Anime, Self::Library];
+    const SLASH: [Self; 5] = [
+        Self::Search,
+        Self::Anime,
+        Self::Library,
+        Self::Magnet,
+        Self::DropTorrent,
+    ];
 
     /// The slash command that selects this mode; empty for [`Self::Navigate`].
     fn command(self) -> &'static str {
@@ -79,6 +89,8 @@ impl Mode {
             Self::Search => "/search",
             Self::Anime => "/anime",
             Self::Library => "/library",
+            Self::Magnet => "/magnet",
+            Self::DropTorrent => "/droptorrent",
         }
     }
 
@@ -87,14 +99,15 @@ impl Mode {
         match self {
             Self::Navigate => SharedString::default(),
             Self::Library => "/library scan ".into(),
-            Self::Search | Self::Anime => format!("{} ", self.command()).into(),
+            Self::DropTorrent => self.command().into(),
+            Self::Search | Self::Anime | Self::Magnet => format!("{} ", self.command()).into(),
         }
     }
 
     /// The media kinds this mode lists, or none for navigation.
     fn kinds(self) -> &'static [MediaKind] {
         match self {
-            Self::Navigate | Self::Library => &[],
+            Self::Navigate | Self::Library | Self::Magnet | Self::DropTorrent => &[],
             Self::Anime | Self::Search => &[MediaKind::Anime],
         }
     }
@@ -103,7 +116,7 @@ impl Mode {
     fn kind(self) -> Option<MediaKind> {
         match self {
             Self::Anime | Self::Search => Some(MediaKind::Anime),
-            Self::Navigate | Self::Library => None,
+            Self::Navigate | Self::Library | Self::Magnet | Self::DropTorrent => None,
         }
     }
 
@@ -135,6 +148,10 @@ enum Entry {
     ScanLibrary,
     /// Opens the Library Explorer sheet.
     OpenExplorer,
+    /// A pasted/typed `magnet:` link to review (#223).
+    IncomingMagnet(String),
+    /// Open a `.torrent`-filtered native file picker (#223).
+    DropTorrent,
 }
 
 impl Entry {
@@ -156,6 +173,12 @@ impl Entry {
             Self::OpenExplorer => CommandItem::new()
                 .label("/library explorer")
                 .icon(IconName::FolderSync),
+            Self::IncomingMagnet(_) => CommandItem::new()
+                .label("Open magnet link")
+                .icon(IconName::Search),
+            Self::DropTorrent => CommandItem::new()
+                .label("/droptorrent")
+                .icon(IconName::Search),
         }
     }
 }
@@ -181,6 +204,14 @@ fn entries_for(
             .chain(ROUTES.into_iter().map(Entry::Route))
             .collect(),
         Mode::Library => vec![Entry::ScanLibrary, Entry::OpenExplorer],
+        Mode::Magnet => {
+            if text.trim_start().starts_with("magnet:?") {
+                vec![Entry::IncomingMagnet(text.trim().to_owned())]
+            } else {
+                Vec::new()
+            }
+        }
+        Mode::DropTorrent => vec![Entry::DropTorrent],
         Mode::Search | Mode::Anime => {
             let kinds = mode.kinds();
             let local: Vec<MediaSummary> = local
@@ -209,6 +240,10 @@ pub(crate) enum PaletteEvent {
     ScanLibrary,
     /// The user picked `/library explorer`; the host opens the sheet.
     OpenExplorer,
+    /// The user confirmed a `magnet:` link in `/magnet` mode (#223).
+    IncomingMagnet(String),
+    /// The user picked `/droptorrent`; the host opens a `.torrent` picker (#223).
+    DropTorrent,
 }
 
 /// The palette's view, kept alive between openings by the shell.
@@ -256,6 +291,25 @@ impl CommandPalette {
         self.db = Some(db);
         self.anilist = Some(anilist);
         self.gateway = Some(gateway);
+    }
+
+    /// Opens in `mode`, replaces the query with `query`, focuses it (#223).
+    pub(crate) fn open_mode_prefilled(
+        &mut self,
+        mode: Mode,
+        query: impl Into<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let _ = mode;
+        self.state.update(cx, |state, cx| {
+            state.set_query(query.into(), window, cx);
+            state.focus(window, cx);
+        });
+        self.search = None;
+        self.remote = None;
+        self.start_local_load(cx);
+        cx.notify();
     }
 
     /// Starts over in `mode` and focuses the query field.
@@ -360,6 +414,8 @@ impl CommandPalette {
             })),
             Entry::ScanLibrary => cx.emit(PaletteEvent::ScanLibrary),
             Entry::OpenExplorer => cx.emit(PaletteEvent::OpenExplorer),
+            Entry::IncomingMagnet(text) => cx.emit(PaletteEvent::IncomingMagnet(text)),
+            Entry::DropTorrent => cx.emit(PaletteEvent::DropTorrent),
         }
     }
 
@@ -370,7 +426,8 @@ impl CommandPalette {
     /// dialog when the query is empty and clears it otherwise.
     fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<'_, Self>) {
         let query = self.state.read(cx).query(cx);
-        if let (Mode::Search | Mode::Anime | Mode::Library, "") = Mode::parse(&query) {
+        if let (Mode::Search | Mode::Anime | Mode::Library | Mode::Magnet, "") = Mode::parse(&query)
+        {
             self.state
                 .update(cx, |state, cx| state.set_query("", window, cx));
         }
@@ -417,6 +474,8 @@ fn empty_state(mode: Mode, cx: &App) -> impl IntoElement + use<> {
         Mode::Search => "No local or AniList matches yet",
         Mode::Anime => "No anime matches yet",
         Mode::Library => "No library command matches",
+        Mode::Magnet => "Paste a magnet: link",
+        Mode::DropTorrent => "Open a .torrent file",
     };
     div()
         .id("palette-empty")
@@ -461,8 +520,14 @@ mod tests {
         assert_eq!(Mode::Anime.kind(), Some(MediaKind::Anime));
         assert_eq!(
             Mode::SLASH,
-            [Mode::Search, Mode::Anime, Mode::Library],
-            "manga stays hidden; library commands are the third mode"
+            [
+                Mode::Search,
+                Mode::Anime,
+                Mode::Library,
+                Mode::Magnet,
+                Mode::DropTorrent
+            ],
+            "manga stays hidden; library, magnet and droptorrent commands follow"
         );
     }
 

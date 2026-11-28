@@ -218,6 +218,7 @@ fn main() -> ExitCode {
             let scan_summaries = cx.new(|_| ScanSummariesStore::new(Arc::clone(&services)));
             let explorer = cx.new(|_| LibraryExplorerStore::new(Arc::clone(&services)));
             let torrent_store = cx.new(|_| TorrentStore::new(Arc::clone(&services)));
+            let incoming_store = cx.new(|_| ui_state::IncomingStore::new(Arc::clone(&services)));
             let playback_store = cx.new(|_| PlaybackStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
@@ -275,6 +276,7 @@ fn main() -> ExitCode {
                 home_store,
                 playback_store,
                 torrent_store,
+                incoming_store,
                 engine.db().clone(),
                 anilist,
                 catalog,
@@ -352,6 +354,7 @@ fn open_main_window(
     home_store: Entity<HomeStore>,
     playback_store: Entity<PlaybackStore>,
     torrent_store: Entity<TorrentStore>,
+    incoming_store: Entity<ui_state::IncomingStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -399,6 +402,7 @@ fn open_main_window(
                 cx,
             );
             shell.set_torrent_store(torrent_store, cx);
+            shell.set_incoming_store(incoming_store, cx);
             shell
         })
     })?;
@@ -512,6 +516,7 @@ mod tests {
                 home_store,
                 cx.new(|_| PlaybackStore::new(ui_state::test_support::pending_services())),
                 cx.new(|_| TorrentStore::inert()),
+                cx.new(|_| ui_state::IncomingStore::inert()),
                 db.clone(),
                 anilist,
                 catalog,
