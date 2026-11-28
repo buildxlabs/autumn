@@ -12,6 +12,7 @@ use std::{
 use db::Db;
 use domain::{
     AppEvent, ExternalId, InfoHash, MediaId, MediaKind, PrepareStage, Preparing, StreamSource,
+    TorrentLink, TorrentOrigin,
 };
 use futures::SinkExt;
 use librqbit::{CreateTorrentOptions, ListenerOptions, Session, SessionOptions};
@@ -665,6 +666,23 @@ async fn the_preload_starts_at_half_way_counts_as_active_and_a_stop_drops_it() {
         !fixture.root.join(second.to_string()).exists(),
         "a partial preload is deleted"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_held_preload_is_a_torrent_list_row_linked_to_the_next_episode() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+
+    fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    let rows = fixture.streams.rows().await.unwrap();
+    let row = rows.iter().find(|row| row.info_hash == second).unwrap();
+    assert_eq!(row.origin, TorrentOrigin::Preload);
+    assert_eq!(row.link, Some(TorrentLink::new(media, 2, Some(1))));
+    fixture.manager.stop().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
