@@ -4,7 +4,7 @@ The master plan for Autumn: decisions, stack, phases with exit criteria, and a c
 
 Scope: **native desktop only** (macOS, Linux, Windows). No web app, no server mode, no mobile.
 
-Last reviewed: 2026-11-26.
+Last reviewed: 2026-11-28.
 
 **Manga is not planned for now.** The former Phase 7 sits in the [Backlog](#backlog-ideas-from-the-other-references); the app is anime-only. Phase numbers are unchanged.
 
@@ -56,6 +56,8 @@ Versions checked on crates.io on 2026-11-21. Pin them in `[workspace.dependencie
 | Observability       | `tracing 0.1`, `tracing-subscriber 0.3`, `tracing-appender 0.2`                                           | Rolling file logs and the in-app viewer.                                                                                  |
 | Errors              | `thiserror 2`                                                                                             | `anyhow` only in the binary.                                                                                              |
 | Tooling (exists)    | clippy (strict workspace lints), rustfmt, taplo, typos, cargo-deny, cargo-nextest, Vite+ hooks, Nix flake | Already set up in the repo.                                                                                               |
+
+**Phase 4 additions** (not yet in `[workspace.dependencies]`): `semver 1` orders manifest versions (#265), `sha1 0.11` backs `autumn.crypto.sha1` (#267), `ipnet 2` holds the outbound-guard ranges (#270, already in `Cargo.lock`), and `time` gains its `parsing` feature for `autumn.time.parse` (#267). `keyring` (now also for `secret` extension settings, #265), `scraper`, `quick-xml`, `regex`, `serde_json`, `sha2`, `base64` and `url` are already workspace dependencies.
 
 ## 3. Phases
 
@@ -110,16 +112,23 @@ Phases 2 and 3 also overlap: the remaining Phase 2 screens are built while the P
 
 ### Phase 4: Extensions
 
-- [ ] `extensions`: Luau sandbox (one VM per extension, ADR 0003), declarative sources, limits, outbound guard, manifest, repository URLs, install/update/remove, settings per extension, error surfacing.
-- [ ] Provider adapters: torrent provider (feeds `search`), online stream, custom source, tracker.
-- [ ] Screens: Extensions (installed, marketplace, update diff review), extension playground (editor + run).
-- [ ] Sidebar badge for updates/errors.
-- **Exit:** install a torrent-provider extension from a repository URL; its results show in the manual search alongside Nyaa. A crashing or looping extension is killed and reported without freezing the app.
+Decisions are locked on the map [Autumn: Phase 4 ready to build](https://github.com/buildxlabs/autumn/issues/258) and recorded in ADRs 0011–0016.
+
+- [ ] `extensions`: Luau runtime (one VM per extension behind a single-caller actor, ADR 0003) with the `autumn` host API and `autumn.d.luau`; fixed limits, kill and rebuild, 3-strike auto-disable and extension health (ADR 0014); declarative sources run natively from JSON (ADR 0016).
+- [ ] Packages: JSON manifest + one inlined payload in `autumn.db`, SemVer `version` + integer `api_version`, settings per extension with `secret` fields in the OS keychain only (ADR 0012).
+- [ ] Repositories: HTTPS JSON indexes, install from a repository or a manifest URL (no local file installs), origin-pinned update checks every 12 h with mandatory review, skip a version, one-slot rollback, remove (ADR 0013).
+- [ ] `net` outbound guard for extension traffic: pre-send check, validating resolver, guarded redirects, declared hosts, LAN host exceptions, payload caps and a per-extension rate limit (ADR 0015).
+- [ ] Torrent-provider adapter only: each enabled provider is an isolated indexer lane in `search`, and a search fails only when every lane fails (ADR 0011, amends ADR 0007). The manifest keeps a `type` field, but only `torrent-provider` is accepted in Phase 4. The online-stream adapter moves to Phase 5, the custom-source adapter to Phase 8, and tracker extensions to the Backlog.
+- [ ] Screens: Extensions with Installed, Marketplace, Repositories and Playground tabs, a detail sheet per extension and the update review sheet; `Route::Extensions { tab, extension }` and an `/extensions` palette mode (#272). The extension playground edits and runs a scratch copy under the real limits and guard, and exports JSON (#273).
+- [ ] Sidebar badge counting extensions that need action (update pending, failing, auto-disabled, needs configuration): red on failure, accent otherwise, cleared only when the cause is fixed (#272).
+- [ ] The first torrent provider: SubsPlease, hand-ported in Luau, hosted in a separate `buildxlabs/autumn-extensions` repository. The binary ships no preset repository URL (#274).
+- **Exit:** install a torrent-provider extension from a repository URL; its results show in the manual search alongside Nyaa. A crashing or looping extension is killed and reported without freezing the app. CI proves it offline (#274): `engine::phase4_exit` serves a fixture repository from a loopback `axum` server with `subsplease` and `broken-loop`, `broken-crash`, `broken-oom` and `broken-hang`, installs them, and checks that Nyaa and SubsPlease results return while each broken lane is reported; a `ui-state` `#[gpui_kit::test]` checks that a looping extension does not freeze the UI.
 
 ### Phase 5: Debrid, online streaming, relay
 
 - [ ] `debrid`: Real-Debrid, TorBox, AllDebrid, Premiumize (cache check, resolve, download to library).
 - [ ] `onlinestream`: provider select, sub/dub, servers, stale-URL refresh → fallback, manual mapping.
+- [ ] Online-stream provider adapter in `extensions` (a new manifest `type`), designed with `onlinestream`. Moved from Phase 4.
 - [ ] `relay` proxy: header/cookie injection, HLS/DASH manifest rewrite, segment prefetch, ranged sub-requests.
 - [ ] Screens: Entry Debrid tab (cached badges), Entry Online tab, Debrid dashboard. Optional merge of online availability into library view.
 - **Exit:** a cached debrid torrent starts playing within a few seconds. An online stream whose URL has expired refreshes transparently before falling back to another provider.
@@ -143,7 +152,7 @@ Manga was Phase 7. It is not planned for now; see the Backlog.
 - [ ] Modular Home with all widget types + Home settings dialog (add, remove, reorder, per-widget filters and layout).
 - [ ] Settings: every tab live-reloads affected modules. Unsaved-changes bar.
 - [ ] Offline mode: snapshot selected entries, offline platform, queued changes synced on reconnect, offline sidebar.
-- [ ] Custom sources screen. MyAnimeList platform. DNS-over-HTTPS setting.
+- [ ] Custom-source provider adapter in `extensions` (moved from Phase 4) and the Custom sources screen. MyAnimeList platform. DNS-over-HTTPS setting.
 - [ ] Diagnostics: log viewer, error explainer, anonymized issue report bundle, crash log, file-cache screen (extends the Phase 1 Settings Storage tab).
 - [ ] Updater (GitHub releases, signature check, stable/beta channels) + announcements banner. Packaging for all three OSes.
 - **Exit:** a new user installs from a release artifact, customizes theme and home, goes offline and keeps watching local files, then comes back online and the queued progress syncs.
@@ -175,7 +184,7 @@ Every feature from the research documents and the reference code is listed here 
 | Playback sources    | Local direct play                                                                                                                                     | 2                                                  |
 |                     | Torrent streaming: head+tail priority, batch file pick, preload next, disk handoff, cleanup, live overlay                                             | 3                                                  |
 |                     | Debrid streaming: 4 providers, cached detection, download to library, dashboard                                                                       | 5                                                  |
-|                     | Online streaming via extensions: sub/dub, servers, stale-URL refresh, manual mapping, merge into library                                              | 5                                                  |
+|                     | Online streaming via extensions (online-stream provider adapter): sub/dub, servers, stale-URL refresh, manual mapping, merge into library             | 5                                                  |
 |                     | Loopback relay: header injection, HLS/DASH rewrite, prefetch, ranged sub-requests                                                                     | 5                                                  |
 | Players             | External mpv, IINA, VLC, MPC-HC; detection per OS; fresh IPC per launch; detached + supervised                                                        | 2                                                  |
 |                     | Continuity (resume after media-ready), watched at threshold/EOF, progress sync, auto-next countdown                                                   | 2                                                  |
@@ -193,15 +202,15 @@ Every feature from the research documents and the reference code is listed here 
 |                     | Local account-free tracking                                                                                                                           | 1                                                  |
 |                     | AniZip / animap episode metadata; anime-offline-database for matching                                                                                 | 1–2                                                |
 |                     | MyAnimeList platform                                                                                                                                  | 8                                                  |
-|                     | Tracker extensions (sync to other services)                                                                                                           | 4                                                  |
-|                     | Custom sources (non-AniList entries)                                                                                                                  | 8                                                  |
+|                     | Tracker extensions (sync to other services)                                                                                                           | Backlog                                            |
+|                     | Custom sources (non-AniList entries, custom-source provider adapter)                                                                                  | 8                                                  |
 | Discovery           | Discover carousels (trending, popular, upcoming, movies, schedule, missed sequels, by country); the manga carousel is removed                         | 1                                                  |
 |                     | Advanced search with all filters + scroll restore                                                                                                     | 1                                                  |
 |                     | My Lists with status tabs, custom lists, quick edit                                                                                                   | 1                                                  |
 |                     | Schedule calendar + missing episodes                                                                                                                  | 6                                                  |
 |                     | Playlists (cross-series queues)                                                                                                                       | 6                                                  |
 | Manga               | Hub, entry, provider compare, refresh, chapter downloads, local manga, reader modes, progress sync, MangaUpdates, manga Home widgets                  | Backlog                                            |
-| Extensions          | Sandbox runtime, repository, marketplace, update diffs, playground, health badge                                                                      | 4                                                  |
+| Extensions          | Sandbox runtime, declarative sources, repository, marketplace, update diffs, playground, health badge, torrent-provider adapter                       | 4                                                  |
 |                     | Plugin type: hooks, injected UI actions, tray/sidebar items                                                                                           | Backlog (after 4; needs a stable UI-injection API) |
 | Shell & UX          | Custom titlebar, hover-expand sidebar, badges, overflow "More", unpinning, back/forward                                                               | 0                                                  |
 |                     | Command palette + slash commands + magnet paste interception                                                                                          | 1, 3                                               |
@@ -240,6 +249,7 @@ Not committed. Pull an item into a phase only when the core phases ship.
 
 - Stremio-protocol add-ons as an extra source type (VortX, MovieBox-TUI).
 - Trakt / SIMKL / Kitsu tracking (Mangayomi, VortX).
+- Tracker extensions (sync to other services), moved from Phase 4. The glossary reserves **Platform** and avoids "tracker"; the concept needs its own design next to **Platform** and **List transfer**.
 - Multiple local profiles with PIN (VortX, Zangetsu, dango).
 - Backup/restore and library import/export (VortX, Mangayomi).
 - Serverless device-to-device sync (Mangayomi `sync_host`).
