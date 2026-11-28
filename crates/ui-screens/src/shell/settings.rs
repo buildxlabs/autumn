@@ -1568,6 +1568,21 @@ impl AppShell {
                 let shell = cx.entity();
                 let validation_error = self.network_error.clone();
                 let fixed_port = matches!(self.network.listen_port, settings::ListenPort::Fixed(_));
+                // ADR 0015: an http:// proxy resolves extension targets itself.
+                let http_proxy_description = if self
+                    .network
+                    .http_proxy
+                    .as_deref()
+                    .is_some_and(|proxy| proxy.starts_with("http://"))
+                {
+                    "One global proxy for all app requests (indexers, AniList, metadata, \
+                     posters). http:// or socks5://, no embedded credentials. Note: an \
+                     http:// proxy resolves extension requests itself, so IP-level \
+                     blocking for extensions shifts to the proxy."
+                } else {
+                    "One global proxy for all app requests (indexers, AniList, metadata, \
+                     posters). http:// or socks5://, no embedded credentials."
+                };
                 let mut items = vec![
                     SettingItem::render(move |_, _, _| {
                         Label::new(
@@ -1824,9 +1839,7 @@ impl AppShell {
                             },
                         ),
                     )
-                    .description(
-                        "One global proxy for all app requests (indexers, AniList, metadata,                          posters). http:// or socks5://, no embedded credentials.",
-                    ),
+                    .description(http_proxy_description),
                 ];
 
                 if fixed_port {

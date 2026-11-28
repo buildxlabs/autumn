@@ -23,8 +23,8 @@ const DEFAULT_MAX_RETRIES: u32 = 3;
 const DEFAULT_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const DEFAULT_LOCKOUT: Duration = Duration::from_secs(60);
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const X_RATE_LIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
 static INSTALL_TLS_PROVIDER: Once = Once::new();
 
@@ -154,13 +154,7 @@ impl ClientBuilder {
     ///
     /// Returns [`Error::Build`] if the HTTP client cannot be initialized.
     pub fn build(self) -> Result<Client, Error> {
-        // reqwest is built without a default TLS provider so aws-lc's native
-        // build is not needed. Install ring once for the whole process.
-        INSTALL_TLS_PROVIDER.call_once(|| {
-            if let Err(already) = rustls::crypto::ring::default_provider().install_default() {
-                debug!(?already, "rustls crypto provider already installed");
-            }
-        });
+        install_tls_provider();
         let mut limiters = HostLimiters::default();
         for (host, config) in self.hosts {
             limiters.insert(host, config);
@@ -430,6 +424,18 @@ const _: () = {
     assert_send_sync::<Client>();
 };
 
+/// Install ring as the process-wide rustls provider, once.
+///
+/// reqwest is built without a default TLS provider so aws-lc's native
+/// build is not needed.
+pub(crate) fn install_tls_provider() {
+    INSTALL_TLS_PROVIDER.call_once(|| {
+        if let Err(already) = rustls::crypto::ring::default_provider().install_default() {
+            debug!(?already, "rustls crypto provider already installed");
+        }
+    });
+}
+
 /// Build a `reqwest` client with timeouts and an optional outbound proxy.
 fn build_reqwest(
     connect_timeout: Duration,
@@ -453,7 +459,7 @@ fn build_reqwest(
 
 /// Reject embedded credentials, require scheme + host, and only allow
 /// `http://` or `socks5://` for the global outbound proxy (ADR-0010).
-fn validate_proxy(url: String) -> Result<String, Error> {
+pub(crate) fn validate_proxy(url: String) -> Result<String, Error> {
     let invalid = |message: &str| Error::Build {
         source: HttpError::new(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

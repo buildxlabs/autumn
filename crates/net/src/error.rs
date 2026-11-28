@@ -4,6 +4,8 @@ use std::{path::PathBuf, time::Duration};
 
 use thiserror::Error;
 
+use crate::BlockReason;
+
 /// An opaque cause from the HTTP stack.
 ///
 /// Its field is private so the rest of the workspace never names a reqwest
@@ -35,6 +37,24 @@ impl From<HttpError> for Error {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// The outbound guard refused an extension request (ADR 0015).
+    #[error("blocked: {host} {reason}")]
+    Blocked {
+        /// The host, or `scheme:` for a URL without one, that broke the rule.
+        host: String,
+        /// The rule it broke.
+        reason: BlockReason,
+    },
+
+    /// A declared host pattern or LAN host exception is malformed or too broad.
+    #[error("invalid host pattern {pattern:?}: {reason}")]
+    InvalidHostPattern {
+        /// The pattern as given.
+        pattern: String,
+        /// Why it was rejected.
+        reason: &'static str,
+    },
+
     /// The request never reached a response.
     #[error("request to {host} failed: {source}")]
     Transport {

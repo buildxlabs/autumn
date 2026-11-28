@@ -5883,6 +5883,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "httpdate",
+ "ipnet",
+ "net",
  "rand 0.10.4",
  "reqwest",
  "rustls",
@@ -5891,6 +5893,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
