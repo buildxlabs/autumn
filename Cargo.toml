@@ -23,6 +23,7 @@ flume = { default-features = false, features = [ "async" ], version = "0.12" }
 futures = "0.3"
 gpui-kit = "=0.10.0"
 httpdate = "1.0"
+ipnet = "2.12"
 keyring = { features = [ "v1" ], version = "4" }
 library = { path = "crates/library" }
 librqbit = { default-features = false, features = [

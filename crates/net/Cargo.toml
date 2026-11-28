@@ -9,8 +9,13 @@ publish                = false
 [lints]
 workspace = true
 
+[features]
+# Loopback and static-DNS hooks on GuardedClientBuilder for test fixtures.
+test-util = [  ]
+
 [dependencies]
 httpdate.workspace  = true
+ipnet.workspace     = true
 rand.workspace      = true
 reqwest.workspace   = true
 rustls.workspace    = true
@@ -19,7 +24,9 @@ tempfile.workspace  = true
 thiserror.workspace = true
 tokio.workspace     = true
 tracing.workspace   = true
+url.workspace       = true
 
 [dev-dependencies]
 axum.workspace = true
+net            = { features = [ "test-util" ], path = "." }
 tokio          = { features = [ "io-util" ], workspace = true }
