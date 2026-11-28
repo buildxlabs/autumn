@@ -16,7 +16,7 @@ mod torrent;
 mod transfer;
 
 pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
-pub use extension::ExtensionId;
+pub use extension::{ExtensionFailure, ExtensionHealth, ExtensionId, FailureKind};
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use info_hash::{InfoHash, InfoHashError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
@@ -125,6 +125,23 @@ pub enum AppEvent {
         message: String,
         /// Whether a Retry action can succeed.
         retryable: bool,
+    },
+    /// An installed extension's health changed (#306). Sent once per
+    /// change, so the store replaces its badge.
+    ExtensionHealthChanged {
+        /// The extension whose health changed.
+        id: ExtensionId,
+        /// Its health now.
+        health: ExtensionHealth,
+    },
+    /// Three CPU or memory kills in a row auto-disabled an extension. Sent
+    /// once, for the error toast; an [`Self::ExtensionHealthChanged`] to
+    /// `AutoDisabled` is sent with it.
+    ExtensionAutoDisabled {
+        /// The extension that was turned off.
+        id: ExtensionId,
+        /// The kill that made the third strike.
+        failure: ExtensionFailure,
     },
 }
 

@@ -1,25 +1,33 @@
-//! Installed torrent-provider extensions as release-search lanes, and their
-//! lifecycle (#304, ADR 0011, ADR 0012).
+//! Installed torrent-provider extensions as release-search lanes, their
+//! lifecycle and their health (#304, #306, ADR 0011, ADR 0012, ADR 0014).
 //!
 //! The engine builds an [`ExtensionHost`] from the runnable rows in
 //! `autumn.db` when it starts, and [`ExtensionLanes`] hands it to `search` as
-//! the provider set. Enabling, disabling or uninstalling an extension rebuilds
-//! the host from the database, stops the changed extension's actor and purges
-//! its cached search rows, so a disabled extension's rows never come back
-//! within the 60 s cache window.
+//! the provider set. Enabling, disabling, re-enabling or uninstalling an
+//! extension rebuilds the host from the database, stops the changed
+//! extension's actor and purges its cached search rows, so a disabled
+//! extension's rows never come back within the 60 s cache window.
+//!
+//! Every finished provider call is recorded in the extension's health. A
+//! health change is published as [`AppEvent::ExtensionHealthChanged`]; the
+//! third CPU or memory kill in a row also publishes
+//! [`AppEvent::ExtensionAutoDisabled`] once and drops the lane.
 
 use std::{
     collections::HashMap,
     future::Future,
     pin::Pin,
-    sync::{PoisonError, RwLock},
+    sync::{Arc, PoisonError, RwLock},
+    time::SystemTime,
 };
 
 use db::Db;
-use domain::ExtensionId;
+use domain::{AppEvent, ExtensionHealth, ExtensionId};
 use extensions::{
-    ExtensionError, ExtensionHost, PackageError, Packages, ProviderRequest, ProviderTorrent,
+    ExtensionError, ExtensionHost, HealthChange, HealthMonitor, PackageError, Packages,
+    ProviderRequest, ProviderTorrent,
 };
+use flume::Sender;
 use search::{ExtensionProviders, ProviderMeta, ProviderSet};
 
 /// One installed extension, as the Extensions screen lists it.
@@ -41,18 +49,27 @@ pub struct ExtensionSummary {
     /// The user's toggle. A disabled extension keeps its row and settings but
     /// gets no search calls.
     pub enabled: bool,
+    /// Healthy, failing with its last error, or auto-disabled. Survives a
+    /// restart.
+    pub health: ExtensionHealth,
+    /// The traceback of the last script error, kept in memory until the next
+    /// success, Clear error or restart.
+    pub traceback: Option<String>,
 }
 
 /// The extension lanes `search` runs: the current host, swapped whole when an
 /// extension's lifecycle changes.
 ///
 /// A search reads the lanes once when it starts, so one already running
-/// finishes on the host it began with.
-#[derive(Debug)]
+/// finishes on the host it began with. Cloning shares everything.
+#[derive(Debug, Clone)]
 pub(crate) struct ExtensionLanes {
-    current: RwLock<Lanes>,
-    /// Serializes lifecycle changes so two rebuilds never swap out of order.
-    lifecycle: tokio::sync::Mutex<()>,
+    current: Arc<RwLock<Lanes>>,
+    /// Serializes rebuilds so two never swap out of order.
+    lifecycle: Arc<tokio::sync::Mutex<()>>,
+    db: Db,
+    health: HealthMonitor,
+    events: Sender<AppEvent>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,17 +92,19 @@ impl Lanes {
 pub(crate) enum Change {
     Enable,
     Disable,
+    /// Clears `auto_disabled`, the last error and the strikes.
+    Reenable,
     Uninstall,
 }
 
 impl ExtensionLanes {
-    /// Lanes for the enabled Luau providers in `db`. A database failure is
-    /// logged and leaves no extension lanes, so search behaves as with
-    /// nothing installed.
+    /// Lanes for the runnable Luau providers in `db`, publishing health on
+    /// `events`. A database failure is logged and leaves no extension lanes,
+    /// so search behaves as with nothing installed.
     ///
     /// Must run inside a Tokio runtime: the host spawns one actor per
     /// provider.
-    pub(crate) async fn load(db: &Db) -> Self {
+    pub(crate) async fn load(db: &Db, events: Sender<AppEvent>) -> Self {
         let lanes = match runnable(db).await {
             Ok(lanes) => lanes,
             Err(error) => {
@@ -94,29 +113,113 @@ impl ExtensionLanes {
             }
         };
         Self {
-            current: RwLock::new(lanes),
-            lifecycle: tokio::sync::Mutex::new(()),
+            current: Arc::new(RwLock::new(lanes)),
+            lifecycle: Arc::new(tokio::sync::Mutex::new(())),
+            db: db.clone(),
+            health: HealthMonitor::new(db.clone()),
+            events,
         }
     }
 
     /// Applies `change` to `id`'s row, rebuilds the host from the database
     /// and stops `id`'s old actor, killing a call in flight. The caller then
     /// purges `id`'s cached search rows.
-    pub(crate) async fn apply(
-        &self,
-        db: &Db,
-        id: &ExtensionId,
-        change: Change,
-    ) -> Result<(), PackageError> {
+    pub(crate) async fn apply(&self, id: &ExtensionId, change: Change) -> Result<(), PackageError> {
         let _serial = self.lifecycle.lock().await;
-        let packages = Packages::new(db);
-        let now = std::time::SystemTime::now();
+        let packages = Packages::new(&self.db);
+        let now = SystemTime::now();
         match change {
             Change::Enable => packages.enable(id, now).await?,
             Change::Disable => packages.disable(id, now).await?,
-            Change::Uninstall => packages.uninstall(id).await?,
+            Change::Reenable => {
+                let change = self.health.re_enable(id, now).await?;
+                self.publish(id, change).await;
+            }
+            Change::Uninstall => {
+                packages.uninstall(id).await?;
+                self.health.forget(id);
+            }
         }
-        let lanes = runnable(db).await?;
+        self.rebuild(id).await
+    }
+
+    /// Clear error: forgets `id`'s last error and traceback. An
+    /// auto-disabled extension stays off.
+    pub(crate) async fn clear_error(&self, id: &ExtensionId) -> Result<(), PackageError> {
+        let change = self.health.clear_error(id, SystemTime::now()).await?;
+        self.publish(id, change).await;
+        Ok(())
+    }
+
+    /// Every installed extension `db` can still load, by id, with its health.
+    pub(crate) async fn installed(&self) -> Result<Vec<ExtensionSummary>, PackageError> {
+        let mut health = self.health.all().await?;
+        Ok(Packages::new(&self.db)
+            .installed()
+            .await?
+            .into_iter()
+            .map(|package| ExtensionSummary {
+                runtime: package.manifest.payload.runtime().to_owned(),
+                version: package.manifest.version.to_string(),
+                health: health.remove(&package.manifest.id).unwrap_or_default(),
+                traceback: self.health.traceback(&package.manifest.id),
+                id: package.manifest.id,
+                name: package.manifest.name,
+                enabled: package.enabled,
+            })
+            .collect())
+    }
+
+    /// Records a finished call's outcome; an auto-disable drops the lane.
+    async fn observe(
+        &self,
+        id: &ExtensionId,
+        outcome: &Result<Vec<ProviderTorrent>, ExtensionError>,
+    ) {
+        let change = match self.health.record(id, outcome, SystemTime::now()).await {
+            Ok(change) => change,
+            Err(error) => {
+                tracing::warn!(extension = %id, %error, "extension health was not recorded");
+                return;
+            }
+        };
+        let tripped = change
+            .as_ref()
+            .is_some_and(|change| change.auto_disabled.is_some());
+        self.publish(id, change).await;
+        if tripped {
+            let _serial = self.lifecycle.lock().await;
+            if let Err(error) = self.rebuild(id).await {
+                tracing::warn!(extension = %id, %error, "the auto-disabled lane was not dropped");
+            }
+        }
+    }
+
+    /// Sends `change` to the UI: the health, then the one-shot auto-disable.
+    async fn publish(&self, id: &ExtensionId, change: Option<HealthChange>) {
+        let Some(change) = change else {
+            return;
+        };
+        let mut events = vec![AppEvent::ExtensionHealthChanged {
+            id: id.clone(),
+            health: change.health,
+        }];
+        if let Some(failure) = change.auto_disabled {
+            events.push(AppEvent::ExtensionAutoDisabled {
+                id: id.clone(),
+                failure,
+            });
+        }
+        for event in events {
+            // No receiver means the UI has gone; nothing is left to tell.
+            let _ = self.events.send_async(event).await;
+        }
+    }
+
+    /// Swaps in a host built from the database and stops `id`'s old actor.
+    /// Callers hold `lifecycle`.
+    async fn rebuild(&self, id: &ExtensionId) -> Result<(), PackageError> {
+        let lanes = runnable(&self.db).await?;
         let old = std::mem::replace(&mut *self.write(), lanes);
         if old.host.providers().any(|info| &info.id == id)
             && let Err(error) = old.host.stop(id).await
@@ -143,30 +246,22 @@ impl ProviderSet for ExtensionLanes {
         self.read().providers.providers()
     }
 
+    /// Runs the call and records its outcome. When search drops this future
+    /// at its deadline, nothing is recorded.
     fn search(
         &self,
         id: ExtensionId,
         request: ProviderRequest,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ProviderTorrent>, ExtensionError>> + Send + 'static>>
     {
-        self.read().providers.search(id, request)
-    }
-}
-
-/// Every installed extension `db` can still load, by id.
-pub(crate) async fn installed(db: &Db) -> Result<Vec<ExtensionSummary>, PackageError> {
-    Ok(Packages::new(db)
-        .installed()
-        .await?
-        .into_iter()
-        .map(|package| ExtensionSummary {
-            runtime: package.manifest.payload.runtime().to_owned(),
-            version: package.manifest.version.to_string(),
-            id: package.manifest.id,
-            name: package.manifest.name,
-            enabled: package.enabled,
+        let call = self.read().providers.search(id.clone(), request);
+        let lanes = self.clone();
+        Box::pin(async move {
+            let outcome = call.await;
+            lanes.observe(&id, &outcome).await;
+            outcome
         })
-        .collect())
+    }
 }
 
 /// A host over `db`'s runnable providers, with each one's declared hosts.
@@ -195,7 +290,7 @@ mod tests {
     use std::{future::Future, sync::Arc};
 
     use db::Db;
-    use domain::ExtensionId;
+    use domain::{AppEvent, ExtensionHealth, ExtensionId, FailureKind};
     use extensions::Packages;
     use search::{Indexer, Query, SearchOutcome, Searcher, Torrent, Transport};
     use settings::AppPaths;
@@ -228,6 +323,17 @@ mod tests {
                     }} }}
                 end }}"#
             ),
+        )
+    }
+
+    /// A Luau provider that runs out of its 32 MiB memory cap on every call.
+    fn memory_hog(id: &str) -> String {
+        manifest(
+            id,
+            r#"return { search = function(request)
+                local big = string.rep("x", 64 * 1024 * 1024)
+                return { { name = big } }
+            end }"#,
         )
     }
 
@@ -305,9 +411,11 @@ mod tests {
 
     struct Fixture {
         _dir: TempDir,
+        paths: AppPaths,
         runtime: Runtime,
         engine: Engine,
         db: Db,
+        events: flume::Receiver<AppEvent>,
     }
 
     impl Fixture {
@@ -338,26 +446,27 @@ mod tests {
                     ))
                     .expect("the package installs");
             }
-            let (events, _receiver) = flume::unbounded();
-            let engine = Engine::new(&runtime, &paths, events).expect("the engine");
-            let lanes: Arc<dyn search::ProviderSet> =
-                Arc::<ExtensionLanes>::clone(&engine.extensions);
-            let searcher = Searcher::new(FixtureNyaa).with_providers(lanes);
-            let selector = AutoSelector::new(
-                Arc::new(Arc::new(searcher)),
-                Arc::new(NoFiles),
-                Arc::new(NoIds),
-            );
-            *engine
-                .auto_select
-                .write()
-                .expect("the selector lock is not poisoned") = selector;
+            let (engine, events) = fixture_engine(&runtime, &paths);
             Self {
                 _dir: dir,
+                paths,
                 runtime,
                 engine,
                 db,
+                events,
             }
+        }
+
+        /// Drops the engine and starts a new one on the same `autumn.db`.
+        fn restart(&mut self) {
+            let (engine, events) = fixture_engine(&self.runtime, &self.paths);
+            self.engine = engine;
+            self.events = events;
+        }
+
+        /// The health events sent so far, in order.
+        fn health_events(&self) -> Vec<AppEvent> {
+            self.events.drain().collect()
         }
 
         fn search(&self) -> SearchOutcome {
@@ -371,6 +480,44 @@ mod tests {
                 .block_on(self.engine.installed_extensions())
                 .expect("the extensions list")
         }
+    }
+
+    fn fixture_engine(runtime: &Runtime, paths: &AppPaths) -> (Engine, flume::Receiver<AppEvent>) {
+        let (events, receiver) = flume::unbounded();
+        let engine = Engine::new(runtime, paths, events).expect("the engine");
+        let lanes: Arc<dyn search::ProviderSet> = Arc::<ExtensionLanes>::clone(&engine.extensions);
+        let searcher = Searcher::new(FixtureNyaa).with_providers(lanes);
+        let selector = AutoSelector::new(
+            Arc::new(Arc::new(searcher)),
+            Arc::new(NoFiles),
+            Arc::new(NoIds),
+        );
+        *engine
+            .auto_select
+            .write()
+            .expect("the selector lock is not poisoned") = selector;
+        // Only health events matter here; the torrent sampler's are noise.
+        let (health, filtered) = flume::unbounded();
+        std::thread::spawn(move || {
+            for event in receiver {
+                if matches!(
+                    event,
+                    AppEvent::ExtensionHealthChanged { .. }
+                        | AppEvent::ExtensionAutoDisabled { .. }
+                ) && health.send(event).is_err()
+                {
+                    return;
+                }
+            }
+        });
+        (engine, filtered)
+    }
+
+    fn summary<'a>(summaries: &'a [ExtensionSummary], id: &str) -> &'a ExtensionSummary {
+        summaries
+            .iter()
+            .find(|summary| summary.id.as_str() == id)
+            .expect("the extension is listed")
     }
 
     fn names(outcome: &SearchOutcome) -> Vec<(String, String)> {
@@ -422,6 +569,8 @@ mod tests {
                 version: "1.0.0".to_owned(),
                 runtime: "luau".to_owned(),
                 enabled: true,
+                health: ExtensionHealth::Healthy,
+                traceback: None,
             }]
         );
     }
@@ -530,5 +679,119 @@ mod tests {
             error.to_string(),
             "the extension change failed: no installed extension has id missing-ext"
         );
+    }
+
+    #[test]
+    fn three_memory_kills_auto_disable_the_lane_once_and_survive_a_restart() {
+        let mut fixture = Fixture::start(&[
+            fixed_provider("fixed-ext", "[Ext] Frieren - 05"),
+            memory_hog("hog-ext"),
+        ]);
+        let hog = ExtensionId::new("hog-ext");
+        let failed = |outcome: &SearchOutcome| {
+            outcome.failures.iter().any(
+                |failure| matches!(&failure.indexer, Indexer::Extension { id, .. } if *id == hog),
+            )
+        };
+
+        for _ in 0..3 {
+            let outcome = fixture.search();
+            assert!(failed(&outcome), "{:?}", outcome.failures);
+            assert_eq!(outcome.torrents.len(), 2, "Nyaa and fixed-ext still answer");
+        }
+        let outcome = fixture.search();
+        assert!(
+            !failed(&outcome),
+            "the lane is dropped: {:?}",
+            outcome.failures
+        );
+        assert_eq!(outcome.torrents.len(), 2);
+
+        // Sent before each search returns, but they pass the filter thread.
+        let mut events = Vec::new();
+        while events.len() < 4 {
+            events.push(
+                fixture
+                    .events
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("a health event"),
+            );
+        }
+        events.extend(fixture.health_events());
+        let kinds: Vec<&str> = events
+            .iter()
+            .map(|event| match event {
+                AppEvent::ExtensionHealthChanged {
+                    health: ExtensionHealth::Failing(_),
+                    ..
+                } => "failing",
+                AppEvent::ExtensionHealthChanged {
+                    health: ExtensionHealth::AutoDisabled(_),
+                    ..
+                } => "auto-disabled",
+                AppEvent::ExtensionAutoDisabled { .. } => "toast",
+                _ => "other",
+            })
+            .collect();
+        assert_eq!(kinds, ["failing", "failing", "auto-disabled", "toast"]);
+
+        let listed = fixture.installed();
+        let health = summary(&listed, "hog-ext").health.clone();
+        assert!(
+            matches!(&health, ExtensionHealth::AutoDisabled(Some(failure))
+                if failure.kind == FailureKind::MemoryLimit),
+            "{health:?}"
+        );
+        assert!(
+            summary(&listed, "hog-ext").enabled,
+            "the user's toggle is untouched"
+        );
+
+        fixture.restart();
+        assert_eq!(summary(&fixture.installed(), "hog-ext").health, health);
+        assert!(!failed(&fixture.search()), "still off after a restart");
+
+        fixture
+            .runtime
+            .block_on(fixture.engine.reenable_extension(hog.clone()))
+            .expect("re-enable");
+        assert_eq!(
+            summary(&fixture.installed(), "hog-ext").health,
+            ExtensionHealth::Healthy
+        );
+        assert!(failed(&fixture.search()), "the lane is back");
+    }
+
+    #[test]
+    fn a_script_error_keeps_its_traceback_until_cleared() {
+        let fixture = Fixture::start(&[broken_provider("broken-ext")]);
+        fixture.search();
+
+        let listed = fixture.installed();
+        let broken = summary(&listed, "broken-ext");
+        assert!(
+            matches!(&broken.health, ExtensionHealth::Failing(failure)
+                if failure.kind == FailureKind::RuntimeError
+                    && failure.message.contains("the site changed")),
+            "{:?}",
+            broken.health
+        );
+        assert!(
+            broken.traceback.is_some(),
+            "the traceback is kept in memory"
+        );
+
+        fixture
+            .runtime
+            .block_on(
+                fixture
+                    .engine
+                    .clear_extension_error(ExtensionId::new("broken-ext")),
+            )
+            .expect("clear error");
+        let listed = fixture.installed();
+        let broken = summary(&listed, "broken-ext");
+        assert_eq!(broken.health, ExtensionHealth::Healthy);
+        assert_eq!(broken.traceback, None);
     }
 }

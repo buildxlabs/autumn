@@ -397,8 +397,8 @@ pub trait EngineServices: Send + Sync + 'static {
         Box::pin(async { Ok(search::SearchOutcome::default()) })
     }
 
-    /// Every installed extension, enabled or not, by id (#304). The default
-    /// is empty for fakes.
+    /// Every installed extension, enabled or not, by id, with its health
+    /// (#304, #306). The default is empty for fakes.
     fn installed_extensions(&self) -> BoxFuture<Result<Vec<ExtensionSummary>, EngineError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
@@ -420,6 +420,19 @@ pub trait EngineServices: Send + Sync + 'static {
     /// cached search rows as [`Self::disable_extension`] does. The default is
     /// a no-op for fakes.
     fn uninstall_extension(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Re-enable after an auto-disable: clears `auto_disabled`, the last
+    /// error and the strikes, so the provider joins the next search (#306).
+    /// The default is a no-op for fakes.
+    fn reenable_extension(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Clear error: forgets the last error and traceback. An auto-disabled
+    /// extension stays off (#306). The default is a no-op for fakes.
+    fn clear_extension_error(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
         Box::pin(async { Ok(()) })
     }
 
@@ -653,7 +666,7 @@ impl Engine {
         ));
         // Enabled Luau providers from `autumn.db` become search lanes; with
         // none installed, search runs the built-in indexers only.
-        let extensions = Arc::new(runtime.block_on(ExtensionLanes::load(&db)));
+        let extensions = Arc::new(runtime.block_on(ExtensionLanes::load(&db, events.clone())));
         let auto_select = Arc::new(RwLock::new(auto_selector(
             &client,
             &poster_cache,
@@ -823,11 +836,10 @@ impl Engine {
         id: ExtensionId,
         change: Change,
     ) -> BoxFuture<Result<(), EngineError>> {
-        let db = self.db.clone();
         let extensions = Arc::clone(&self.extensions);
         let auto_select = Arc::clone(&self.auto_select);
         Box::pin(async move {
-            extensions.apply(&db, &id, change).await?;
+            extensions.apply(&id, change).await?;
             let selector = auto_select.read().ok().map(|selector| selector.clone());
             if let Some(selector) = selector {
                 selector.purge_provider(&id);
@@ -1391,8 +1403,8 @@ impl EngineServices for Engine {
     }
 
     fn installed_extensions(&self) -> BoxFuture<Result<Vec<ExtensionSummary>, EngineError>> {
-        let db = self.db.clone();
-        Box::pin(async move { Ok(extension_lanes::installed(&db).await?) })
+        let extensions = Arc::clone(&self.extensions);
+        Box::pin(async move { Ok(extensions.installed().await?) })
     }
 
     fn enable_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
@@ -1405,6 +1417,15 @@ impl EngineServices for Engine {
 
     fn uninstall_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
         self.change_extension(id, Change::Uninstall)
+    }
+
+    fn reenable_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        self.change_extension(id, Change::Reenable)
+    }
+
+    fn clear_extension_error(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        let extensions = Arc::clone(&self.extensions);
+        Box::pin(async move { Ok(extensions.clear_error(&id).await?) })
     }
 
     fn torrent_files(

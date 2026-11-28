@@ -23,7 +23,7 @@ use sqlx::{
 pub use availability::{AvailabilityIndexer, AvailabilityRecord, AvailabilityRepo};
 pub use continuity::{Continuity, ContinuityRepo, ResumePoint};
 pub use error::DbError;
-pub use extension::{ExtensionRepo, InstalledExtension, NewExtension};
+pub use extension::{ExtensionRepo, InstalledExtension, NewExtension, StoredHealth};
 pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
 pub use local_list::LocalListRepo;
 pub use media::{LinkConflict, MediaRepo, Minted};
