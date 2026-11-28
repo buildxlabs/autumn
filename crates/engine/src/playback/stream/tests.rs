@@ -5,7 +5,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
     num::NonZeroU32,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -23,8 +23,14 @@ use tempfile::TempDir;
 use tokio::time::{sleep, timeout};
 use torrent::{PeerDiscovery, TorrentSessionOptions};
 
+use search::{Indexer, SearchRequest, Torrent};
+use settings::AutoSelectSettings;
+use torrent::{TorrentFile, TorrentSource};
+
 use crate::{
-    LocalProgressSync, PlayRequest, PlaybackManager, TorrentStreams, playback::fakes::FakeLauncher,
+    AutoSelectRequest, AutoSelector, BoxFuture, EpisodeAiring, EpisodeIds, FileListError,
+    FileLister, LocalProgressSync, PlayRequest, PlaybackManager, StreamOrigin, TorrentSearch,
+    TorrentStreams, playback::fakes::FakeLauncher,
 };
 
 const MIB: u64 = 1024 * 1024;
@@ -123,6 +129,20 @@ impl Fixture {
     /// A manager whose torrent session only knows `peer`. A threshold of
     /// 100 % leaves EOF as the only way to mark an episode watched.
     async fn new(peer: SocketAddr, no_peers_after: Duration) -> Self {
+        Self::build(peer, no_peers_after, None).await
+    }
+
+    /// A manager that preloads, whose auto-select finds `results`, every
+    /// episode aired, a 10 ms countdown step and a `grace` grace period.
+    async fn preloading(peer: SocketAddr, results: Vec<Torrent>, grace: Duration) -> Self {
+        Self::build(peer, Duration::from_secs(60), Some((results, grace))).await
+    }
+
+    async fn build(
+        peer: SocketAddr,
+        no_peers_after: Duration,
+        preload: Option<(Vec<Torrent>, Duration)>,
+    ) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let db = Db::open(&dir.path().join("autumn.db")).await.unwrap();
         let cache = dir.path().join("cache");
@@ -153,6 +173,20 @@ impl Fixture {
         )
         .with_torrent(Arc::clone(&streams));
         manager.no_peers_after = no_peers_after;
+        if let Some((results, grace)) = preload {
+            let selector = AutoSelector::new(
+                Arc::new(FakeSearch(results)),
+                Arc::new(NoFiles),
+                Arc::new(NoIds),
+            );
+            manager = manager.with_preload(
+                Arc::new(RwLock::new(selector)),
+                Arc::new(AllAired),
+                AutoSelectSettings::default(),
+            );
+            manager.countdown_step = Duration::from_millis(10);
+            manager.preload_grace = grace;
+        }
         Self {
             _dir: dir,
             root,
@@ -397,4 +431,512 @@ async fn a_stop_while_preparing_drops_the_request_and_the_torrent() {
     assert_eq!(fixture.launcher.launches(), 0, "no player opens");
     assert_eq!(fixture.streams.active(), []);
     assert!(!fixture.root.join(info_hash.to_string()).exists());
+}
+
+// Next-episode preload (#224, #208).
+
+/// Auto-select's indexers, answering every search with the same results.
+struct FakeSearch(Vec<Torrent>);
+
+impl TorrentSearch for FakeSearch {
+    fn search(&self, _request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+        let results = self.0.clone();
+        Box::pin(async move { Ok(results) })
+    }
+}
+
+/// Every result carries its file list, so none is fetched.
+struct NoFiles;
+
+impl FileLister for NoFiles {
+    fn files(&self, _torrent: Torrent) -> BoxFuture<Result<Vec<TorrentFile>, FileListError>> {
+        Box::pin(async { Err(FileListError::TimedOut) })
+    }
+}
+
+struct NoIds;
+
+impl EpisodeIds for NoIds {
+    fn anidb_eid(&self, _anilist_id: u32, _episode_key: String) -> BoxFuture<Option<u32>> {
+        Box::pin(async { None })
+    }
+}
+
+struct AllAired;
+
+impl EpisodeAiring for AllAired {
+    fn has_aired(&self, _anilist_id: u32, _episode: u32) -> BoxFuture<bool> {
+        Box::pin(async { true })
+    }
+}
+
+/// One loopback librqbit session seeding several torrents, slowly enough
+/// that a preload is still partial when a test drops it.
+struct Swarm {
+    session: Arc<Session>,
+    dir: TempDir,
+    addr: SocketAddr,
+}
+
+impl Swarm {
+    async fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let session = Session::new_with_opts(
+            dir.path().into(),
+            SessionOptions {
+                dht: None,
+                disable_local_service_discovery: true,
+                disable_trackers: true,
+                listen: Some(ListenerOptions {
+                    listen_addr: (Ipv4Addr::LOCALHOST, 0).into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        session
+            .ratelimits
+            .set_upload_bps(NonZeroU32::new(8 * 1024 * 1024));
+        Self {
+            addr: session.listen_addr().unwrap(),
+            session,
+            dir,
+        }
+    }
+
+    /// Seeds `files` of `EPISODE` bytes each: a single-file torrent for one
+    /// name, else a batch folder `folder`.
+    async fn seed(&self, folder: &str, files: &[&str]) -> InfoHash {
+        let path = if let [single] = files {
+            self.dir.path().join(single)
+        } else {
+            self.dir.path().join(folder)
+        };
+        for name in files {
+            let file = if files.len() == 1 {
+                path.clone()
+            } else {
+                path.join(name)
+            };
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, contents(EPISODE)).unwrap();
+        }
+        let (created, handle) = self
+            .session
+            .create_and_serve_torrent(
+                &path,
+                CreateTorrentOptions {
+                    piece_length: Some(PIECE),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        handle.wait_until_completed().await.unwrap();
+        InfoHash::from_bytes(created.info_hash().0)
+    }
+}
+
+const EP1: &str = "[Grp] Show - 01 [1080p].mkv";
+const EP2: &str = "[Grp] Show - 02 [1080p].mkv";
+
+/// The indexer result of a single-file torrent holding `file`.
+fn result(info_hash: InfoHash, file: &str) -> Torrent {
+    let mut torrent = Torrent::new(
+        Indexer::Nyaa,
+        info_hash.to_string(),
+        file.trim_end_matches(".mkv"),
+    );
+    torrent.seeders = Some(10);
+    torrent.size = Some(EPISODE);
+    torrent.magnet_url = Some(format!("magnet:?xt=urn:btih:{info_hash}"));
+    torrent.files = vec![file.to_owned()];
+    torrent
+}
+
+/// Episode 1 found by an auto-select search for "Show".
+fn episode_1(media: MediaId, source: StreamSource) -> PlayRequest {
+    PlayRequest::new(media, 1, source).with_auto_select(AutoSelectRequest::new(
+        SearchRequest::new(vec!["Show".to_owned()], 1, 1),
+        None,
+    ))
+}
+
+impl Fixture {
+    /// Plays `request`, then has the player report a 100 s file at `at`.
+    async fn play_at(
+        &self,
+        request: PlayRequest,
+        at: f64,
+    ) -> futures::channel::mpsc::UnboundedSender<PlayerEvent> {
+        let launches = self.launcher.launches();
+        self.manager.play(request).await.unwrap();
+        wait_until("the launch", || self.launcher.launches() > launches).await;
+        let mut player = self.launcher.sender(launches);
+        player
+            .send(PlayerEvent::MediaReady {
+                path: None,
+                duration: Some(100.0),
+            })
+            .await
+            .unwrap();
+        player
+            .send(PlayerEvent::Position { seconds: at })
+            .await
+            .unwrap();
+        player
+    }
+
+    async fn preloaded(&self, source: StreamSource) {
+        wait_until("the preload", || {
+            self.manager.preloaded().map(|preloaded| preloaded.source) == Some(source.clone())
+        })
+        .await;
+    }
+
+    fn active(&self) -> Vec<InfoHash> {
+        let mut active = self.streams.active();
+        active.sort_unstable();
+        active
+    }
+
+    /// Plays to EOF within the last 2 %.
+    async fn finish(player: &mut futures::channel::mpsc::UnboundedSender<PlayerEvent>) {
+        player
+            .send(PlayerEvent::Position { seconds: 99.0 })
+            .await
+            .unwrap();
+        player.send(PlayerEvent::Eof).await.unwrap();
+    }
+}
+
+fn sorted(mut hashes: Vec<InfoHash>) -> Vec<InfoHash> {
+    hashes.sort_unstable();
+    hashes
+}
+
+/// Two single-episode torrents, and a fixture whose auto-select finds the
+/// second for episode 2.
+async fn two_releases(grace: Duration) -> (Swarm, Fixture, InfoHash, InfoHash) {
+    let swarm = Swarm::new().await;
+    let first = swarm.seed("", &[EP1]).await;
+    let second = swarm.seed("", &[EP2]).await;
+    let fixture = Fixture::preloading(swarm.addr, vec![result(second, EP2)], grace).await;
+    (swarm, fixture, first, second)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_preload_starts_at_half_way_counts_as_active_and_a_stop_drops_it() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 49.0)
+        .await;
+    sleep(Duration::from_millis(300)).await;
+    assert_eq!(fixture.manager.preloaded(), None, "nothing before 50 %");
+    // A seek past the middle counts.
+    player
+        .send(PlayerEvent::Position { seconds: 75.0 })
+        .await
+        .unwrap();
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    assert_eq!(
+        fixture.active(),
+        sorted(vec![first, second]),
+        "Clear keeps both"
+    );
+    assert_eq!(fixture.streams.origin(second), Some(StreamOrigin::Preload));
+    assert_eq!(fixture.streams.origin(first), Some(StreamOrigin::Playback));
+    assert_eq!(
+        fixture
+            .manager
+            .preloaded()
+            .map(|preloaded| preloaded.episode),
+        Some(2)
+    );
+
+    fixture.manager.stop().await;
+    assert_eq!(fixture.active(), [], "Stop drops the preload now");
+    assert!(
+        !fixture.root.join(second.to_string()).exists(),
+        "a partial preload is deleted"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn auto_next_consumes_a_same_batch_preload_without_dropping_the_batch() {
+    let swarm = Swarm::new().await;
+    let batch = swarm
+        .seed("[Grp] Show (01-02)", &["Show - 01.mkv", "Show - 02.mkv"])
+        .await;
+    let fixture = Fixture::preloading(swarm.addr, Vec::new(), Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let files = fixture
+        .streams
+        .session()
+        .await
+        .unwrap()
+        .list_files(TorrentSource::Magnet(format!(
+            "magnet:?xt=urn:btih:{batch}"
+        )))
+        .await
+        .unwrap();
+    let index = |name: &str| {
+        files
+            .iter()
+            .find(|file| file.path.ends_with(name))
+            .unwrap()
+            .index
+    };
+    let (one, two) = (index("Show - 01.mkv"), index("Show - 02.mkv"));
+
+    let mut player = fixture
+        .play_at(
+            PlayRequest::new(media, 1, StreamSource::torrent(batch, one)),
+            60.0,
+        )
+        .await;
+    // The same batch holds episode 2: no search.
+    fixture.preloaded(StreamSource::torrent(batch, two)).await;
+    assert_eq!(fixture.active(), [batch]);
+    let session = fixture.streams.session().await.unwrap();
+    wait_until("episode 2's readiness gate", || {
+        session
+            .readiness(batch, two)
+            .is_ok_and(torrent::Readiness::is_ready)
+    })
+    .await;
+    // From here a dropped and re-added batch could never meet the gate again.
+    swarm.session.ratelimits.set_upload_bps(NonZeroU32::new(1));
+
+    Fixture::finish(&mut player).await;
+    wait_until("the switch to episode 2", || {
+        fixture
+            .launcher
+            .loads()
+            .last()
+            .is_some_and(|url| url.to_string_lossy().ends_with(&format!("/{batch}/{two}")))
+    })
+    .await;
+
+    assert_eq!(fixture.manager.preloaded(), None, "consumed");
+    assert_eq!(fixture.active(), [batch]);
+    assert_eq!(fixture.streams.origin(batch), Some(StreamOrigin::Playback));
+    assert!(
+        fixture.root.join(batch.to_string()).exists(),
+        "ending episode 1's stream left the batch to episode 2"
+    );
+    let url = fixture
+        .launcher
+        .loads()
+        .last()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        get(&url, "bytes=0-15").await.status(),
+        StatusCode::PARTIAL_CONTENT
+    );
+    assert_eq!(fixture.watched_progress(media).await, Some(1));
+    fixture.manager.stop().await;
+    assert_eq!(fixture.active(), []);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn auto_next_takes_the_library_file_first_and_ends_the_stream() {
+    let (_swarm, fixture, first, _second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let mut files = fixture.db.local_file().all().await.unwrap();
+    files.push(db::LocalFile {
+        path: PathBuf::from("/library/Show - 02.mkv"),
+        size: 0,
+        modified: 0,
+        title: None,
+        group: None,
+        season: None,
+        episode: Some(2),
+        kind: "episode".to_owned(),
+        media_id: Some(media),
+        confidence: Some(1.0),
+        locked: false,
+        ignored: false,
+        filler: false,
+        shelved: false,
+    });
+    fixture.db.local_file().sync(&files).await.unwrap();
+
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        fixture.manager.preloaded(),
+        None,
+        "a library episode is not preloaded"
+    );
+    assert_eq!(fixture.active(), [first]);
+
+    Fixture::finish(&mut player).await;
+    wait_until("the switch to the library file", || {
+        fixture.launcher.loads() == [PathBuf::from("/library/Show - 02.mkv")]
+    })
+    .await;
+    wait_until("the stream to end", || fixture.streams.active().is_empty()).await;
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn playing_the_preloaded_episode_from_anywhere_consumes_it() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let _player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    // The screen asked for some other release of episode 2.
+    let other: InfoHash = "e".repeat(40).parse().unwrap();
+    fixture
+        .manager
+        .play(PlayRequest::new(media, 2, StreamSource::torrent(other, 3)))
+        .await
+        .unwrap();
+    wait_until("the second launch", || fixture.launcher.launches() == 2).await;
+
+    assert_eq!(
+        fixture.launcher.launched().last().unwrap().source,
+        StreamSource::torrent(second, 0),
+        "the preload's stream plays"
+    );
+    assert_eq!(fixture.manager.preloaded(), None);
+    assert_eq!(fixture.active(), [second], "episode 1's stream ended");
+    assert_eq!(fixture.streams.origin(second), Some(StreamOrigin::Playback));
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn closing_the_player_keeps_the_preload_for_the_grace_period() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_millis(800)).await;
+    let media = fixture.media().await;
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    player.send(PlayerEvent::Exited).await.unwrap();
+    wait_until("the session to end", || {
+        fixture.streams.origin(first).is_none()
+    })
+    .await;
+    assert_eq!(fixture.active(), [second], "kept, still downloading");
+    assert!(fixture.manager.preloaded().is_some());
+
+    wait_until("the grace to end", || fixture.manager.preloaded().is_none()).await;
+    wait_until("the drop", || fixture.streams.active().is_empty()).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cancelling_auto_next_keeps_the_preload_for_the_grace_period() {
+    let (_swarm, mut fixture, first, second) = two_releases(Duration::from_millis(800)).await;
+    // A countdown long enough to cancel.
+    Arc::get_mut(&mut fixture.manager).unwrap().countdown_step = Duration::from_secs(5);
+    let media = fixture.media().await;
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    Fixture::finish(&mut player).await;
+    fixture
+        .next("the countdown to episode 2", |event| match event {
+            AppEvent::PlaybackAutoNext(Some(next)) if next.episode == 2 => Some(()),
+            _ => None,
+        })
+        .await;
+    assert!(fixture.manager.cancel_auto_next());
+
+    sleep(Duration::from_millis(200)).await;
+    assert!(fixture.manager.preloaded().is_some(), "kept for now");
+    wait_until("the grace to end", || fixture.manager.preloaded().is_none()).await;
+    wait_until("the drop", || fixture.active() == [first]).await;
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_play_of_another_episode_drops_the_preload_now() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let _player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    fixture
+        .manager
+        .play(PlayRequest::new(
+            media,
+            5,
+            StreamSource::local("/library/Show - 05.mkv"),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(fixture.manager.preloaded(), None);
+    assert_eq!(fixture.active(), []);
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn turning_the_toggle_off_drops_the_preload_now() {
+    let (_swarm, fixture, first, second) = two_releases(Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let _player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+
+    fixture.manager.set_preload(false).await;
+
+    assert_eq!(fixture.manager.preloaded(), None);
+    assert_eq!(fixture.active(), [first], "the current stream plays on");
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failed_preload_shows_only_at_episode_end() {
+    let swarm = Swarm::new().await;
+    let first = swarm.seed("", &[EP1]).await;
+    let fixture = Fixture::preloading(swarm.addr, Vec::new(), Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+    sleep(Duration::from_millis(500)).await;
+    assert!(
+        !fixture
+            .events
+            .drain()
+            .any(|event| matches!(event, AppEvent::PlaybackNoRelease(Some(_)))),
+        "nothing shows during playback"
+    );
+
+    Fixture::finish(&mut player).await;
+    let notice = fixture
+        .next("the no-release notice", |event| match event {
+            AppEvent::PlaybackNoRelease(Some(notice)) => Some(notice),
+            _ => None,
+        })
+        .await;
+
+    assert_eq!((notice.media, notice.episode), (media, 2));
+    assert!(
+        notice.reason.contains("no torrent matches"),
+        "{}",
+        notice.reason
+    );
+    fixture.manager.stop().await;
 }

@@ -47,11 +47,11 @@ pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
 };
 pub use playback::{
-    LocalProgressSync, MIN_RESUME, MpvLauncher, PlayRequest, PlaybackError, PlaybackFileKind,
-    PlaybackManager, PlaybackSession, PlayerLaunch, PlayerLauncher, ProgressSync, SyncError,
-    sidecar_subtitles,
+    AniZipAiring, EpisodeAiring, LocalProgressSync, MIN_RESUME, MpvLauncher, PlayRequest,
+    PlaybackError, PlaybackFileKind, PlaybackManager, PlaybackSession, PlayerLaunch,
+    PlayerLauncher, Preloaded, ProgressSync, SyncError, sidecar_subtitles,
 };
-pub use torrent_streams::TorrentStreams;
+pub use torrent_streams::{StreamOrigin, TorrentStreams};
 
 /// A boxed engine-service call: object-safe, `Send` and `'static`.
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
@@ -435,7 +435,15 @@ impl Engine {
                 &settings.playback,
                 paths.cache_dir().to_path_buf(),
             )
-            .with_torrent(Arc::clone(&torrent)),
+            .with_torrent(Arc::clone(&torrent))
+            .with_preload(
+                Arc::clone(&auto_select),
+                Arc::new(AniZipAiring::new(AniZip::new(
+                    client.clone(),
+                    poster_cache.clone(),
+                ))),
+                settings.auto_select.clone(),
+            ),
         );
         Ok(Self {
             db,

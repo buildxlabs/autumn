@@ -7,7 +7,7 @@
 //! stream: the restart waits until the last stream ends.
 
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -30,14 +30,28 @@ struct Config {
     options: TorrentSessionOptions,
 }
 
+/// Why a torrent is held in the session (#208 reconciliation): a Torrent
+/// List row shows a preload as `downloading` or `seeding` with origin
+/// `preload`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StreamOrigin {
+    /// A playback session is preparing or playing it.
+    Playback,
+    /// It holds the next episode's preload.
+    Preload,
+}
+
 /// The torrent session and relay behind torrent streams.
 #[derive(Debug)]
 pub struct TorrentStreams {
     config: Mutex<Config>,
     session: tokio::sync::Mutex<Option<Arc<TorrentSession>>>,
     relay: tokio::sync::OnceCell<Relay>,
-    /// Infohashes with a stream preparing or playing.
-    active: Mutex<HashSet<InfoHash>>,
+    /// Infohashes held by a stream or a preload, one origin per holder. A
+    /// batch torrent can be held by the current stream and the preload of
+    /// its next episode at once.
+    active: Mutex<HashMap<InfoHash, Vec<StreamOrigin>>>,
     /// A restart was asked for while a stream played.
     restart_pending: AtomicBool,
 }
@@ -55,7 +69,7 @@ impl TorrentStreams {
             }),
             session: tokio::sync::Mutex::new(None),
             relay: tokio::sync::OnceCell::new(),
-            active: Mutex::new(HashSet::new()),
+            active: Mutex::new(HashMap::new()),
             restart_pending: AtomicBool::new(false),
         }
     }
@@ -87,14 +101,27 @@ impl TorrentStreams {
         self.relay.get_or_try_init(Relay::start).await
     }
 
-    /// The infohashes of streams preparing or playing. Clearing the torrent
-    /// cache must leave these alone.
+    /// The infohashes of streams preparing or playing and of the preload.
+    /// Clearing the torrent cache must leave these alone.
     #[must_use]
     pub fn active(&self) -> Vec<InfoHash> {
-        lock(&self.active).iter().copied().collect()
+        lock(&self.active).keys().copied().collect()
     }
 
-    /// Whether any torrent stream is preparing or playing.
+    /// Why `info_hash` is held: [`StreamOrigin::Playback`] while a stream
+    /// uses it, else [`StreamOrigin::Preload`], `None` when nothing holds it.
+    #[must_use]
+    pub fn origin(&self, info_hash: InfoHash) -> Option<StreamOrigin> {
+        let active = lock(&self.active);
+        let origins = active.get(&info_hash)?;
+        if origins.contains(&StreamOrigin::Playback) {
+            Some(StreamOrigin::Playback)
+        } else {
+            origins.first().copied()
+        }
+    }
+
+    /// Whether any torrent stream or preload holds a torrent.
     #[must_use]
     pub fn is_streaming(&self) -> bool {
         !lock(&self.active).is_empty()
@@ -146,15 +173,42 @@ impl TorrentStreams {
         }
     }
 
-    /// Marks `info_hash` as streaming.
-    pub(crate) fn track(&self, info_hash: InfoHash) {
-        lock(&self.active).insert(info_hash);
+    /// Holds `info_hash` for `origin`.
+    pub(crate) fn track(&self, info_hash: InfoHash, origin: StreamOrigin) {
+        lock(&self.active)
+            .entry(info_hash)
+            .or_default()
+            .push(origin);
     }
 
-    /// Ends the stream of `info_hash` (#179 Q6, #180): the torrent is
-    /// paused, then a partial one is deleted and a complete one seeds. A
-    /// restart deferred by a settings save runs once no stream is left.
-    pub(crate) async fn end_stream(&self, info_hash: InfoHash) {
+    /// Releases one `origin` hold on `info_hash`. When it was the last one
+    /// the stream ends (#179 Q6, #180): the torrent is paused, then a
+    /// partial one is deleted and a complete one seeds. A torrent another
+    /// holder still uses is left running. A restart deferred by a settings
+    /// save runs once nothing is held.
+    pub(crate) async fn end_stream(&self, info_hash: InfoHash, origin: StreamOrigin) {
+        let last = {
+            let mut active = lock(&self.active);
+            let origins = active.entry(info_hash).or_default();
+            if let Some(at) = origins.iter().position(|held| *held == origin) {
+                origins.swap_remove(at);
+            }
+            let last = origins.is_empty();
+            if last {
+                active.remove(&info_hash);
+            }
+            last
+        };
+        if last {
+            self.drop_torrent(info_hash).await;
+        }
+        if !self.is_streaming() && self.restart_pending.swap(false, Ordering::SeqCst) {
+            self.restart(TorrentRestart::Now).await;
+        }
+    }
+
+    /// Pauses `info_hash`, then deletes it when partial or lets it seed.
+    async fn drop_torrent(&self, info_hash: InfoHash) {
         let session = self.session.lock().await.clone();
         if let Some(session) = session {
             // An error here means the torrent never made it into the session
@@ -164,14 +218,6 @@ impl TorrentStreams {
                 Ok(()) | Err(torrent::Error::NotFound(_)) => {}
                 Err(error) => warn!(%error, "could not drop a torrent stream"),
             }
-        }
-        let idle = {
-            let mut active = lock(&self.active);
-            active.remove(&info_hash);
-            active.is_empty()
-        };
-        if idle && self.restart_pending.swap(false, Ordering::SeqCst) {
-            self.restart(TorrentRestart::Now).await;
         }
     }
 
