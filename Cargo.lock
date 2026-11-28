@@ -5882,6 +5882,7 @@ name = "net"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures",
  "httpdate",
  "ipnet",
  "net",
@@ -5893,6 +5894,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 

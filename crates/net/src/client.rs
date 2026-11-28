@@ -22,7 +22,7 @@ pub const ANILIST_HOST: &str = "graphql.anilist.co";
 const DEFAULT_MAX_RETRIES: u32 = 3;
 const DEFAULT_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
-const DEFAULT_LOCKOUT: Duration = Duration::from_secs(60);
+pub(crate) const DEFAULT_LOCKOUT: Duration = Duration::from_secs(60);
 pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const X_RATE_LIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
@@ -288,6 +288,7 @@ impl Client {
         let in_flight = InFlight::begin(&self.inner.activity);
         let retryable = mode == SendMode::Read;
         let host = request.host().to_owned();
+        let response_limit = request.response_limit();
         let limiter = self.inner.limiters.get(&host);
         let kind = self.inner.limiters.kind(&host);
         let mut current = request.into_reqwest()?;
@@ -320,7 +321,7 @@ impl Client {
 
             let status = response.status();
             if status.is_success() {
-                return Ok(Response::new(response, in_flight));
+                return Ok(Response::new(response, in_flight, response_limit));
             }
 
             if status == StatusCode::TOO_MANY_REQUESTS {
@@ -389,7 +390,7 @@ fn clone_for_retry(
         })
 }
 
-fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
+pub(crate) fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
     // AniList sends both headers on a 429; honour the later of the two so a
     // long reset is never cut short by a stale Retry-After.
     let header = |name: &HeaderName| headers.get(name).and_then(|value| value.to_str().ok());

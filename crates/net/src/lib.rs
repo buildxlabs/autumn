@@ -26,7 +26,7 @@ pub use cache::PosterCache;
 pub use client::{ANILIST_HOST, Client, ClientBuilder, HostKind, Lockout};
 pub use error::{Error, HttpError};
 pub use guard::BlockReason;
-pub use guarded::{GuardedClient, GuardedClientBuilder};
+pub use guarded::{GuardedClient, GuardedClientBuilder, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES};
 pub use hosts::{DeclaredHost, ExtensionHosts, LanHostException};
 pub use limiter::{RateLimit, RateLimitSnapshot};
 pub use request::{Method, Request, Response};
