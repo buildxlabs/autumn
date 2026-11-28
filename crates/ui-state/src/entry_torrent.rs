@@ -7,7 +7,9 @@
 //! lands; for now it is a no-op. Unaired episodes are dimmed with their air
 //! time; `in library` and `✓ watched` pills come from the library and list
 //! progress. The per-media **Profile ▾** (#182 Q11) picks the effective
-//! auto-select profile and writes `media_profiles`.
+//! auto-select profile and writes `media_profiles`. Recently aired rows also
+//! carry an availability badge (#226): a profile-independent indexer check,
+//! retried every five minutes while `waiting`.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -15,6 +17,7 @@ use domain::{ExternalId, MediaId, MediaKind, PlaybackDetails, StreamSource};
 use engine::{AutoSelectProgress, AutoSelectRequest, EngineServices, PlayRequest};
 use gpui_kit::{Context, Entity, Task};
 use metadata::EntryKind;
+use search::{Availability, AvailabilityTracker, EpisodeTarget, SystemWallClock, parse_air_date};
 use settings::{AutoSelectProfile, AutoSelectSettings};
 
 use crate::{bridge, entry_store::call, playback_store::PlaybackStore};
@@ -99,6 +102,10 @@ pub struct EntryTorrentStore {
     episodes: Vec<TorrentEpisode>,
     states: BTreeMap<u32, TorrentRowState>,
     tasks: BTreeMap<u32, Task<()>>,
+    /// Availability state and in-flight budget for recently aired episodes.
+    tracker: AvailabilityTracker<SystemWallClock>,
+    /// One cancellable check-and-recheck loop per aired episode.
+    availability_tasks: BTreeMap<u32, Task<()>>,
     /// Known titles, romaji first, for the indexer query (#181 Q1).
     titles: Vec<String>,
     /// The media's title, for playback labels.
@@ -140,6 +147,8 @@ impl EntryTorrentStore {
             episodes: Vec::new(),
             states: BTreeMap::new(),
             tasks: BTreeMap::new(),
+            tracker: AvailabilityTracker::new(),
+            availability_tasks: BTreeMap::new(),
             titles: Vec::new(),
             media_title: String::new(),
             poster: None,
@@ -159,6 +168,8 @@ impl EntryTorrentStore {
         self.episodes.clear();
         self.states.clear();
         self.tasks.clear();
+        self.tracker = AvailabilityTracker::new();
+        self.availability_tasks.clear();
         let services = Arc::clone(&self.services);
         let today = today.to_owned();
         self.load_task = Some(cx.spawn(async move |store, cx| {
@@ -222,6 +233,7 @@ impl EntryTorrentStore {
                 store.season = season;
                 store.anidb_aid = anidb_aid;
                 store.auto_select = auto_select;
+                store.start_availability(cx);
                 cx.notify();
             });
         }));
@@ -243,6 +255,15 @@ impl EntryTorrentStore {
     #[must_use]
     pub fn state(&self, episode: u32) -> &TorrentRowState {
         self.states.get(&episode).unwrap_or(&TorrentRowState::Idle)
+    }
+
+    /// The episode's availability badge (#181 Q12). A plain value the release
+    /// list can reuse when it lands (#221).
+    #[must_use]
+    pub fn availability(&self, episode: u32) -> Availability {
+        self.media.map_or(Availability::None, |media| {
+            self.tracker.state(media.get(), episode)
+        })
     }
 
     /// The next unwatched aired episode with no library file (#182 Q2), for
@@ -463,10 +484,10 @@ impl EntryTorrentStore {
         cx.notify();
     }
 
-    fn request(&self, anilist_id: u32, episode: u32) -> AutoSelectRequest {
-        let mut search = search::SearchRequest::new(self.titles.clone(), self.season, episode);
+    fn search_request(&self, episode: u32) -> search::SearchRequest {
+        let mut request = search::SearchRequest::new(self.titles.clone(), self.season, episode);
         if let Some(anidb_aid) = self.anidb_aid {
-            search = search.with_anidb_ids(anidb_aid, None);
+            request = request.with_anidb_ids(anidb_aid, None);
         }
         if let Some(meta) = &self.ep_meta {
             let entry = meta
@@ -476,16 +497,100 @@ impl EntryTorrentStore {
                 if let Some(absolute) = entry.absolute_number
                     && absolute != episode
                 {
-                    search = search.with_absolute_episode(absolute);
+                    request = request.with_absolute_episode(absolute);
                 }
                 if let Some(eid) = entry.anidb_eid
-                    && search.anidb_eid.is_none()
+                    && request.anidb_eid.is_none()
                 {
-                    search.anidb_eid = Some(eid);
+                    request.anidb_eid = Some(eid);
                 }
             }
         }
-        AutoSelectRequest::new(search, Some(anilist_id))
+        request
+    }
+
+    fn request(&self, anilist_id: u32, episode: u32) -> AutoSelectRequest {
+        AutoSelectRequest::new(self.search_request(episode), Some(anilist_id))
+    }
+
+    /// Register the aired episodes and fill the check budget (#226).
+    fn start_availability(&mut self, cx: &mut Context<'_, Self>) {
+        self.availability_tasks.clear();
+        let Some(media) = self.media else { return };
+        let key = media.get();
+        for episode in &self.episodes {
+            if let Some(aired_at) = episode.air_date.as_deref().and_then(parse_air_date) {
+                self.tracker.track(key, episode.number, aired_at);
+            }
+        }
+        self.pump_availability(cx);
+    }
+
+    /// Grant queued checks up to the tracker's in-flight cap.
+    fn pump_availability(&mut self, cx: &mut Context<'_, Self>) {
+        let media = self.media.map(MediaId::get);
+        for (_, episode) in self.tracker.pump() {
+            self.spawn_availability_check(episode, media, cx);
+        }
+    }
+
+    /// One check and its rechecks, cancelled by `open` when the media changes.
+    fn spawn_availability_check(
+        &mut self,
+        episode: u32,
+        media: Option<i64>,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let Some(media) = media else { return };
+        let request = self.search_request(episode);
+        let mut target = EpisodeTarget::new(request.season, request.episode);
+        if let Some(absolute) = request.absolute_episode {
+            target = target.with_absolute_episode(absolute);
+        }
+        let services = Arc::clone(&self.services);
+        let weak = cx.entity().downgrade();
+        let task = cx.spawn(async move |_, cx| {
+            loop {
+                let outcome = match cx
+                    .update(|app| bridge::run(app, services.search_torrents(request.clone())))
+                    .await
+                {
+                    Ok(Ok(torrents)) => Ok(torrents),
+                    _ => Err(()),
+                };
+                let delay = weak.update(cx, |store, cx| {
+                    match outcome {
+                        Ok(torrents) => {
+                            let found = torrents
+                                .iter()
+                                .filter(|torrent| search::matches_torrent(torrent, &target))
+                                .map(|torrent| torrent.indexer)
+                                .collect::<Vec<_>>();
+                            store.tracker.complete(media, episode, &found);
+                        }
+                        Err(()) => store.tracker.fail(media, episode),
+                    }
+                    cx.notify();
+                    store.pump_availability(cx);
+                    store.tracker.recheck_delay(media, episode)
+                });
+                let Ok(Some(delay)) = delay else { return };
+                cx.background_executor().timer(delay).await;
+                let granted = weak.update(cx, |store, cx| {
+                    let granted = store.tracker.begin(media, episode);
+                    store.pump_availability(cx);
+                    granted
+                });
+                if !granted.unwrap_or(false) {
+                    let _ = weak.update(cx, |store, cx| {
+                        store.tracker.enqueue(media, episode);
+                        store.pump_availability(cx);
+                    });
+                    return;
+                }
+            }
+        });
+        self.availability_tasks.insert(episode, task);
     }
 }
 
@@ -628,6 +733,8 @@ fn insert_episode(
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, SystemTime};
+
     use gpui_kit::{AppContext, TestAppContext};
     use tokio::runtime::Builder;
 
@@ -822,6 +929,27 @@ mod tests {
             "a no-match run ends Failed: {:?}",
             stage(&store, cx, 1)
         );
+    }
+
+    #[gpui_kit::test]
+    fn availability_getter_exposes_the_tracker_state(cx: &mut TestAppContext) {
+        let store = store(cx);
+        cx.update(|cx| {
+            store.update(cx, |store, _| {
+                store.media = Some(MediaId::new(1));
+                store
+                    .tracker
+                    .track(1, 1, SystemTime::now() - Duration::from_mins(1));
+            });
+        });
+        let badge = |cx: &TestAppContext| store.read_with(cx, |store, _| store.availability(1));
+        assert_eq!(badge(cx), Availability::Waiting);
+        cx.update(|cx| {
+            store.update(cx, |store, _| {
+                assert!(store.tracker.begin(1, 1));
+            });
+        });
+        assert_eq!(badge(cx), Availability::Checking);
     }
 
     #[gpui_kit::test]

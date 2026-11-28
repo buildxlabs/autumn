@@ -6,6 +6,7 @@
 //! and ADR 0008, and ARCHITECTURE §2–§3.
 
 pub mod animetosho;
+mod availability;
 mod error;
 mod file_pick;
 mod matching;
@@ -16,6 +17,10 @@ mod result;
 pub mod search;
 mod util;
 
+pub use availability::{
+    Availability, AvailabilityTracker, FRESH_WINDOW, FakeWallClock, MAX_IN_FLIGHT,
+    RECHECK_INTERVAL, SystemWallClock, WallClock, parse_air_date,
+};
 pub use error::Error;
 pub use file_pick::pick_file;
 pub use matching::{EpisodeTarget, matches, matches_torrent};

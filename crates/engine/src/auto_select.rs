@@ -151,6 +151,12 @@ impl AutoSelector {
         Self { search, files, ids }
     }
 
+    /// The raw indexer search, without ranking or file checks (#181 Q12).
+    pub fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+        let search = Arc::clone(&self.search);
+        Box::pin(async move { search.search(request).await })
+    }
+
     /// Choose a torrent and file for the request's episode with `profile`.
     ///
     /// # Errors

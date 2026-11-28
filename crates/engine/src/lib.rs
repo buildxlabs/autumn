@@ -332,6 +332,20 @@ pub trait EngineServices: Send + Sync + 'static {
         })
     }
 
+    /// A raw indexer search for availability badges: no profile, no file list
+    /// (#181 Q13). The default fails for fakes that do not exercise badges.
+    fn search_torrents(
+        &self,
+        _request: search::SearchRequest,
+    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+        Box::pin(async {
+            Err(search::Error::Transport {
+                indexer: search::Indexer::Nyaa,
+                message: "torrent search is unavailable".to_owned(),
+            })
+        })
+    }
+
     /// Auto-select profiles, the global default and per-media overrides.
     /// The default is the shipped defaults for fakes.
     fn auto_select_settings(&self) -> BoxFuture<Result<settings::AutoSelectSettings, EngineError>> {
@@ -1134,6 +1148,22 @@ impl EngineServices for Engine {
                     indexer: search::Indexer::Nyaa,
                     message: "auto-select is unavailable".to_owned(),
                 })),
+            }
+        })
+    }
+
+    fn search_torrents(
+        &self,
+        request: search::SearchRequest,
+    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+        let selector = self.auto_selector();
+        Box::pin(async move {
+            match selector {
+                Some(selector) => selector.search(request).await,
+                None => Err(search::Error::Transport {
+                    indexer: search::Indexer::Nyaa,
+                    message: "torrent search is unavailable".to_owned(),
+                }),
             }
         })
     }
