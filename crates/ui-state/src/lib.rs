@@ -26,6 +26,7 @@ pub mod search;
 pub mod test_support;
 pub mod torrent_store;
 
+pub use ::search::Availability;
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
 pub use engine::LibraryMediaInfo;

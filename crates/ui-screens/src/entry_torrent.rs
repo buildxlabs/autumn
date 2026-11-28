@@ -16,10 +16,11 @@ use gpui_kit::{
         button::{Button, ButtonVariants as _},
         menu::{DropdownMenu as _, PopupMenu, PopupMenuItem},
     },
-    div, px,
+    div, hsla, px,
 };
 use ui_state::{
-    EntryTab, EntryTorrentStore, TorrentEpisode, TorrentRowState, TorrentStage, WATCHED,
+    Availability, EntryTab, EntryTorrentStore, TorrentEpisode, TorrentRowState, TorrentStage,
+    WATCHED,
 };
 
 use crate::{entry::EntryScreen, entry_library::PlayLabels, shell::AppShell};
@@ -127,7 +128,13 @@ fn row(
     muted: Hsla,
     cx: &mut Context<'_, AppShell>,
 ) -> AnyElement {
-    let state = screen.torrents.read(cx).state(episode.number).clone();
+    let (state, availability) = {
+        let store = screen.torrents.read(cx);
+        (
+            store.state(episode.number).clone(),
+            store.availability(episode.number),
+        )
+    };
     let unaired = !episode.aired;
     let id = episode.number;
     let torrents = screen.torrents.clone();
@@ -136,6 +143,11 @@ fn row(
         .flex()
         .items_center()
         .gap_1()
+        .children(
+            availability
+                .label()
+                .map(|label| availability_pill(label, availability, cx)),
+        )
         .children(episode.in_library.then(|| in_library_pill(cx)))
         .children(episode.watched.then(|| pill(WATCHED)));
 
@@ -274,6 +286,29 @@ fn in_library_pill(cx: &mut Context<'_, AppShell>) -> impl IntoElement {
                 shell.select_entry_tab(EntryTab::Library, cx);
             }),
         )
+}
+
+/// The `available` / `checking` / `waiting` pill (#182 Q3). `unknown` and
+/// `none` have no label and render nothing.
+fn availability_pill(
+    label: &'static str,
+    availability: Availability,
+    cx: &Context<'_, AppShell>,
+) -> impl IntoElement {
+    let color = match availability {
+        Availability::Available => hsla(142., 0.62, 0.45, 1.),
+        Availability::Checking => cx.theme().colors.accent,
+        Availability::Waiting => hsla(38., 0.92, 0.62, 1.),
+        Availability::Unknown | Availability::None => cx.theme().colors.muted_foreground,
+    };
+    div()
+        .rounded_full()
+        .border_1()
+        .px_2()
+        .py_1()
+        .text_sm()
+        .text_color(color)
+        .child(label.to_owned())
 }
 
 fn pill(label: &str) -> impl IntoElement {
