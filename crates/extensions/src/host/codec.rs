@@ -239,6 +239,8 @@ mod tests {
         let encoded: String =
             eval(r#"return autumn.json.encode({ b = 1, a = { "x", "y" } })"#).unwrap();
         assert_eq!(encoded, r#"{"a":["x","y"],"b":1}"#);
+        let empty: String = eval("return autumn.json.encode({})").unwrap();
+        assert_eq!(empty, "{}", "an empty table is an object");
 
         let error = raised("autumn.json.decode('{')");
         assert!(error.starts_with("autumn.json.decode: parse: "), "{error}");
