@@ -5,7 +5,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
     num::NonZeroU32,
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, atomic::Ordering},
     time::Duration,
 };
 
@@ -557,6 +557,17 @@ fn result(info_hash: InfoHash, file: &str) -> Torrent {
     torrent
 }
 
+/// The stream of `two_releases`' auto-selected preload: the indexer
+/// result's magnet, without trackers.
+fn preloaded_source(info_hash: InfoHash) -> StreamSource {
+    StreamSource::torrent_with_source(
+        info_hash,
+        0,
+        Some(format!("magnet:?xt=urn:btih:{info_hash}")),
+        Vec::new(),
+    )
+}
+
 /// Episode 1 found by an auto-select search for "Show".
 fn episode_1(media: MediaId, source: StreamSource) -> PlayRequest {
     PlayRequest::new(media, 1, source).with_auto_select(AutoSelectRequest::new(
@@ -643,7 +654,7 @@ async fn the_preload_starts_at_half_way_counts_as_active_and_a_stop_drops_it() {
         .send(PlayerEvent::Position { seconds: 75.0 })
         .await
         .unwrap();
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     assert_eq!(
         fixture.active(),
@@ -676,7 +687,7 @@ async fn a_held_preload_is_a_torrent_list_row_linked_to_the_next_episode() {
     fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     let rows = fixture.streams.rows().await.unwrap();
     let row = rows.iter().find(|row| row.info_hash == second).unwrap();
@@ -814,7 +825,7 @@ async fn playing_the_preloaded_episode_from_anywhere_consumes_it() {
     let _player = fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     // The screen asked for some other release of episode 2.
     let other: InfoHash = "e".repeat(40).parse().unwrap();
@@ -827,7 +838,7 @@ async fn playing_the_preloaded_episode_from_anywhere_consumes_it() {
 
     assert_eq!(
         fixture.launcher.launched().last().unwrap().source,
-        StreamSource::torrent(second, 0),
+        preloaded_source(second),
         "the preload's stream plays"
     );
     assert_eq!(fixture.manager.preloaded(), None);
@@ -843,7 +854,7 @@ async fn closing_the_player_keeps_the_preload_for_the_grace_period() {
     let mut player = fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     player.send(PlayerEvent::Exited).await.unwrap();
     wait_until("the session to end", || {
@@ -866,7 +877,7 @@ async fn cancelling_auto_next_keeps_the_preload_for_the_grace_period() {
     let mut player = fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     Fixture::finish(&mut player).await;
     fixture
@@ -891,7 +902,7 @@ async fn a_play_of_another_episode_drops_the_preload_now() {
     let _player = fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     fixture
         .manager
@@ -915,7 +926,7 @@ async fn turning_the_toggle_off_drops_the_preload_now() {
     let _player = fixture
         .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
         .await;
-    fixture.preloaded(StreamSource::torrent(second, 0)).await;
+    fixture.preloaded(preloaded_source(second)).await;
 
     fixture.manager.set_preload(false).await;
 
@@ -956,5 +967,117 @@ async fn a_failed_preload_shows_only_at_episode_end() {
         "{}",
         notice.reason
     );
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_auto_selected_preload_keeps_the_indexer_magnet_and_trackers() {
+    let swarm = Swarm::new().await;
+    let first = swarm.seed("", &[EP1]).await;
+    let second = swarm.seed("", &[EP2]).await;
+    let tracker = "http://127.0.0.1:9/announce";
+    let magnet = format!("magnet:?xt=urn:btih:{second}&tr={tracker}");
+    let mut release = result(second, EP2);
+    release.magnet_url = Some(magnet.clone());
+    let fixture = Fixture::preloading(swarm.addr, vec![release], Duration::from_secs(600)).await;
+    let media = fixture.media().await;
+    let source = StreamSource::torrent_with_source(
+        second,
+        0,
+        Some(magnet.clone()),
+        vec![tracker.to_owned()],
+    );
+    let mut player = fixture
+        .play_at(episode_1(media, StreamSource::torrent(first, 0)), 60.0)
+        .await;
+
+    // The preload's stream carries the selection's magnet and trackers.
+    wait_until("the preload to resolve", || {
+        fixture.manager.preloaded().is_some()
+    })
+    .await;
+    assert_eq!(
+        fixture
+            .manager
+            .preloaded()
+            .map(|preloaded| preloaded.source),
+        Some(source.clone())
+    );
+
+    // The session added that magnet, not a tracker-less identity link.
+    let session = fixture.streams.session().await.unwrap();
+    wait_until("the preload's torrent in the session", || {
+        session.stats(second).is_ok()
+    })
+    .await;
+    let row = session
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|row| row.info_hash == second)
+        .unwrap();
+    assert!(
+        row.magnet
+            .contains("tr=http%3A%2F%2F127.0.0.1%3A9%2Fannounce"),
+        "the session added the indexer's magnet: {}",
+        row.magnet
+    );
+
+    // Auto-next hands the same stream to the player.
+    fixture.launcher.relaunch.store(true, Ordering::SeqCst);
+    Fixture::finish(&mut player).await;
+    wait_until("the switch to episode 2", || {
+        fixture.launcher.launched().len() > 1
+    })
+    .await;
+    assert_eq!(fixture.launcher.launched().last().unwrap().source, source);
+
+    fixture.manager.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn auto_next_within_a_batch_keeps_the_current_streams_magnet() {
+    let swarm = Swarm::new().await;
+    let batch = swarm
+        .seed("[Grp] Show (01-02)", &["Show - 01.mkv", "Show - 02.mkv"])
+        .await;
+    let fixture = Fixture::new(swarm.addr, Duration::from_secs(60)).await;
+    let media = fixture.media().await;
+    let session = fixture.streams.session().await.unwrap();
+    let files = session
+        .list_files(TorrentSource::Magnet(format!(
+            "magnet:?xt=urn:btih:{batch}"
+        )))
+        .await
+        .unwrap();
+    let index = |name: &str| {
+        files
+            .iter()
+            .find(|file| file.path.ends_with(name))
+            .unwrap()
+            .index
+    };
+    let (one, two) = (index("Show - 01.mkv"), index("Show - 02.mkv"));
+    let tracker = "http://127.0.0.1:9/announce";
+    let magnet = format!("magnet:?xt=urn:btih:{batch}&tr={tracker}");
+    let source = StreamSource::torrent_with_source(
+        batch,
+        one,
+        Some(magnet.clone()),
+        vec![tracker.to_owned()],
+    );
+    fixture.launcher.relaunch.store(true, Ordering::SeqCst);
+    let mut player = fixture.play_at(episode_1(media, source), 60.0).await;
+
+    Fixture::finish(&mut player).await;
+    wait_until("the switch to episode 2", || {
+        fixture.launcher.launched().len() > 1
+    })
+    .await;
+    assert_eq!(
+        fixture.launcher.launched().last().unwrap().source,
+        StreamSource::torrent_with_source(batch, two, Some(magnet), vec![tracker.to_owned()])
+    );
+
     fixture.manager.stop().await;
 }

@@ -916,7 +916,7 @@ impl PlaybackManager {
             self.drop_preload().await;
         }
         self.stop_inner().await;
-        if let Some(fetch) = consumed {
+        if let Some(fetch) = &consumed {
             request.source = fetch.source();
         }
         let result = self.play_stopped(request).await;
@@ -1547,8 +1547,9 @@ impl PlaybackManager {
         let StreamSource::Torrent {
             info_hash,
             file_index,
-            ..
-        } = request.source
+            magnet,
+            trackers,
+        } = &request.source
         else {
             return None;
         };
@@ -1558,11 +1559,16 @@ impl PlaybackManager {
             return Some(next_request(request, episode, fetch.source()));
         }
         let session = self.torrent.as_ref()?.session().await.ok()?;
-        if let Some(next) = preload::batch_file(&session, info_hash, file_index, request).await {
+        if let Some(next) = preload::batch_file(&session, *info_hash, *file_index, request).await {
             return Some(next_request(
                 request,
                 episode,
-                StreamSource::torrent(info_hash, next),
+                StreamSource::torrent_with_source(
+                    *info_hash,
+                    next,
+                    magnet.clone(),
+                    trackers.clone(),
+                ),
             ));
         }
         if let Some(preload::Outcome::Failed(reason)) = outcome {
