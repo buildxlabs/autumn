@@ -33,7 +33,7 @@ use ::library::{AutoScan, Library, ScanSummary};
 use db::{Continuity, Db, FileFlag, LocalFile, ResumePoint};
 use domain::{
     AppEvent, ExternalId, InfoHash, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl,
-    StreamSource, TorrentLink, TorrentListRow, TorrentOrigin,
+    StreamSource, TorrentFileRow, TorrentLink, TorrentListRow, TorrentOrigin,
 };
 use flume::Sender;
 use metadata::{
@@ -355,6 +355,29 @@ pub trait EngineServices: Send + Sync + 'static {
                 message: "torrent search is unavailable".to_owned(),
             })
         })
+    }
+
+    /// One keyword-only release search on both indexers (#221 Q6); `refresh`
+    /// bypasses the 60 s cache. The default is empty for fakes.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    fn search_releases(
+        &self,
+        _keyword: String,
+        _refresh: bool,
+    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// A torrent's file list, on demand for batch file pick (#221 Q7). The
+    /// default is empty for fakes.
+    fn torrent_files(
+        &self,
+        _torrent: search::Torrent,
+    ) -> BoxFuture<Result<Vec<TorrentFileRow>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 
     /// Auto-select profiles, the global default and per-media overrides.
@@ -1234,6 +1257,43 @@ impl EngineServices for Engine {
                     message: "torrent search is unavailable".to_owned(),
                 }),
             }
+        })
+    }
+
+    fn search_releases(
+        &self,
+        keyword: String,
+        refresh: bool,
+    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+        let selector = self.auto_selector();
+        Box::pin(async move {
+            match selector {
+                Some(selector) => selector.search_keyword(&keyword, refresh).await,
+                None => Err(search::Error::Transport {
+                    indexer: search::Indexer::Nyaa,
+                    message: "torrent search is unavailable".to_owned(),
+                }),
+            }
+        })
+    }
+
+    fn torrent_files(
+        &self,
+        torrent: search::Torrent,
+    ) -> BoxFuture<Result<Vec<TorrentFileRow>, EngineError>> {
+        let selector = self.auto_selector();
+        Box::pin(async move {
+            let selector = selector.ok_or_else(|| {
+                EngineError::ActivePlatform("torrent search is unavailable".to_owned())
+            })?;
+            let files = selector
+                .list_files(&torrent)
+                .await
+                .map_err(|error| EngineError::ActivePlatform(error.to_string()))?;
+            Ok(files
+                .into_iter()
+                .map(|file| TorrentFileRow::new(file.index, file.path, file.len, false))
+                .collect())
         })
     }
 

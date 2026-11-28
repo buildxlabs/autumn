@@ -48,29 +48,44 @@ impl EpisodeTarget {
 /// when its range covers `N` or it is flagged with no contradicting range.
 #[must_use]
 pub fn matches(release: &Release, target: &EpisodeTarget) -> bool {
-    if release.kind != EpisodeKind::Episode || !season_covers(release, target.season) {
-        return false;
+    match_rejection(release, target).is_none()
+}
+
+/// Why a release does not match the requested episode, or `None` when it
+/// does. `not an episode`, `wrong season`, `wrong episode`.
+#[must_use]
+pub fn match_rejection(release: &Release, target: &EpisodeTarget) -> Option<&'static str> {
+    if release.kind != EpisodeKind::Episode {
+        return Some("not an episode");
+    }
+    if !season_covers(release, target.season) {
+        return Some("wrong season");
     }
     // Episode zero is the specials marker (`S2 - 00`), even without `S00`.
     if release.episode == Some(0) {
-        return false;
+        return Some("wrong episode");
     }
     if let Some(last) = release.last_episode {
         let Some(first) = release.episode else {
-            return false;
+            return Some("wrong episode");
         };
         if first > last {
-            return false;
+            return Some("wrong episode");
         }
-        return (first..=last).contains(&target.episode)
+        if (first..=last).contains(&target.episode)
             || target
                 .absolute_episode
-                .is_some_and(|absolute| (first..=last).contains(&absolute));
+                .is_some_and(|absolute| (first..=last).contains(&absolute))
+        {
+            return None;
+        }
+        return Some("wrong episode");
     }
     match release.episode {
-        Some(number) => number == target.episode || target.absolute_episode == Some(number),
+        Some(number) if number == target.episode || target.absolute_episode == Some(number) => None,
         // `Batch` / `Complete` / a season range with no episode number.
-        None => release.batch,
+        None if release.batch => None,
+        _ => Some("wrong episode"),
     }
 }
 

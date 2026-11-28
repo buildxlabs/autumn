@@ -14,6 +14,7 @@ mod lists_source;
 mod palette;
 mod palette_search;
 mod placeholder;
+mod release_list;
 mod scan_summaries;
 mod search;
 mod search_catalog;

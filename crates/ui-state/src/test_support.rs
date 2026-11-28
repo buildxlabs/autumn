@@ -511,6 +511,7 @@ impl EngineServices for LibraryServices {
 /// One playback command sent through a store, recorded for command tests.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
+#[expect(clippy::large_enum_variant, reason = "a play request is the payload")]
 pub enum PlaybackCall {
     /// A play request.
     Play(PlayRequest),

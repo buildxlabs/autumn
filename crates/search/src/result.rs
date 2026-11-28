@@ -64,6 +64,8 @@ pub struct Torrent {
     pub anidb_eid: Option<u32>,
     /// Number of files, when the indexer reports it.
     pub num_files: Option<u32>,
+    /// When the release was published, Unix seconds, when known.
+    pub published: Option<u64>,
     /// File names, when a file list was fetched for this result.
     pub files: Vec<String>,
 }
@@ -89,6 +91,7 @@ impl Torrent {
             anidb_aid: None,
             anidb_eid: None,
             num_files: None,
+            published: None,
             files: Vec::new(),
         }
     }

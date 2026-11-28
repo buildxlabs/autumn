@@ -281,8 +281,14 @@ impl PlaybackManager {
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let session = streams.session().await?;
         let existing = session.stats(info_hash).is_ok();
-        // The source carries identity only (#179 Q1); peers supply the rest.
-        let magnet = TorrentSource::Magnet(format!("magnet:?xt=urn:btih:{info_hash}"));
+        // The source may carry the indexer's magnet and trackers; otherwise
+        // identity only (#179 Q1) and peers supply the rest.
+        let magnet = TorrentSource::Magnet(
+            request
+                .source
+                .magnet_link()
+                .unwrap_or_else(|| format!("magnet:?xt=urn:btih:{info_hash}")),
+        );
         {
             let add = session.add(magnet, file_index);
             tokio::pin!(add);

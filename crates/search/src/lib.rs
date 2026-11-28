@@ -22,12 +22,15 @@ pub use availability::{
     RECHECK_INTERVAL, SystemWallClock, WallClock, parse_air_date,
 };
 pub use error::Error;
-pub use file_pick::{is_video_path, pick_file};
-pub use matching::{EpisodeTarget, episode_suggestion, match_titles, matches, matches_torrent};
+pub use file_pick::{is_playable_file, is_video_path, pick_file};
+pub use matching::{
+    EpisodeTarget, episode_suggestion, match_rejection, match_titles, matches, matches_torrent,
+};
 pub use query::{
     MAX_REQUESTS_PER_INDEXER, MAX_TITLES, Query, QueryPlan, SearchRequest, clean_title,
     episode_season, plan,
 };
-pub use rank::rank;
+pub use rank::{Ranked, rank, rank_with_status};
 pub use result::{Indexer, Torrent};
 pub use search::{Config, FakeClock, NetTransport, Searcher, SystemClock, Transport, query_url};
+pub use util::trackers_from_magnet;

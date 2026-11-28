@@ -122,6 +122,8 @@ pub struct EntryTorrentStore {
     auto_select: AutoSelectSettings,
     /// Whether torrent streaming is enabled (always in Phase 3).
     torrents_enabled: bool,
+    /// A failed auto-select to auto-open the release list for (#182 Q2).
+    pending_open: Option<(u32, String)>,
     load_task: Option<Task<()>>,
 }
 
@@ -157,6 +159,7 @@ impl EntryTorrentStore {
             anidb_aid: None,
             auto_select: AutoSelectSettings::default(),
             torrents_enabled: true,
+            pending_open: None,
             load_task: None,
         }
     }
@@ -484,6 +487,54 @@ impl EntryTorrentStore {
         cx.notify();
     }
 
+    /// Builds the release-list context for `episode` (#221), with the
+    /// auto-select failure reason when opening after a failed run.
+    #[must_use]
+    pub fn release_list_context(
+        &self,
+        episode: u32,
+        failure_reason: Option<String>,
+    ) -> Option<crate::release_list::ReleaseListContext> {
+        let media = self.media?;
+        let anilist_id = self.anilist_id?;
+        let auto = self.request(anilist_id, episode);
+        let search_request = auto.search;
+        let mut target = search::EpisodeTarget::new(search_request.season, episode);
+        if let Some(absolute) = search_request.absolute_episode {
+            target = target.with_absolute_episode(absolute);
+        }
+        let prefill_query = prefill_query(&search_request);
+        let episode_title = self.ep_meta.as_ref().and_then(|meta| {
+            meta.entries(EntryKind::Regular)
+                .find(|entry| entry.number() == Some(episode))
+                .and_then(|entry| {
+                    ["en", "x-jat"]
+                        .iter()
+                        .find_map(|lang| entry.titles.get(*lang))
+                        .or_else(|| entry.titles.values().next())
+                        .cloned()
+                })
+        });
+        let absolute_episode = search_request.absolute_episode;
+        let season = search_request.season;
+        Some(crate::release_list::ReleaseListContext {
+            media,
+            anilist_id,
+            episode,
+            episode_title,
+            season,
+            absolute_episode,
+            search: search_request,
+            target,
+            media_title: self.media_title.clone(),
+            poster: self.poster.clone(),
+            profile: self.effective_profile(),
+            profiles: self.auto_select.profiles.clone(),
+            prefill_query,
+            failure_reason,
+        })
+    }
+
     fn search_request(&self, episode: u32) -> search::SearchRequest {
         let mut request = search::SearchRequest::new(self.titles.clone(), self.season, episode);
         if let Some(anidb_aid) = self.anidb_aid {
@@ -602,6 +653,7 @@ fn fail(
 ) {
     let _ = store.update(cx, |store, cx| {
         store.tasks.remove(&episode);
+        store.pending_open = Some((episode, reason.clone()));
         store.set_state(episode, TorrentRowState::Failed { reason }, cx);
     });
 }
@@ -731,6 +783,25 @@ fn insert_episode(
     );
 }
 
+/// Takes a pending auto-select-failure auto-open (#182 Q2).
+pub fn take_pending_open(store: &mut EntryTorrentStore) -> Option<(u32, String)> {
+    store.pending_open.take()
+}
+
+/// `#181`'s first query keyword, for prefilling the editable query (#182 Q6).
+fn prefill_query(request: &search::SearchRequest) -> String {
+    let plan = search::plan(request);
+    plan.numbered
+        .first()
+        .map(|query| match query {
+            search::Query::Nyaa { keyword } => keyword.clone(),
+            search::Query::AnimeTosho { keyword, .. } => keyword.clone().unwrap_or_default(),
+            _ => String::new(),
+        })
+        .filter(|keyword| !keyword.is_empty())
+        .or_else(|| request.titles.first().cloned())
+        .unwrap_or_default()
+}
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, SystemTime};

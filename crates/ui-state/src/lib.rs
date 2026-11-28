@@ -18,6 +18,7 @@ pub mod library_store;
 pub mod lists;
 pub mod platform;
 pub mod playback_store;
+pub mod release_list;
 mod route;
 mod router;
 pub mod scan_summaries;
@@ -47,6 +48,7 @@ pub use lists::{
 };
 pub use platform::{ActiveKind, AniListHandle, GatewayError, GatewayErrorKind, PlatformGateway};
 pub use playback_store::{PlaybackError, PlaybackStore};
+pub use release_list::ReleaseListStore;
 pub use route::{EntryTab, Route, SettingsTab};
 pub use router::RouterState;
 pub use scan_summaries::{PendingEdit, ScanSummariesStore};

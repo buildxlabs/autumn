@@ -32,6 +32,20 @@ pub const FILE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
 pub trait TorrentSearch: Send + Sync {
     /// Every result for `request`, deduped by infohash.
     fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>>;
+
+    /// One keyword-only search on both indexers; `refresh` bypasses the
+    /// 60 s cache. The default is empty, for fakes.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    fn search_keyword(
+        &self,
+        _keyword: String,
+        _refresh: bool,
+    ) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
 }
 
 /// Lists a torrent's files without downloading it.
@@ -224,6 +238,43 @@ impl AutoSelector {
         Err(AutoSelectError::NoFileFound { candidates })
     }
 
+    /// One keyword-only search on both indexers; `refresh` bypasses the
+    /// 60 s cache.
+    ///
+    /// # Errors
+    ///
+    /// An indexer error after its one retry.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    pub async fn search_keyword(
+        &self,
+        keyword: &str,
+        refresh: bool,
+    ) -> Result<Vec<Torrent>, search::Error> {
+        self.search
+            .search_keyword(keyword.to_owned(), refresh)
+            .await
+    }
+
+    /// A torrent's file list, for the release list's on-demand batch pick.
+    ///
+    /// # Errors
+    ///
+    /// [`FileListError`] when the metadata cannot be read in time.
+    pub async fn list_files(&self, torrent: &Torrent) -> Result<Vec<TorrentFile>, FileListError> {
+        if !torrent.files.is_empty() {
+            return Ok(torrent
+                .files
+                .iter()
+                .enumerate()
+                .map(|(index, path)| TorrentFile::new(index, path.clone(), 0))
+                .collect());
+        }
+        self.files.files(torrent.clone()).await
+    }
+
     /// The episode's file in `torrent`, or `None` to try the next candidate.
     async fn verify(&self, torrent: &Torrent, target: &EpisodeTarget) -> Option<AutoSelection> {
         let Ok(info_hash) = torrent.infohash.parse::<InfoHash>() else {
@@ -254,8 +305,12 @@ impl AutoSelector {
             tracing::info!(name = %torrent.name, "auto-select found no episode file in a candidate");
             return None;
         };
+        let magnet = torrent.magnet_url.clone();
+        let trackers = magnet
+            .as_deref()
+            .map_or_else(Vec::new, search::trackers_from_magnet);
         Some(AutoSelection {
-            source: StreamSource::torrent(info_hash, file_index),
+            source: StreamSource::torrent_with_source(info_hash, file_index, magnet, trackers),
             torrent: torrent.clone(),
             file_path,
         })
@@ -266,6 +321,15 @@ impl<T: Transport + 'static> TorrentSearch for Arc<Searcher<T>> {
     fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
         let searcher = Arc::clone(self);
         Box::pin(async move { Searcher::search(&searcher, &request).await })
+    }
+
+    fn search_keyword(
+        &self,
+        keyword: String,
+        refresh: bool,
+    ) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+        let searcher = Arc::clone(self);
+        Box::pin(async move { Searcher::search_keyword(&searcher, &keyword, refresh).await })
     }
 }
 
@@ -438,6 +502,23 @@ mod tests {
         AutoSelectRequest::new(search, Some(FRIEREN))
     }
 
+    fn assert_torrent(source: &StreamSource, h: char, file_index: usize) {
+        match source {
+            StreamSource::Torrent {
+                info_hash,
+                file_index: index,
+                ..
+            } => {
+                assert_eq!(*info_hash, hash(h), "infohash");
+                assert_eq!(*index, file_index, "file index");
+            }
+            other => assert!(
+                matches!(other, StreamSource::Torrent { .. }),
+                "not a torrent source: {other:?}"
+            ),
+        }
+    }
+
     async fn select(rig: &Rig) -> Result<AutoSelection, AutoSelectError> {
         rig.selector
             .select(episode_5(), &AutoSelectProfile::default())
@@ -457,7 +538,7 @@ mod tests {
 
         let selection = select(&rig).await.unwrap();
 
-        assert_eq!(selection.source, StreamSource::torrent(hash('b'), 0));
+        assert_torrent(&selection.source, 'b', 0);
         assert_eq!(
             selection.file_path,
             "[Grp] Sousou no Frieren - 05 [1080p].mkv"
@@ -480,7 +561,7 @@ mod tests {
 
         let selection = select(&rig).await.unwrap();
 
-        assert_eq!(selection.source, StreamSource::torrent(hash('a'), 2));
+        assert_torrent(&selection.source, 'a', 2);
         assert_eq!(*rig.files.asked.lock().unwrap(), Vec::<String>::new());
     }
 
@@ -505,7 +586,7 @@ mod tests {
 
         let selection = select(&rig).await.unwrap();
 
-        assert_eq!(selection.source, StreamSource::torrent(hash('b'), 0));
+        assert_torrent(&selection.source, 'b', 0);
         assert_eq!(
             *rig.files.asked.lock().unwrap(),
             [
@@ -527,7 +608,7 @@ mod tests {
 
         let selection = select(&rig).await.unwrap();
 
-        assert_eq!(selection.source, StreamSource::torrent(hash('b'), 0));
+        assert_torrent(&selection.source, 'b', 0);
     }
 
     #[tokio::test]

@@ -25,6 +25,7 @@ struct SearchItem {
     anidb_aid: Option<u32>,
     anidb_eid: Option<u32>,
     num_files: Option<u32>,
+    timestamp: Option<u64>,
 }
 
 /// Parse one page of `AnimeTosho` JSON results, in feed order.
@@ -55,6 +56,7 @@ pub fn parse_search(json: &str) -> Result<Vec<Torrent>, Error> {
         torrent.anidb_aid = item.anidb_aid;
         torrent.anidb_eid = item.anidb_eid;
         torrent.num_files = item.num_files;
+        torrent.published = item.timestamp;
         results.push(torrent);
     }
     Ok(results)

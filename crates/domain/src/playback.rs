@@ -22,6 +22,11 @@ pub enum StreamSource {
         info_hash: InfoHash,
         /// The file's index in the torrent's file list.
         file_index: usize,
+        /// A full magnet link (carrying trackers), when known; playback
+        /// otherwise builds a tracker-less `magnet:?xt=urn:btih:` link.
+        magnet: Option<String>,
+        /// Tracker announce URLs, when known separately from the magnet.
+        trackers: Vec<String>,
     },
 }
 
@@ -32,13 +37,61 @@ impl StreamSource {
         Self::Local { path: path.into() }
     }
 
-    /// File `file_index` of the torrent `info_hash`.
+    /// File `file_index` of the torrent `info_hash`, identity only.
     #[must_use]
     pub const fn torrent(info_hash: InfoHash, file_index: usize) -> Self {
         Self::Torrent {
             info_hash,
             file_index,
+            magnet: None,
+            trackers: Vec::new(),
         }
+    }
+
+    /// File `file_index` of the torrent `info_hash`, carrying a known magnet
+    /// link and any tracker announce URLs through to playback.
+    #[must_use]
+    pub fn torrent_with_source(
+        info_hash: InfoHash,
+        file_index: usize,
+        magnet: Option<String>,
+        trackers: Vec<String>,
+    ) -> Self {
+        Self::Torrent {
+            info_hash,
+            file_index,
+            magnet,
+            trackers,
+        }
+    }
+
+    /// The magnet link playback should add: the known magnet, else a
+    /// tracker-less `magnet:?xt=urn:btih:` link. Known `trackers` not already
+    /// in the magnet are appended as `tr=` parameters.
+    #[must_use]
+    pub fn magnet_link(&self) -> Option<String> {
+        let Self::Torrent {
+            info_hash,
+            magnet,
+            trackers,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let base = magnet
+            .clone()
+            .unwrap_or_else(|| format!("magnet:?xt=urn:btih:{info_hash}"));
+        let mut link = base;
+        for tracker in trackers {
+            if !link.contains(&format!("tr={tracker}")) {
+                let separator = if link.contains('?') { '&' } else { '?' };
+                link.push(separator);
+                link.push_str("tr=");
+                link.push_str(tracker);
+            }
+        }
+        Some(link)
     }
 }
 

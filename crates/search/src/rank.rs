@@ -14,7 +14,7 @@ use std::cmp::{Ordering, Reverse};
 use release_parser::{Audio, Release, Subtitle, VideoCodec, parse};
 use settings::{AutoSelectProfile, Codec, Preference, Source};
 
-use crate::{EpisodeTarget, Torrent, matching::matches};
+use crate::{EpisodeTarget, Torrent};
 
 /// Filter `torrents` to the releases of `target` that pass `profile`, best first.
 #[must_use]
@@ -26,12 +26,61 @@ pub fn rank(
     let mut kept: Vec<Candidate> = torrents
         .into_iter()
         .map(Candidate::new)
-        .filter(|candidate| candidate.passes(target, profile))
+        .filter(|candidate| candidate.rejection(target, profile).is_none())
         .collect();
     kept.sort_by(|a, b| a.compare(b, profile));
     kept.into_iter()
         .map(|candidate| candidate.torrent)
         .collect()
+}
+
+/// One result scored against a profile: passing results are ranked first,
+/// failing ones are kept (dimmed) with their hard-filter reason (#182 Q5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Ranked {
+    /// The result.
+    pub torrent: Torrent,
+    /// Whether it passes every hard filter.
+    pub passes: bool,
+    /// The first hard-filter failure, `None` when it passes. `min seeders`,
+    /// `excluded term`, `size`, `not an episode`, `wrong season`,
+    /// `wrong episode`, `only`, `never`, `require …`.
+    pub status: Option<String>,
+}
+
+/// Every result, passing (ranked, best first) then failing, each with its
+/// status. Failing results keep input order among themselves (#182 Q5).
+#[must_use]
+pub fn rank_with_status(
+    torrents: Vec<Torrent>,
+    target: &EpisodeTarget,
+    profile: &AutoSelectProfile,
+) -> Vec<Ranked> {
+    let mut passing: Vec<Candidate> = Vec::new();
+    let mut failing: Vec<Ranked> = Vec::new();
+    for torrent in torrents {
+        let candidate = Candidate::new(torrent);
+        match candidate.rejection(target, profile) {
+            None => passing.push(candidate),
+            Some(reason) => failing.push(Ranked {
+                torrent: candidate.torrent,
+                passes: false,
+                status: Some(reason.to_owned()),
+            }),
+        }
+    }
+    passing.sort_by(|a, b| a.compare(b, profile));
+    let mut ranked: Vec<Ranked> = passing
+        .into_iter()
+        .map(|candidate| Ranked {
+            torrent: candidate.torrent,
+            passes: true,
+            status: None,
+        })
+        .collect();
+    ranked.extend(failing);
+    ranked
 }
 
 /// A result with its release name parsed once.
@@ -53,7 +102,11 @@ impl Candidate {
         }
     }
 
-    fn passes(&self, target: &EpisodeTarget, profile: &AutoSelectProfile) -> bool {
+    fn rejection(
+        &self,
+        target: &EpisodeTarget,
+        profile: &AutoSelectProfile,
+    ) -> Option<&'static str> {
         // Whether a preference lets a release with or without the property through.
         let allows = |preference: Preference, has: bool| match preference {
             Preference::Only => has,
@@ -64,21 +117,52 @@ impl Candidate {
         let size_ok = |bound: Option<u64>, ok: fn(u64, u64) -> bool| {
             bound.is_none_or(|bound| self.torrent.size.is_some_and(|size| ok(size, bound)))
         };
-        matches(&self.release, target)
-            && !profile
-                .excluded_terms
-                .iter()
-                .map(|term| term.trim().to_lowercase())
-                .any(|term| !term.is_empty() && self.lower_name.contains(&term))
-            && seeders >= profile.min_seeders
-            && size_ok(profile.min_size, |size, min| size >= min)
-            && size_ok(profile.max_size, |size, max| size <= max)
-            && allows(profile.multiple_audio, self.multiple_audio())
-            && allows(profile.batch, self.release.batch)
-            && allows(profile.multiple_subs, self.multiple_subs())
-            && (!profile.require_codec || position(&profile.codecs, self.codec()).is_some())
-            && (!profile.require_source || position(&profile.sources, self.source()).is_some())
-            && (!profile.require_language || self.language_rank(profile).is_some())
+        if let Some(reason) = crate::matching::match_rejection(&self.release, target) {
+            return Some(reason);
+        }
+        if profile
+            .excluded_terms
+            .iter()
+            .map(|term| term.trim().to_lowercase())
+            .any(|term| !term.is_empty() && self.lower_name.contains(&term))
+        {
+            return Some("excluded term");
+        }
+        if seeders < profile.min_seeders {
+            return Some("min seeders");
+        }
+        if !size_ok(profile.min_size, |size, min| size >= min)
+            || !size_ok(profile.max_size, |size, max| size <= max)
+        {
+            return Some("size");
+        }
+        if !allows(profile.multiple_audio, self.multiple_audio()) {
+            return Some(if self.multiple_audio() {
+                "never"
+            } else {
+                "only"
+            });
+        }
+        if !allows(profile.batch, self.release.batch) {
+            return Some(if self.release.batch { "never" } else { "only" });
+        }
+        if !allows(profile.multiple_subs, self.multiple_subs()) {
+            return Some(if self.multiple_subs() {
+                "never"
+            } else {
+                "only"
+            });
+        }
+        if profile.require_codec && position(&profile.codecs, self.codec()).is_none() {
+            return Some("require codec");
+        }
+        if profile.require_source && position(&profile.sources, self.source()).is_none() {
+            return Some("require source");
+        }
+        if profile.require_language && self.language_rank(profile).is_none() {
+            return Some("require language");
+        }
+        None
     }
 
     fn compare(&self, other: &Self, profile: &AutoSelectProfile) -> Ordering {
