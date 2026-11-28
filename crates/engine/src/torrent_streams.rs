@@ -323,59 +323,22 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use std::{
-        net::{Ipv4Addr, SocketAddr},
         path::PathBuf,
         sync::{Arc, Mutex},
         time::Duration,
     };
 
     use domain::TorrentOrigin;
-    use librqbit::{CreateTorrentOptions, ListenerOptions, Session, SessionOptions};
-    use tempfile::TempDir;
     use torrent::{PeerDiscovery, TorrentSessionOptions, TorrentSource};
 
     use super::{StreamOrigin, TorrentStreams};
-
-    /// A plain librqbit session seeding one small file over loopback, as in
-    /// `crates/torrent/tests/session.rs`: no live network in the test.
-    async fn seeder() -> (Arc<Session>, TempDir, Vec<u8>, SocketAddr) {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ep.mkv");
-        std::fs::write(&path, vec![0x5A; 1024 * 1024]).unwrap();
-        let session = Session::new_with_opts(
-            dir.path().into(),
-            SessionOptions {
-                dht: None,
-                disable_local_service_discovery: true,
-                disable_trackers: true,
-                listen: Some(ListenerOptions {
-                    listen_addr: (Ipv4Addr::LOCALHOST, 0).into(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        let (created, handle) = session
-            .create_and_serve_torrent(
-                &path,
-                CreateTorrentOptions {
-                    piece_length: Some(256 * 1024),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-        handle.wait_until_completed().await.unwrap();
-        let addr = session.listen_addr().unwrap();
-        let bytes = created.as_bytes().unwrap().to_vec();
-        (session, dir, bytes, addr)
-    }
+    use crate::test_seeder::Seeder;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn removing_a_streaming_torrent_ends_the_session_before_deleting_files() {
-        let (_seeder, _seed_dir, bytes, peer) = seeder().await;
+        let seeder = Seeder::new("ep.mkv", 1024 * 1024, None).await;
+        let peer = seeder.addr;
+        let bytes = seeder.metainfo;
         let cache = tempfile::tempdir().unwrap();
         let root: PathBuf = cache.path().to_path_buf();
         let streams = TorrentStreams::new(

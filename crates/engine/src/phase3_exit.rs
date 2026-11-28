@@ -12,8 +12,7 @@
 
 use std::{
     future::Future,
-    net::{Ipv4Addr, SocketAddr},
-    num::NonZeroU32,
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -21,7 +20,6 @@ use std::{
 use db::Db;
 use domain::{AppEvent, ExternalId, InfoHash, MediaId, MediaKind};
 use futures::SinkExt;
-use librqbit::{CreateTorrentOptions, ListenerOptions, Session, SessionOptions};
 use metadata::CatalogCache;
 use player::PlayerEvent;
 use reqwest::{StatusCode, header::RANGE};
@@ -31,6 +29,7 @@ use tempfile::TempDir;
 use tokio::time::{sleep, timeout};
 use torrent::{PeerDiscovery, TorrentSessionOptions};
 
+use crate::test_seeder::Seeder;
 use crate::{
     AutoSelectProgress, AutoSelectRequest, AutoSelection, AutoSelector, BoxFuture, EpisodeIds,
     LocalProgressSync, PlayRequest, PlaybackManager, SessionFiles, TorrentStreams,
@@ -43,87 +42,10 @@ const AIRED: u32 = 5;
 const RELEASE: &str = "[SubsPlease] Sousou no Frieren - 05 (1080p) [5E1A0C05].mkv";
 
 const MIB: u64 = 1024 * 1024;
-const PIECE: u32 = 256 * 1024;
 const EPISODE_BYTES: u64 = 96 * MIB;
 /// One episode's length as the fake player reports it, in seconds.
 const EPISODE_SECONDS: f64 = 1420.0;
 const LIMIT: Duration = Duration::from_secs(60);
-
-/// Deterministic pseudo-random bytes, so every piece hashes differently.
-fn contents(len: u64) -> Vec<u8> {
-    let len = usize::try_from(len).unwrap();
-    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
-    let mut buf = Vec::with_capacity(len + 8);
-    while buf.len() < len {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        buf.extend_from_slice(&x.to_le_bytes());
-    }
-    buf.truncate(len);
-    buf
-}
-
-/// A loopback librqbit session seeding [`RELEASE`].
-struct Seeder {
-    session: Arc<Session>,
-    _dir: TempDir,
-    addr: SocketAddr,
-    info_hash: InfoHash,
-    content: Vec<u8>,
-}
-
-impl Seeder {
-    async fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(RELEASE);
-        let content = contents(EPISODE_BYTES);
-        std::fs::write(&path, &content).unwrap();
-        let session = Session::new_with_opts(
-            dir.path().into(),
-            SessionOptions {
-                dht: None,
-                disable_local_service_discovery: true,
-                disable_trackers: true,
-                listen: Some(ListenerOptions {
-                    listen_addr: (Ipv4Addr::LOCALHOST, 0).into(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        let (created, handle) = session
-            .create_and_serve_torrent(
-                &path,
-                CreateTorrentOptions {
-                    piece_length: Some(PIECE),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-        handle.wait_until_completed().await.unwrap();
-        let seeder = Self {
-            addr: session.listen_addr().unwrap(),
-            info_hash: InfoHash::from_bytes(created.info_hash().0),
-            session,
-            _dir: dir,
-            content,
-        };
-        // Fast enough for the readiness gate, slow enough that the whole
-        // file takes far longer than the test's reads.
-        seeder.throttle(4 * 1024 * 1024);
-        seeder
-    }
-
-    fn throttle(&self, bytes_per_sec: u32) {
-        self.session
-            .ratelimits
-            .set_upload_bps(NonZeroU32::new(bytes_per_sec));
-    }
-}
 
 /// Nyaa's RSS feed: the seeded release, a 720p release of the same episode
 /// that ranks below it, and the previous episode, which the filters drop.
@@ -314,7 +236,7 @@ async fn read_matches(url: &str, content: &[u8], start: u64, end: u64) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn auto_select_plays_while_downloading_and_a_seek_near_the_end_is_served() {
-    let seeder = Seeder::new().await;
+    let seeder = Seeder::new(RELEASE, EPISODE_BYTES, Some(4 * 1024 * 1024)).await;
     let fixture = Fixture::new(
         seeder.addr,
         FixtureIndexers {
@@ -375,7 +297,7 @@ async fn auto_select_plays_while_downloading_and_a_seek_near_the_end_is_served()
     );
 
     // From here the seeder is slow: the rest of the file would take minutes.
-    seeder.throttle(512 * 1024);
+    seeder.throttle(Some(512 * 1024));
     read_matches(&url, &seeder.content, 0, 63).await;
 
     // The player seeks to 98 %: 6 MiB before the end, past the 4 MiB tail

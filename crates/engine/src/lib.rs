@@ -18,6 +18,8 @@ mod phase2_exit;
 mod phase3_exit;
 mod playback;
 mod settings_store;
+#[cfg(test)]
+mod test_seeder;
 mod torrent_list;
 mod torrent_streams;
 

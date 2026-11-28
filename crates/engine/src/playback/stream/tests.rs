@@ -28,6 +28,7 @@ use search::{Indexer, SearchRequest, Torrent};
 use settings::AutoSelectSettings;
 use torrent::{TorrentFile, TorrentSource};
 
+use crate::test_seeder::{Seeder, contents};
 use crate::{
     AutoSelectRequest, AutoSelector, BoxFuture, EpisodeAiring, EpisodeIds, FileListError,
     FileLister, LocalProgressSync, PlayRequest, PlaybackManager, StreamOrigin, TorrentSearch,
@@ -39,82 +40,6 @@ const PIECE: u32 = 256 * 1024;
 /// Big enough that the middle of the file is far from both windows.
 const EPISODE: u64 = 96 * MIB;
 const LIMIT: Duration = Duration::from_secs(60);
-
-/// Deterministic pseudo-random bytes, so every piece hashes differently.
-fn contents(len: u64) -> Vec<u8> {
-    let len = usize::try_from(len).unwrap();
-    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
-    let mut buf = Vec::with_capacity(len + 8);
-    while buf.len() < len {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        buf.extend_from_slice(&x.to_le_bytes());
-    }
-    buf.truncate(len);
-    buf
-}
-
-struct Seeder {
-    session: Arc<Session>,
-    _dir: TempDir,
-    addr: SocketAddr,
-    info_hash: InfoHash,
-    content: Vec<u8>,
-}
-
-impl Seeder {
-    /// Limits how fast the seeder uploads, `None` for unlimited.
-    fn throttle(&self, bytes_per_sec: Option<u32>) {
-        self.session
-            .ratelimits
-            .set_upload_bps(bytes_per_sec.and_then(NonZeroU32::new));
-    }
-}
-
-/// A plain librqbit session seeding one file, `ep.mkv`, over loopback.
-async fn seeder(len: u64) -> Seeder {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ep.mkv");
-    let content = contents(len);
-    std::fs::write(&path, &content).unwrap();
-    let session = Session::new_with_opts(
-        dir.path().into(),
-        SessionOptions {
-            dht: None,
-            disable_local_service_discovery: true,
-            disable_trackers: true,
-            listen: Some(ListenerOptions {
-                listen_addr: (Ipv4Addr::LOCALHOST, 0).into(),
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-    let (created, handle) = session
-        .create_and_serve_torrent(
-            &path,
-            CreateTorrentOptions {
-                piece_length: Some(PIECE),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-    handle.wait_until_completed().await.unwrap();
-    let seeder = Seeder {
-        addr: session.listen_addr().unwrap(),
-        info_hash: InfoHash::from_bytes(created.info_hash().0),
-        session,
-        _dir: dir,
-        content,
-    };
-    // Slow enough that the readiness gate is met long before the middle.
-    seeder.throttle(Some(8 * 1024 * 1024));
-    seeder
-}
 
 struct Fixture {
     _dir: TempDir,
@@ -270,7 +195,7 @@ async fn get(url: &str, range: &str) -> reqwest::Response {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_torrent_stream_prepares_plays_buffers_and_ends_cleanly() {
-    let seeder = seeder(EPISODE).await;
+    let seeder = Seeder::new("ep.mkv", EPISODE, Some(8 * 1024 * 1024)).await;
     let fixture = Fixture::new(seeder.addr, Duration::from_secs(60)).await;
     let media = fixture.media().await;
     fixture
