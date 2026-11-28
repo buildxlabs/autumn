@@ -16,7 +16,10 @@ use std::{
 
 use url::Url;
 
-use crate::{Error, Indexer, Query, QueryPlan, SearchRequest, Torrent, animetosho, nyaa, plan};
+use crate::{
+    Error, Indexer, LaneFailure, Query, QueryPlan, SearchOutcome, SearchRequest, Torrent,
+    animetosho, nyaa, plan,
+};
 
 /// `Nyaa`'s default base URL; a mirror can be supplied in [`Config`].
 pub const NYAA_BASE_URL: &str = "https://nyaa.si";
@@ -59,6 +62,17 @@ impl Config {
         self.animetosho_base_url = base_url.into();
         self
     }
+}
+
+/// Which indexer lanes a search runs (#264 Q3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum LaneFilter {
+    /// Every available lane, including extensions once they join search.
+    #[default]
+    All,
+    /// Only the built-in indexers, for unattended availability badges.
+    BuiltIn,
 }
 
 /// Where response bytes come from. Tests inject recorded fixtures here.
@@ -154,21 +168,35 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
 
     /// Search both indexers concurrently and return deduped results.
     ///
+    /// A failed lane is reported in [`SearchOutcome::failures`] while the
+    /// other lanes' results still return (ADR 0011).
+    ///
     /// # Errors
     ///
-    /// Returns an error if either indexer fails after its one retry, or if a
-    /// response cannot be parsed.
-    pub async fn search(&self, request: &SearchRequest) -> Result<Vec<Torrent>, Error> {
+    /// Returns [`Error::AllLanesFailed`] when every lane failed, or when the
+    /// filter selected no lanes.
+    pub async fn search(&self, request: &SearchRequest) -> Result<SearchOutcome, Error> {
+        self.search_with_filter(request, LaneFilter::All).await
+    }
+
+    /// Like [`Self::search`], restricted to the lanes in `filter`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::search`].
+    pub async fn search_with_filter(
+        &self,
+        request: &SearchRequest,
+        filter: LaneFilter,
+    ) -> Result<SearchOutcome, Error> {
         let queries = plan(request);
         let (nyaa, tosho) = tokio::join!(
             self.run_indexer(&queries, Indexer::Nyaa),
             self.run_indexer(&queries, Indexer::AnimeTosho),
         );
-        let mut results = nyaa?;
-        results.extend(tosho?);
-        let mut seen = HashSet::new();
-        results.retain(|torrent| seen.insert(torrent.infohash.to_ascii_lowercase()));
-        Ok(results)
+        // Extensions join `All` in #303; both filters run the built-ins today.
+        tracing::debug!(?filter, "running indexer lanes");
+        outcome([(Indexer::Nyaa, nyaa), (Indexer::AnimeTosho, tosho)])
     }
 
     async fn run_indexer(
@@ -215,7 +243,26 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
         &self,
         keyword: &str,
         refresh: bool,
-    ) -> Result<Vec<Torrent>, Error> {
+    ) -> Result<SearchOutcome, Error> {
+        self.search_keyword_with_filter(keyword, refresh, LaneFilter::All)
+            .await
+    }
+
+    /// Like [`Self::search_keyword`], restricted to the lanes in `filter`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::search`].
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    pub async fn search_keyword_with_filter(
+        &self,
+        keyword: &str,
+        refresh: bool,
+        filter: LaneFilter,
+    ) -> Result<SearchOutcome, Error> {
         let keyword = keyword.trim();
         let nyaa = Query::Nyaa {
             keyword: keyword.to_owned(),
@@ -225,11 +272,8 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
             self.run_query_cached(&nyaa, refresh),
             self.run_query_cached(&tosho, refresh),
         );
-        let mut results = nyaa?;
-        results.extend(tosho?);
-        let mut seen = HashSet::new();
-        results.retain(|torrent| seen.insert(torrent.infohash.to_ascii_lowercase()));
-        Ok(results)
+        tracing::debug!(?filter, "running keyword indexer lanes");
+        outcome([(Indexer::Nyaa, nyaa), (Indexer::AnimeTosho, tosho)])
     }
 
     async fn run_query(&self, query: &Query) -> Result<Vec<Torrent>, Error> {
@@ -284,6 +328,33 @@ fn is_retryable(error: &Error) -> bool {
         error,
         Error::RateLimited { .. } | Error::Http { status: 503, .. } | Error::Transport { .. }
     )
+}
+
+/// Merge concurrent lanes in a fixed order, keeping the first duplicate and
+/// reporting failed lanes instead of failing the whole search (ADR 0011).
+fn outcome(
+    lanes: impl IntoIterator<Item = (Indexer, Result<Vec<Torrent>, Error>)>,
+) -> Result<SearchOutcome, Error> {
+    let mut merged = SearchOutcome::default();
+    let mut lane_count = 0;
+    for (indexer, yielded) in lanes {
+        lane_count += 1;
+        match yielded {
+            Ok(torrents) => merged.torrents.extend(torrents),
+            Err(error) => {
+                tracing::warn!(indexer = %indexer.label(), %error, "indexer lane failed");
+                merged.failures.push(LaneFailure { indexer, error });
+            }
+        }
+    }
+    if lane_count == 0 || merged.failures.len() == lane_count {
+        return Err(Error::AllLanesFailed);
+    }
+    let mut seen = HashSet::new();
+    merged
+        .torrents
+        .retain(|torrent| seen.insert(torrent.infohash.to_ascii_lowercase()));
+    Ok(merged)
 }
 
 /// Build the single request URL for a query from the configured base URL.

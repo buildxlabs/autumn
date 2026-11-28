@@ -151,7 +151,7 @@ fn suggestion(torrent: Torrent, total_episodes: u32) -> BatchSuggestion {
         codec: release.video_codec.map(release_list::codec_label),
         size: torrent.size,
         seeders: torrent.seeders,
-        indexer: torrent.indexer,
+        indexer: torrent.indexer.clone(),
         range,
         torrent,
     }

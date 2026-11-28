@@ -102,6 +102,7 @@ impl Render for ReleaseListScreen {
         let indexers = store.available_indexers();
         let searching = store.searching();
         let error = store.error().map(str::to_owned);
+        let notices = store.notices().to_vec();
         let query_has_text = !store.query().trim().is_empty();
 
         let visible = store.visible_rows();
@@ -172,6 +173,12 @@ impl Render for ReleaseListScreen {
             .child(chip_row(store.clone(), &filters, &resolutions, &indexers))
             .children(searching.then(|| div().text_sm().text_color(muted).child("Searching…")))
             .children(error.map(|error| div().text_sm().text_color(amber).child(error)))
+            .children(notices.into_iter().map(|notice| {
+                div()
+                    .text_sm()
+                    .text_color(amber)
+                    .child(format!("{}: {}", notice.indexer, notice.reason))
+            }))
             .child(table(&store, &rows, sort, muted, amber))
     }
 }

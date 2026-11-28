@@ -15,7 +15,9 @@ use std::{sync::Arc, time::Duration};
 
 use domain::{InfoHash, StreamSource};
 use metadata::{Aging, AniZip};
-use search::{EpisodeTarget, SearchRequest, Searcher, Torrent, Transport};
+use search::{
+    EpisodeTarget, LaneFilter, SearchOutcome, SearchRequest, Searcher, Torrent, Transport,
+};
 use settings::AutoSelectProfile;
 use torrent::{TorrentFile, TorrentSource};
 
@@ -30,8 +32,12 @@ pub const FILE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Searches the torrent indexers.
 pub trait TorrentSearch: Send + Sync {
-    /// Every result for `request`, deduped by infohash.
-    fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>>;
+    /// The outcome for `request` on the lanes in `filter`, deduped by infohash.
+    fn search(
+        &self,
+        request: SearchRequest,
+        lanes: LaneFilter,
+    ) -> BoxFuture<Result<SearchOutcome, search::Error>>;
 
     /// One keyword-only search on both indexers; `refresh` bypasses the
     /// 60 s cache. The default is empty, for fakes.
@@ -43,8 +49,8 @@ pub trait TorrentSearch: Send + Sync {
         &self,
         _keyword: String,
         _refresh: bool,
-    ) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
-        Box::pin(async { Ok(Vec::new()) })
+    ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
+        Box::pin(async { Ok(SearchOutcome::default()) })
     }
 }
 
@@ -125,11 +131,17 @@ pub struct AutoSelection {
 }
 
 /// Progress of an auto-select run, for the row's inline stage display.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AutoSelectProgress {
     /// The indexer search is running.
     Searching,
+    /// Some lanes failed but others answered; the search continues without
+    /// relaxing the match criteria (ADR 0011).
+    LaneFailures {
+        /// Display names of the lanes that failed.
+        names: Vec<String>,
+    },
     /// Verifying a candidate's file list; `checking` of `total`, both 1-based
     /// `checking` up to [`VERIFY_CANDIDATES`].
     Verifying {
@@ -165,17 +177,22 @@ impl AutoSelector {
         Self { search, files, ids }
     }
 
-    /// The raw indexer search, without ranking or file checks (#181 Q12).
-    pub fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+    /// The raw indexer search on `lanes`, without ranking or file checks
+    /// (#181 Q12). Availability badges pass [`LaneFilter::BuiltIn`].
+    pub fn search(
+        &self,
+        request: SearchRequest,
+        lanes: LaneFilter,
+    ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
         let search = Arc::clone(&self.search);
-        Box::pin(async move { search.search(request).await })
+        Box::pin(async move { search.search(request, lanes).await })
     }
 
     /// Choose a torrent and file for the request's episode with `profile`.
     ///
     /// # Errors
     ///
-    /// [`AutoSelectError::IndexerError`] when the search fails,
+    /// [`AutoSelectError::IndexerError`] when every indexer lane failed,
     /// [`AutoSelectError::NoTorrentsMatch`] when no result passes the
     /// filters, [`AutoSelectError::NoFileFound`] when none of the top
     /// [`VERIFY_CANDIDATES`] holds the episode's file.
@@ -216,11 +233,21 @@ impl AutoSelector {
             target = target.with_absolute_episode(absolute);
         }
         progress(AutoSelectProgress::Searching);
-        let results = self
+        let outcome = self
             .search
-            .search(search)
+            .search(search, LaneFilter::All)
             .await
             .map_err(AutoSelectError::IndexerError)?;
+        if !outcome.failures.is_empty() {
+            progress(AutoSelectProgress::LaneFailures {
+                names: outcome
+                    .failures
+                    .iter()
+                    .map(|failure| failure.indexer.label().to_owned())
+                    .collect(),
+            });
+        }
+        let results = outcome.torrents;
         let candidates = search::rank(results.clone(), &target, profile);
         if candidates.is_empty() {
             return Err(AutoSelectError::NoTorrentsMatch { results });
@@ -243,7 +270,7 @@ impl AutoSelector {
     ///
     /// # Errors
     ///
-    /// An indexer error after its one retry.
+    /// [`search::Error::AllLanesFailed`] when every lane failed.
     #[expect(
         clippy::fn_params_excessive_bools,
         reason = "refresh bypasses the cache"
@@ -252,7 +279,7 @@ impl AutoSelector {
         &self,
         keyword: &str,
         refresh: bool,
-    ) -> Result<Vec<Torrent>, search::Error> {
+    ) -> Result<SearchOutcome, search::Error> {
         self.search
             .search_keyword(keyword.to_owned(), refresh)
             .await
@@ -318,16 +345,20 @@ impl AutoSelector {
 }
 
 impl<T: Transport + 'static> TorrentSearch for Arc<Searcher<T>> {
-    fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+    fn search(
+        &self,
+        request: SearchRequest,
+        lanes: LaneFilter,
+    ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
         let searcher = Arc::clone(self);
-        Box::pin(async move { Searcher::search(&searcher, &request).await })
+        Box::pin(async move { Searcher::search_with_filter(&searcher, &request, lanes).await })
     }
 
     fn search_keyword(
         &self,
         keyword: String,
         refresh: bool,
-    ) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+    ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
         let searcher = Arc::clone(self);
         Box::pin(async move { Searcher::search_keyword(&searcher, &keyword, refresh).await })
     }
@@ -417,14 +448,23 @@ mod tests {
 
     #[derive(Default)]
     struct FakeSearch {
-        reply: Mutex<Option<Result<Vec<Torrent>, search::Error>>>,
+        reply: Mutex<Option<Result<SearchOutcome, search::Error>>>,
         requests: Mutex<Vec<SearchRequest>>,
     }
 
     impl TorrentSearch for FakeSearch {
-        fn search(&self, request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+        fn search(
+            &self,
+            request: SearchRequest,
+            _lanes: LaneFilter,
+        ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
             self.requests.lock().unwrap().push(request);
-            let reply = self.reply.lock().unwrap().take().unwrap_or(Ok(Vec::new()));
+            let reply = self
+                .reply
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or(Ok(SearchOutcome::default()));
             Box::pin(async move { reply })
         }
     }
@@ -472,7 +512,18 @@ mod tests {
     }
 
     fn rig(
-        reply: Result<Vec<Torrent>, search::Error>,
+        results: Result<Vec<Torrent>, search::Error>,
+        lists: Vec<(char, Vec<&'static str>)>,
+    ) -> Rig {
+        let reply = results.map(|torrents| SearchOutcome {
+            torrents,
+            failures: Vec::new(),
+        });
+        rig_with_outcome(reply, lists)
+    }
+
+    fn rig_with_outcome(
+        reply: Result<SearchOutcome, search::Error>,
         lists: Vec<(char, Vec<&'static str>)>,
     ) -> Rig {
         let search = Arc::new(FakeSearch {
@@ -659,7 +710,9 @@ mod tests {
         let mut seen = Vec::new();
         let _ = rig
             .selector
-            .select_with_progress(episode_5(), &AutoSelectProfile::default(), |p| seen.push(p))
+            .select_with_progress(episode_5(), &AutoSelectProfile::default(), |p| {
+                seen.push(p);
+            })
             .await;
 
         assert_eq!(
@@ -723,21 +776,58 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_indexer_failure_is_an_indexer_error() {
-        let failure = search::Error::Http {
-            indexer: Indexer::Nyaa,
-            status: 500,
-        };
-        let rig = rig(Err(failure), Vec::new());
+    async fn every_lane_failing_is_an_indexer_error() {
+        let rig = rig(Err(search::Error::AllLanesFailed), Vec::new());
 
         let error = select(&rig).await.unwrap_err();
 
         assert!(
             matches!(
                 error,
-                AutoSelectError::IndexerError(search::Error::Http { status: 500, .. })
+                AutoSelectError::IndexerError(search::Error::AllLanesFailed)
             ),
             "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_lane_still_selects_and_is_named_in_progress() {
+        let rig = rig_with_outcome(
+            Ok(SearchOutcome {
+                torrents: vec![result('a', "[Grp] Sousou no Frieren - 05 [1080p]", 90)],
+                failures: vec![search::LaneFailure {
+                    indexer: Indexer::AnimeTosho,
+                    error: search::Error::Http {
+                        indexer: Indexer::AnimeTosho,
+                        status: 500,
+                    },
+                }],
+            }),
+            vec![('a', vec!["[Grp] Sousou no Frieren - 05 [1080p].mkv"])],
+        );
+
+        let mut seen = Vec::new();
+        let selection = rig
+            .selector
+            .select_with_progress(episode_5(), &AutoSelectProfile::default(), |progress| {
+                seen.push(progress);
+            })
+            .await
+            .unwrap();
+
+        assert_torrent(&selection.source, 'a', 0);
+        assert_eq!(
+            seen.first(),
+            Some(&AutoSelectProgress::Searching),
+            "the search runs first"
+        );
+        assert_eq!(
+            seen.iter().find_map(|progress| match progress {
+                AutoSelectProgress::LaneFailures { names } => Some(names.clone()),
+                _ => None,
+            }),
+            Some(vec!["AnimeTosho".to_owned()]),
+            "the failed lane is named without relaxing the match"
         );
     }
 
@@ -762,7 +852,7 @@ mod tests {
             .selector
             .select(known, &AutoSelectProfile::default())
             .await;
-        *rig.search.reply.lock().unwrap() = Some(Ok(Vec::new()));
+        *rig.search.reply.lock().unwrap() = Some(Ok(SearchOutcome::default()));
         let _ = rig
             .selector
             .select(unknown, &AutoSelectProfile::default())

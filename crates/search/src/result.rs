@@ -1,7 +1,9 @@
 //! The indexer-neutral [`Torrent`] result, plain data shared with `debrid`.
 
+use crate::Error;
+
 /// Which indexer produced a [`Torrent`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Indexer {
     /// `Nyaa`, by keyword only.
@@ -13,12 +15,34 @@ pub enum Indexer {
 impl Indexer {
     /// A short name for logs and UI labels.
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub fn label(&self) -> &str {
         match self {
             Self::Nyaa => "Nyaa",
             Self::AnimeTosho => "AnimeTosho",
         }
     }
+}
+
+/// One indexer lane that failed, with the reason it reported (ADR 0011).
+#[derive(Debug, Clone)]
+pub struct LaneFailure {
+    /// The lane that failed.
+    pub indexer: Indexer,
+    /// Why the lane failed.
+    pub error: Error,
+}
+
+/// What a search returns: the results that answered, plus the failed lanes.
+///
+/// A search with no answer fails only when every lane failed, or when there
+/// were no lanes (ADR 0011). Partial failures are carried here so callers can
+/// report them without losing the results that did arrive.
+#[derive(Debug, Clone, Default)]
+pub struct SearchOutcome {
+    /// All results, merged in lane order and deduped by infohash.
+    pub torrents: Vec<Torrent>,
+    /// The lanes that failed, in lane order.
+    pub failures: Vec<LaneFailure>,
 }
 
 /// One torrent-indexer result (glossary **Torrent**).

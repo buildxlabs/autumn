@@ -171,9 +171,9 @@ async fn results_are_deduped_by_infohash_across_indexers() {
         .await
         .expect("search succeeds");
 
-    assert_eq!(results.len(), 1, "the shared infohash is deduped");
+    assert_eq!(results.torrents.len(), 1, "the shared infohash is deduped");
     assert_eq!(
-        results.first().expect("one result").seeders,
+        results.torrents.first().expect("one result").seeders,
         Some(10),
         "the first indexer result wins"
     );
@@ -213,7 +213,7 @@ async fn keyword_fallback_runs_only_when_numbered_queries_find_nothing() {
         .await
         .expect("search succeeds");
 
-    assert_eq!(results.len(), 1);
+    assert_eq!(results.torrents.len(), 1);
     let calls = transport.calls();
     assert!(calls.contains(&fallback_url), "AnimeTosho fallback ran");
 }
@@ -254,7 +254,7 @@ async fn one_backoff_retry_honours_retry_after() {
         .await
         .expect("retry succeeds");
 
-    assert_eq!(results.len(), 1);
+    assert_eq!(results.torrents.len(), 1);
     assert_eq!(
         transport
             .calls()
@@ -300,9 +300,22 @@ async fn a_query_result_is_cached_for_sixty_seconds() {
     let searcher = Searcher::with_clock(transport.clone(), clock.clone());
     let request = SearchRequest::new(vec!["Frieren".to_owned()], 1, 5);
 
-    assert_eq!(searcher.search(&request).await.expect("first").len(), 1);
     assert_eq!(
-        searcher.search(&request).await.expect("cached").len(),
+        searcher
+            .search(&request)
+            .await
+            .expect("first")
+            .torrents
+            .len(),
+        1
+    );
+    assert_eq!(
+        searcher
+            .search(&request)
+            .await
+            .expect("cached")
+            .torrents
+            .len(),
         1,
         "second search uses the cache"
     );
@@ -310,11 +323,126 @@ async fn a_query_result_is_cached_for_sixty_seconds() {
 
     clock.advance(Duration::from_secs(61));
     assert_eq!(
-        searcher.search(&request).await.expect("expired").len(),
+        searcher
+            .search(&request)
+            .await
+            .expect("expired")
+            .torrents
+            .len(),
         0,
         "expired cache refetches"
     );
     assert_eq!(transport.calls().len(), 11);
+}
+
+fn tosho_fallback_url(keyword: &str) -> String {
+    search::query_url(&Query::anime_tosho_fallback(keyword), &Config::default()).unwrap_or_default()
+}
+
+const TOSHO_MIXED: &str = r#"[{"title":"[Group] Frieren - 05","info_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","seeders":999},{"title":"[Group] Frieren - 05 [1080p]","info_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","seeders":12}]"#;
+
+#[tokio::test]
+async fn dedupe_keeps_lane_order_with_the_first_result_winning() {
+    let transport = MockTransport::with(&[
+        (
+            &nyaa_url("frieren 05"),
+            vec![Reply::Body(RSS_ONE.to_owned())],
+        ),
+        (
+            &tosho_url("frieren"),
+            vec![Reply::Body(TOSHO_MIXED.to_owned())],
+        ),
+    ]);
+    let searcher = Searcher::new(transport);
+
+    let outcome = searcher
+        .search(&SearchRequest::new(vec!["Frieren".to_owned()], 1, 5))
+        .await
+        .expect("search succeeds");
+
+    assert_eq!(outcome.torrents.len(), 2, "one duplicate is dropped");
+    assert_eq!(
+        outcome
+            .torrents
+            .first()
+            .map(|torrent| torrent.infohash.as_str()),
+        Some("a".repeat(40).as_str()),
+        "Nyaa is merged first"
+    );
+    assert_eq!(
+        outcome.torrents.first().and_then(|torrent| torrent.seeders),
+        Some(10),
+        "the first result wins the duplicate"
+    );
+    assert_eq!(
+        outcome
+            .torrents
+            .get(1)
+            .map(|torrent| torrent.infohash.as_str()),
+        Some("b".repeat(40).as_str())
+    );
+    assert!(outcome.failures.is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_lane_returns_the_other_lanes_results_and_a_failure() {
+    let transport = MockTransport::with(&[
+        (
+            &nyaa_url("frieren"),
+            vec![Reply::Fail(Error::Http {
+                indexer: Indexer::Nyaa,
+                status: 500,
+            })],
+        ),
+        (
+            &tosho_fallback_url("frieren"),
+            vec![Reply::Body(TOSHO_ONE.to_owned())],
+        ),
+    ]);
+    let searcher = Searcher::new(transport);
+
+    let outcome = searcher
+        .search_keyword("frieren", false)
+        .await
+        .expect("one lane still answers");
+
+    assert_eq!(outcome.torrents.len(), 1, "AnimeTosho's result survives");
+    assert_eq!(outcome.failures.len(), 1, "one failed lane is reported");
+    assert_eq!(
+        outcome
+            .failures
+            .first()
+            .map(|failure| failure.indexer.clone()),
+        Some(Indexer::Nyaa)
+    );
+}
+
+#[tokio::test]
+async fn a_search_fails_when_every_lane_fails() {
+    let transport = MockTransport::with(&[
+        (
+            &nyaa_url("frieren"),
+            vec![Reply::Fail(Error::Http {
+                indexer: Indexer::Nyaa,
+                status: 500,
+            })],
+        ),
+        (
+            &tosho_fallback_url("frieren"),
+            vec![Reply::Fail(Error::Http {
+                indexer: Indexer::AnimeTosho,
+                status: 500,
+            })],
+        ),
+    ]);
+    let searcher = Searcher::new(transport);
+
+    let error = searcher
+        .search_keyword("frieren", false)
+        .await
+        .expect_err("every lane failed");
+
+    assert!(matches!(error, Error::AllLanesFailed), "{error:?}");
 }
 
 #[tokio::test]
@@ -340,5 +468,5 @@ async fn indexers_are_queried_concurrently() {
     .await
     .expect("indexers did not block on each other")
     .expect("search succeeds");
-    assert_eq!(results.len(), 1);
+    assert_eq!(results.torrents.len(), 1);
 }

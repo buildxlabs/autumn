@@ -20,6 +20,7 @@ settings.workspace       = true
 thiserror.workspace      = true
 time                     = { features = [ "parsing" ], workspace = true }
 tokio.workspace          = true
+tracing.workspace        = true
 url.workspace            = true
 
 [dev-dependencies]

@@ -347,18 +347,15 @@ pub trait EngineServices: Send + Sync + 'static {
         })
     }
 
-    /// A raw indexer search for availability badges: no profile, no file list
-    /// (#181 Q13). The default fails for fakes that do not exercise badges.
+    /// A raw indexer search on `lanes`: no profile, no file list (#181 Q13).
+    /// Availability badges pass [`search::LaneFilter::BuiltIn`]. The default
+    /// fails for fakes that do not exercise badges.
     fn search_torrents(
         &self,
         _request: search::SearchRequest,
-    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
-        Box::pin(async {
-            Err(search::Error::Transport {
-                indexer: search::Indexer::Nyaa,
-                message: "torrent search is unavailable".to_owned(),
-            })
-        })
+        _lanes: search::LaneFilter,
+    ) -> BoxFuture<Result<search::SearchOutcome, search::Error>> {
+        Box::pin(async { Err(search::Error::AllLanesFailed) })
     }
 
     /// Stored availability badge results for `media` (#251). The default is
@@ -379,7 +376,7 @@ pub trait EngineServices: Send + Sync + 'static {
         Box::pin(async { Ok(()) })
     }
 
-    /// One keyword-only release search on both indexers (#221 Q6); `refresh`
+    /// One keyword-only release search on both lanes (#221 Q6); `refresh`
     /// bypasses the 60 s cache. The default is empty for fakes.
     #[expect(
         clippy::fn_params_excessive_bools,
@@ -389,8 +386,8 @@ pub trait EngineServices: Send + Sync + 'static {
         &self,
         _keyword: String,
         _refresh: bool,
-    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
-        Box::pin(async { Ok(Vec::new()) })
+    ) -> BoxFuture<Result<search::SearchOutcome, search::Error>> {
+        Box::pin(async { Ok(search::SearchOutcome::default()) })
     }
 
     /// A torrent's file list, on demand for batch file pick (#221 Q7). The
@@ -1269,15 +1266,13 @@ impl EngineServices for Engine {
     fn search_torrents(
         &self,
         request: search::SearchRequest,
-    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+        lanes: search::LaneFilter,
+    ) -> BoxFuture<Result<search::SearchOutcome, search::Error>> {
         let selector = self.auto_selector();
         Box::pin(async move {
             match selector {
-                Some(selector) => selector.search(request).await,
-                None => Err(search::Error::Transport {
-                    indexer: search::Indexer::Nyaa,
-                    message: "torrent search is unavailable".to_owned(),
-                }),
+                Some(selector) => selector.search(request, lanes).await,
+                None => Err(search::Error::AllLanesFailed),
             }
         })
     }
@@ -1312,15 +1307,12 @@ impl EngineServices for Engine {
         &self,
         keyword: String,
         refresh: bool,
-    ) -> BoxFuture<Result<Vec<search::Torrent>, search::Error>> {
+    ) -> BoxFuture<Result<search::SearchOutcome, search::Error>> {
         let selector = self.auto_selector();
         Box::pin(async move {
             match selector {
                 Some(selector) => selector.search_keyword(&keyword, refresh).await,
-                None => Err(search::Error::Transport {
-                    indexer: search::Indexer::Nyaa,
-                    message: "torrent search is unavailable".to_owned(),
-                }),
+                None => Err(search::Error::AllLanesFailed),
             }
         })
     }
