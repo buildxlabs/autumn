@@ -8,6 +8,9 @@ A looping or allocating Luau extension holds its VM's synchronous `ReentrantMute
 - Caller cancellation or the 30 s timeout drops suspended host futures (cancelling in-flight `net` requests) at once and arms the interrupt if Luau is running.
 - A `MemoryError` caught by `pcall` is still reported as a memory kill, and a call's outcome is the kill whatever the script returns.
 - Transient network, wall-timeout and parse errors show in extension health and the Extensions sidebar badge, without toasts and without auto-disabling; only the third consecutive CPU or memory kill auto-disables and raises a one-shot error toast.
+- The 9th HTTP request in a call is an uncatchable kill like the CPU and memory caps: the VM is rebuilt and the kill's message names `request_limit`. It does not count toward auto-disable.
+- `auto_disabled` and `last_error` (kind, message, time) persist on the extension's row in `autumn.db`; the traceback and the strike counter stay in memory.
+- A search-deadline cancel (ADR 0011) is not a failure: it is not recorded in health and shows only in the release list's partial-failure notice.
 - Declarative sources run no user code, so the CPU and memory caps and the auto-disable rule do not apply to them (ADR 0016).
 
 ## Considered options
