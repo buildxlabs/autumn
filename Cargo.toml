@@ -31,6 +31,7 @@ librqbit = { default-features = false, features = [
 ], version = "9.1" }
 metadata = { path = "crates/metadata" }
 mkv = { path = "crates/mkv" }
+mlua = { features = [ "async", "luau", "send" ], version = "0.12" }
 net = { path = "crates/net" }
 notify = "9"
 nucleo-matcher = "0.3"

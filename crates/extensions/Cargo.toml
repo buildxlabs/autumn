@@ -1,0 +1,20 @@
+[package]
+name                   = "extensions"
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+publish                = false
+
+[lints]
+workspace = true
+
+[dependencies]
+domain.workspace    = true
+mlua.workspace      = true
+thiserror.workspace = true
+tokio.workspace     = true
+tracing.workspace   = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true

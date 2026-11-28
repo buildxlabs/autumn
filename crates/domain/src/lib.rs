@@ -5,6 +5,7 @@
 use std::time::{Instant, SystemTime};
 
 mod account;
+mod extension;
 mod fuzzy_date;
 mod info_hash;
 mod list_entry;
@@ -15,6 +16,7 @@ mod torrent;
 mod transfer;
 
 pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
+pub use extension::ExtensionId;
 pub use fuzzy_date::{FuzzyDate, FuzzyDateError};
 pub use info_hash::{InfoHash, InfoHashError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
