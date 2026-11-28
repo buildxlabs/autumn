@@ -36,6 +36,12 @@ impl TorrentList {
     ) {
         let mut meta = lock(&self.meta);
         if let Some(existing) = meta.iter_mut().find(|(hash, _)| *hash == info_hash) {
+            // A preload of the next episode in a batch shares the current
+            // stream's torrent; it must not take over the row while that
+            // episode plays (#208).
+            if existing.1.origin == TorrentOrigin::Stream && origin == TorrentOrigin::Preload {
+                return;
+            }
             existing.1 = Meta { origin, link };
         } else {
             meta.push((info_hash, Meta { origin, link }));
@@ -188,6 +194,23 @@ mod tests {
         );
         assert_eq!(rows[2].origin, TorrentOrigin::Incoming);
         assert_eq!(rows[0].ratio_permille, 250, "informational ratio");
+    }
+
+    #[test]
+    fn a_preload_does_not_replace_a_stream_registration() {
+        let list = TorrentList::default();
+        let info_hash = hash(1);
+        let stream_link = TorrentLink::new(domain::MediaId::new(7), 4, Some(42));
+        list.register(info_hash, TorrentOrigin::Stream, Some(stream_link.clone()));
+        list.register(
+            info_hash,
+            TorrentOrigin::Preload,
+            Some(TorrentLink::new(domain::MediaId::new(7), 5, Some(42))),
+        );
+
+        let rows = list.rows(vec![entry(info_hash)], &HashSet::new());
+        assert_eq!(rows[0].origin, TorrentOrigin::Stream);
+        assert_eq!(rows[0].link, Some(stream_link));
     }
 
     #[test]

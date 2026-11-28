@@ -24,7 +24,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use domain::{InfoHash, MediaId, StreamSource};
+use domain::{InfoHash, MediaId, StreamSource, TorrentLink, TorrentOrigin};
 use metadata::{Aging, AniZip};
 use search::EpisodeTarget;
 use settings::AutoSelectSettings;
@@ -453,10 +453,17 @@ impl PlaybackManager {
                 return;
             }
         };
+        let next = current.episode.checked_add(1);
+        let anilist_id = self.anilist_id(current.media).await;
         {
             // Held and Ready together, so an abort never leaks a hold.
             let mut outcome = lock(&outcome);
             streams.track(fetch.info_hash(), StreamOrigin::Preload);
+            streams.register(
+                fetch.info_hash(),
+                TorrentOrigin::Preload,
+                next.map(|episode| TorrentLink::new(current.media, episode, anilist_id)),
+            );
             *outcome = Outcome::Ready(fetch);
         }
         if let Err(error) = select_preload(&session, fetch).await {
