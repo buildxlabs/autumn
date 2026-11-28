@@ -51,14 +51,18 @@ return {
 
 #[tokio::test]
 async fn a_scraper_extracts_rows_from_a_recorded_listing() {
-    // No `autumn.http.fetch` yet (#305): the page is inlined as a long string.
+    // The page is inlined so this test needs no server; tests/http.rs fetches.
     let source = format!("local PAGE = [=====[{NYAA_HTML}]=====]\n{PROVIDER}");
-    let host = ExtensionHost::start(vec![ProviderSource {
-        id: ExtensionId::new("nyaa-html"),
-        name: "Nyaa (HTML)".to_owned(),
-        version: "1.0.0".to_owned(),
-        source,
-    }]);
+    let host = ExtensionHost::start(
+        vec![ProviderSource {
+            id: ExtensionId::new("nyaa-html"),
+            name: "Nyaa (HTML)".to_owned(),
+            version: "1.0.0".to_owned(),
+            source,
+            hosts: Vec::new(),
+        }],
+        &net::GuardedClient::new().unwrap(),
+    );
     let rows = host
         .search(
             &ExtensionId::new("nyaa-html"),

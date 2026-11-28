@@ -135,7 +135,7 @@ pub(super) fn crypto(build: &Builder<'_>) -> mlua::Result<Table> {
 
 /// Appends `query` to `base` with its keys sorted, so the URL is
 /// deterministic. Values must be strings, numbers or booleans.
-fn build_url(base: &str, query: &Table) -> Result<String, HostError> {
+pub(super) fn build_url(base: &str, query: &Table) -> Result<String, HostError> {
     let mut url =
         url::Url::parse(base).map_err(|error| HostError::invalid(format!("base: {error}")))?;
     let mut pairs = Vec::new();

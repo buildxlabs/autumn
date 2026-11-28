@@ -13,7 +13,7 @@ use mlua::{Function, Lua, Table, Value, VmState};
 
 use crate::{
     error::ExtensionError,
-    host::{self, CallLog},
+    host::{self, CallLog, Http, Network},
     limits::{Kill, KillSwitch},
     provider::{ProviderRequest, ProviderTorrent},
 };
@@ -92,6 +92,7 @@ pub(crate) struct Vm {
     search: Function,
     switch: Arc<KillSwitch>,
     log: CallLog,
+    http: Arc<Http>,
 }
 
 impl Vm {
@@ -109,6 +110,7 @@ impl Vm {
         source: &str,
         memory: usize,
         switch: Arc<KillSwitch>,
+        network: Network,
         prepare: Prepare,
     ) -> Result<Self, ExtensionError> {
         let lua = Lua::new();
@@ -117,7 +119,8 @@ impl Vm {
             globals.raw_set(name, Value::Nil)?;
         }
         let log = CallLog::new(id.clone());
-        host::install(&lua, &log)?;
+        let http = Http::new(network, Arc::clone(&switch));
+        host::install(&lua, &log, &http)?;
         lua.load(KILL_GUARDS)
             .set_name("=autumn")
             .call::<()>(is_killed(&lua, &switch)?)?;
@@ -149,8 +152,10 @@ impl Vm {
             Err(error) => return Err(error.into()),
         };
         let call = log.begin_call();
-        let provider = protected(&protected_call, chunk, Value::Nil).await?;
+        http.begin_call();
+        let provider = protected(&protected_call, chunk, Value::Nil).await;
         drop(call);
+        let provider = blocked_as_network(&http, provider)?;
         let search = provider_search(provider)?;
         Ok(Self {
             id,
@@ -159,6 +164,7 @@ impl Vm {
             search,
             switch,
             log,
+            http,
         })
     }
 
@@ -180,13 +186,29 @@ impl Vm {
     ) -> Result<Vec<ProviderTorrent>, ExtensionError> {
         let request = encode_request(&self.lua, request)?;
         let _call = self.log.begin_call();
+        self.http.begin_call();
         let results = protected(
             &self.protected_call,
             self.search.clone(),
             Value::Table(request),
         )
-        .await?;
+        .await;
+        let results = blocked_as_network(&self.http, results)?;
         decode_results(&self.id, results)
+    }
+}
+
+/// Reports an uncaught `blocked` error from `autumn.http.fetch` as
+/// [`ExtensionError::NetworkBlocked`], so health can tell it apart.
+fn blocked_as_network(
+    http: &Http,
+    outcome: Result<Value, ExtensionError>,
+) -> Result<Value, ExtensionError> {
+    match outcome {
+        Err(ExtensionError::Runtime { message, .. }) if http.was_blocked(&message) => {
+            Err(ExtensionError::NetworkBlocked(message))
+        }
+        other => other,
     }
 }
 

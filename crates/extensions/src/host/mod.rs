@@ -6,16 +6,18 @@
 //! by [`RAISE`] so a failure reaches the script as a plain string error,
 //! `"<function>: <kind>: <detail>"`, which it can `pcall` and match on.
 //!
-//! `autumn.http.fetch` (#305) and `autumn.settings.get` (#304) are added by
-//! their own tickets; [`AUTUMN_D_LUAU`] already declares them.
+//! `autumn.settings.get` (#304) is added by its own ticket; [`AUTUMN_D_LUAU`]
+//! already declares it.
 
 mod codec;
 mod html;
+mod http;
 mod log;
 mod time;
 
 use mlua::{FromLuaMulti, Function, IntoLua, Lua, MultiValue, Table, Value};
 
+pub(crate) use http::{Http, Network};
 pub(crate) use log::CallLog;
 
 /// The typed definitions of the whole `autumn` global, for the playground and
@@ -46,15 +48,10 @@ end
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     InvalidArgument,
-    #[expect(dead_code, reason = "raised by autumn.http.fetch (#305)")]
     Blocked,
-    #[expect(dead_code, reason = "raised by autumn.http.fetch (#305)")]
     Network,
-    #[expect(dead_code, reason = "raised by autumn.http.fetch (#305)")]
     Timeout,
-    #[expect(dead_code, reason = "raised by autumn.http.fetch (#305)")]
     TooLarge,
-    #[expect(dead_code, reason = "raised by autumn.http.fetch (#305)")]
     RateLimited,
     Parse,
     #[expect(dead_code, reason = "raised by autumn.settings.get (#304)")]
@@ -98,6 +95,11 @@ impl HostError {
     pub(crate) fn parse(detail: impl Into<String>) -> Self {
         Self::new(Kind::Parse, detail)
     }
+
+    /// The string the script sees from `function`.
+    pub(crate) fn message(&self, function: &str) -> String {
+        format!("{function}: {}: {}", self.kind.as_str(), self.detail)
+    }
 }
 
 impl From<mlua::Error> for HostError {
@@ -134,14 +136,43 @@ impl<'lua> Builder<'lua> {
                 .map_err(|error| HostError::invalid(argument_error(&error)))
                 .and_then(|args| call(lua, args))
                 .and_then(|value| value.into_lua(lua).map_err(HostError::from));
-            Ok(match outcome {
-                Ok(value) => (true, value),
-                Err(error) => {
-                    let message = format!("{name}: {}: {}", error.kind.as_str(), error.detail);
-                    (false, Value::String(lua.create_string(message)?))
-                }
-            })
+            reply(lua, name, outcome)
         })?;
+        self.raise.call(host)
+    }
+
+    /// Like [`Self::function`], for a host call that waits. `call` returns
+    /// an outer `Err` for a kill, which is raised as is.
+    pub(crate) fn async_function<A, R, F, Fut>(
+        &self,
+        name: &'static str,
+        call: F,
+    ) -> mlua::Result<Function>
+    where
+        A: FromLuaMulti + Send + 'static,
+        R: IntoLua,
+        F: Fn(Lua, A) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = mlua::Result<Result<R, HostError>>> + Send + 'static,
+    {
+        let call = std::sync::Arc::new(call);
+        let host = self
+            .lua
+            .create_async_function(move |lua, args: MultiValue| {
+                let call = std::sync::Arc::clone(&call);
+                async move {
+                    let args = match A::from_lua_multi(args, &lua) {
+                        Ok(args) => args,
+                        Err(error) => {
+                            let error = HostError::invalid(argument_error(&error));
+                            return reply(&lua, name, Err(error));
+                        }
+                    };
+                    let outcome = call(lua.clone(), args).await?;
+                    let outcome =
+                        outcome.and_then(|value| value.into_lua(&lua).map_err(HostError::from));
+                    reply(&lua, name, outcome)
+                }
+            })?;
         self.raise.call(host)
     }
 
@@ -156,6 +187,17 @@ impl<'lua> Builder<'lua> {
         }
         Ok(table)
     }
+}
+
+/// The `(ok, value)` pair [`RAISE`] expects.
+fn reply(lua: &Lua, name: &str, outcome: Result<Value, HostError>) -> mlua::Result<(bool, Value)> {
+    Ok(match outcome {
+        Ok(value) => (true, value),
+        Err(error) => (
+            false,
+            Value::String(lua.create_string(error.message(name))?),
+        ),
+    })
 }
 
 /// mlua's conversion message, without its `error converting …` framing
@@ -174,9 +216,10 @@ fn argument_error(error: &mlua::Error) -> String {
 }
 
 /// Installs the frozen `autumn` global. Must run before `sandbox(true)`.
-pub(crate) fn install(lua: &Lua, log: &CallLog) -> mlua::Result<()> {
+pub(crate) fn install(lua: &Lua, log: &CallLog, http: &std::sync::Arc<Http>) -> mlua::Result<()> {
     let build = Builder::new(lua)?;
     let autumn = lua.create_table()?;
+    autumn.raw_set("http", http.module(&build)?)?;
     autumn.raw_set("html", html::module(&build)?)?;
     autumn.raw_set("json", codec::json(&build)?)?;
     autumn.raw_set("url", codec::url(&build)?)?;
@@ -205,16 +248,25 @@ fn freeze(table: &Table) -> mlua::Result<()> {
 pub(crate) mod test_support {
     //! A VM with just the host API, for per-function tests.
 
+    use std::sync::Arc;
+
     use domain::ExtensionId;
     use mlua::{FromLuaMulti, Lua};
+    use net::{ExtensionHosts, GuardedClient};
 
-    use super::{CallLog, install};
+    use super::{CallLog, Http, Network, install};
 
-    /// A sandboxed VM with `autumn` installed, and its call log.
+    /// A sandboxed VM with `autumn` installed, and its call log. Its
+    /// network declares no hosts.
     pub(crate) fn vm() -> (Lua, CallLog) {
         let lua = Lua::new();
         let log = CallLog::new(ExtensionId::new("t"));
-        install(&lua, &log).unwrap();
+        let network = Network {
+            client: GuardedClient::new().unwrap(),
+            hosts: ExtensionHosts::new("t", Vec::new()),
+        };
+        let http = Http::new(network, Arc::default());
+        install(&lua, &log, &http).unwrap();
         lua.sandbox(true).unwrap();
         (lua, log)
     }

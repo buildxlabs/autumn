@@ -45,8 +45,9 @@ pub enum ExtensionError {
     /// The call made more HTTP requests than allowed (8).
     #[error("the extension made too many requests")]
     RequestLimit,
-    /// The outbound guard refused a request (#305).
-    #[error("blocked: {0}")]
+    /// The outbound guard refused a request and the script didn't catch it.
+    /// Holds the script's error, `autumn.http.fetch: blocked: <host> <reason>`.
+    #[error("{0}")]
     NetworkBlocked(String),
     /// The caller left mid-call, or the extension was stopped.
     #[error("the extension call was cancelled")]
