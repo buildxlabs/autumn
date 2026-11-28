@@ -894,8 +894,11 @@ impl AppShell {
     pub fn set_incoming_store(
         &mut self,
         store: Entity<ui_state::IncomingStore>,
-        _cx: &mut Context<'_, Self>,
+        cx: &mut Context<'_, Self>,
     ) {
+        // The file read (#252) and later review states land off the UI
+        // thread, so re-render the overlay when the store notifies.
+        cx.observe(&store, |_, _, cx| cx.notify()).detach();
         self.incoming = store;
     }
 
@@ -953,13 +956,6 @@ impl AppShell {
         Self::open_incoming_dialog(cx);
     }
 
-    /// Validates + starts the incoming pipeline for `.torrent` bytes (#209).
-    pub(crate) fn open_incoming_torrent_file(&mut self, bytes: &[u8], cx: &mut Context<'_, Self>) {
-        let incoming = self.incoming.clone();
-        incoming.update(cx, |store, cx| store.open_torrent_file(bytes, cx));
-        Self::open_incoming_dialog(cx);
-    }
-
     /// Opens a `.torrent`-filtered native file picker (`/droptorrent`, #209 Q1).
     pub(crate) fn drop_torrent(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let _ = window;
@@ -980,10 +976,11 @@ impl AppShell {
             if path.extension().and_then(|e| e.to_str()) != Some("torrent") {
                 return;
             }
-            let Ok(bytes) = std::fs::read(path) else {
+            let path = path.clone();
+            let Ok(incoming) = shell.update(cx, |shell, _| shell.incoming.clone()) else {
                 return;
             };
-            let _ = shell.update(cx, |shell, cx| shell.open_incoming_torrent_file(&bytes, cx));
+            incoming.update(cx, |store, cx| store.open_torrent_path(path, cx));
         }));
     }
 
@@ -1029,10 +1026,10 @@ impl AppShell {
         cx: &mut Context<'_, Self>,
     ) {
         for path in paths.paths() {
-            if path.extension().and_then(|e| e.to_str()) == Some("torrent")
-                && let Ok(bytes) = std::fs::read(path)
-            {
-                self.open_incoming_torrent_file(&bytes, cx);
+            if path.extension().and_then(|e| e.to_str()) == Some("torrent") {
+                let path = path.clone();
+                let incoming = self.incoming.clone();
+                incoming.update(cx, |store, cx| store.open_torrent_path(path, cx));
                 break;
             }
         }

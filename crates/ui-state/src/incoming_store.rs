@@ -4,15 +4,15 @@
 //! validation → add-for-metadata → match review → Stream or Add to Torrent
 //! List through the bridge. Rendering stays pure.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use domain::{InfoHash, MediaKind, TorrentLink};
-use engine::{EngineServices, IncomingSource, MatchCandidate, MatchReview};
+use engine::{EngineServices, IncomingError, IncomingSource, MatchCandidate, MatchReview};
 
 pub use engine::IncomingFile;
 use gpui_kit::{Context, Task};
 
-use crate::entry_store::call;
+use crate::{bridge, entry_store::call};
 
 /// Where an incoming torrent's match review stands.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -238,6 +238,28 @@ impl IncomingStore {
         }
     }
 
+    /// Reads a `.torrent` path off the UI thread (#252), then opens match
+    /// review. A read failure is rejected inline like invalid bytes are, so
+    /// it is never dropped silently. The task is held here, so a newer drop
+    /// cancels an older read still in flight.
+    pub fn open_torrent_path(&mut self, path: PathBuf, cx: &mut Context<'_, Self>) {
+        self.task = Some(cx.spawn(async move |store, cx| {
+            let read = cx
+                .update(|cx| bridge::run(cx, async move { std::fs::read(path) }))
+                .await;
+            let Ok(Ok(bytes)) = read else {
+                let _ = store.update(cx, |store, cx| {
+                    store.state =
+                        ReviewState::Rejected(IncomingError::UnreadableTorrent.to_string());
+                    store.review = None;
+                    cx.notify();
+                });
+                return;
+            };
+            let _ = store.update(cx, |store, cx| store.open_torrent_file(&bytes, cx));
+        }));
+    }
+
     /// Validates `.torrent` bytes (#209 Q6) then starts the pipeline;
     /// unreadable or non-video torrents are rejected inline.
     pub fn open_torrent_file(&mut self, bytes: &[u8], cx: &mut Context<'_, Self>) {
@@ -444,4 +466,45 @@ fn titles_and_names(name: Option<&str>, files: &[IncomingFile]) -> Vec<String> {
             .to_owned()
     }));
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use gpui_kit::{AppContext, TestAppContext};
+    use tokio::runtime::{Builder, Runtime};
+
+    use super::{IncomingStore, ReviewState};
+    use crate::bridge;
+
+    fn runtime() -> Runtime {
+        Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a test runtime")
+    }
+
+    #[gpui_kit::test]
+    async fn an_unreadable_torrent_path_shows_an_inline_error(cx: &mut TestAppContext) {
+        let runtime = runtime();
+        let _guard = runtime.enter();
+        cx.executor().allow_parking();
+        cx.update(|cx| bridge::init(cx, runtime.handle().clone()));
+
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let missing = dir.path().join("missing.torrent");
+        let store = cx.new(|_| IncomingStore::inert());
+        cx.update(|cx| store.update(cx, |store, cx| store.open_torrent_path(missing, cx)));
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        cx.run_until_parked();
+
+        assert_eq!(
+            store.read_with(cx, |store, _| store.state.clone()),
+            ReviewState::Rejected("could not read .torrent".to_owned()),
+            "the read failure must be shown inline like a validation error"
+        );
+    }
 }
