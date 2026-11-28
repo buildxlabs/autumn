@@ -11,6 +11,10 @@
 //! ```
 //!
 //! A stop during `Preparing` drops the request and the torrent.
+//!
+//! Auto-next to another torrent stream (#179 Q5) stays in the session: the
+//! new stream is held before the old one ends, so a shared batch torrent
+//! is never dropped, then it prepares and the player loads its new URL.
 
 use std::{
     sync::Arc,
@@ -25,9 +29,9 @@ use tracing::{debug, warn};
 
 use super::{
     PlayRequest, PlaybackError, PlaybackManager, PlaybackSession, SessionControl, SessionState,
-    lock,
+    Switch, lock,
 };
-use crate::TorrentStreams;
+use crate::{StreamOrigin, TorrentStreams};
 
 /// The `Preparing` report rate: 4 Hz (ARCHITECTURE §4).
 pub(super) const PREPARE_TICK: Duration = Duration::from_millis(250);
@@ -73,7 +77,9 @@ impl LiveStream {
         if let Ok(relay) = self.streams.relay().await {
             relay.revoke(&self.token).await;
         }
-        self.streams.end_stream(self.info_hash).await;
+        self.streams
+            .end_stream(self.info_hash, StreamOrigin::Playback)
+            .await;
     }
 }
 
@@ -134,7 +140,7 @@ impl PlaybackManager {
             cancel,
             settled,
         });
-        streams.track(info_hash);
+        streams.track(info_hash, StreamOrigin::Playback);
         let _ = self
             .events
             .send(AppEvent::PlaybackPreparing(Some(Preparing::new(
@@ -180,7 +186,7 @@ impl PlaybackManager {
             Some(Err(error)) => Err(error),
             None => {
                 debug!("torrent stream cancelled while preparing");
-                streams.end_stream(info_hash).await;
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
                 self.release_preparing(id, settle, None);
                 return;
             }
@@ -189,7 +195,7 @@ impl PlaybackManager {
             Ok(launched) => launched,
             Err(error) => {
                 warn!(%error, "the torrent stream could not start");
-                streams.end_stream(info_hash).await;
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
                 self.release_preparing(id, settle, Some((&request, error.to_string())));
                 return;
             }
@@ -291,8 +297,12 @@ impl PlaybackManager {
             }
         }
         if existing {
-            // A torrent kept seeding from an earlier stream: select this file.
+            // A torrent kept seeding from an earlier stream, or a preload:
+            // select this file, and undo a yield.
             session.update_only_files(info_hash, &[file_index]).await?;
+            if session.stats(info_hash).is_ok_and(|stats| stats.paused) {
+                session.resume(info_hash).await?;
+            }
         }
         {
             let ready = session.wait_ready(info_hash, file_index);
@@ -327,23 +337,7 @@ impl PlaybackManager {
         file_index: usize,
         ready: Ready,
     ) -> Result<(Box<dyn PlaybackSession>, LiveStream), PlaybackError> {
-        let relay = streams.relay().await?;
-        let buffering = relay.subscribe_buffering();
-        let spec = StreamSpec {
-            info_hash,
-            file_index,
-            len: ready.file.len,
-            disk_path: ready.file.path,
-        };
-        let (token, url) = relay.mint(spec, ready.reader).await;
-        let stream = LiveStream {
-            streams: Arc::clone(streams),
-            session: ready.session,
-            info_hash,
-            token,
-            buffering,
-            on_disk: false,
-        };
+        let (stream, url) = mint_stream(streams, info_hash, file_index, ready).await?;
         let mut launch = self.player_launch(request, Vec::new());
         launch.stream_url = Some(url);
         match self.launcher.launch(launch).await {
@@ -355,11 +349,103 @@ impl PlaybackManager {
         }
     }
 
+    /// Auto-next from the running stream to the torrent stream `next`
+    /// (#179 Q5). Its torrent is held for playback first, then the old
+    /// stream ends and a consumed preload lets go, so a batch torrent both
+    /// use keeps running. `Preparing` shows until the gate is met.
+    pub(super) async fn switch_stream(
+        &self,
+        session: &mut Box<dyn PlaybackSession>,
+        stream: &mut Option<LiveStream>,
+        stopped: &mut oneshot::Receiver<()>,
+        next: &PlayRequest,
+        info_hash: InfoHash,
+        file_index: usize,
+    ) -> Switch {
+        let Some(streams) = self.torrent.clone() else {
+            return Switch::Failed;
+        };
+        streams.track(info_hash, StreamOrigin::Playback);
+        if let Some(old) = stream.take() {
+            old.end().await;
+        }
+        let _ = self.events.send(AppEvent::PlaybackBuffering(false));
+        self.set_stream_buffering(false);
+        if let Some(fetch) = self.take_preload(next.media, next.episode) {
+            self.release_preload_hold(fetch).await;
+        }
+        self.publish_preparing(Preparing::new(next.media, next.episode));
+        let prepared = tokio::select! {
+            ready = self.prepare(&streams, next, info_hash, file_index) => Some(ready),
+            _ = &mut *stopped => None,
+        };
+        let _ = self.events.send(AppEvent::PlaybackPreparing(None));
+        let ready = match prepared {
+            Some(Ok(ready)) => ready,
+            Some(Err(error)) => {
+                warn!(%error, "the next torrent stream could not start");
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
+                return Switch::Failed;
+            }
+            None => {
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
+                return Switch::Stopped;
+            }
+        };
+        let (live, url) = match mint_stream(&streams, info_hash, file_index, ready).await {
+            Ok(minted) => minted,
+            Err(error) => {
+                warn!(%error, "the next torrent stream has no relay URL");
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
+                return Switch::Failed;
+            }
+        };
+        // mpv's `loadfile` takes the URL where it takes a path.
+        let opened = self
+            .open_next(
+                session,
+                next,
+                std::path::Path::new(&url),
+                Vec::new(),
+                Some(url.clone()),
+            )
+            .await;
+        *stream = Some(live);
+        if opened { Switch::Done } else { Switch::Failed }
+    }
+
     fn publish_preparing(&self, preparing: Preparing) {
         let _ = self
             .events
             .send(AppEvent::PlaybackPreparing(Some(preparing)));
     }
+}
+
+/// Mints `ready`'s relay URL: the session's stream of `info_hash`.
+async fn mint_stream(
+    streams: &Arc<TorrentStreams>,
+    info_hash: InfoHash,
+    file_index: usize,
+    ready: Ready,
+) -> Result<(LiveStream, String), PlaybackError> {
+    let relay = streams.relay().await?;
+    let buffering = relay.subscribe_buffering();
+    let spec = StreamSpec {
+        info_hash,
+        file_index,
+        len: ready.file.len,
+        disk_path: ready.file.path,
+    };
+    let (token, url) = relay.mint(spec, ready.reader).await;
+    let stream = LiveStream {
+        streams: Arc::clone(streams),
+        session: ready.session,
+        info_hash,
+        token,
+        buffering,
+        on_disk: false,
+    };
+    Ok((stream, url))
 }
 
 impl LiveStream {

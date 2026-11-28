@@ -124,6 +124,31 @@ impl AutoNext {
     }
 }
 
+/// Auto-next has no release for the next episode: its preload's search
+/// found nothing (#208 Q4). The HUD offers to choose a release by hand.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct NoRelease {
+    /// The media of the episode.
+    pub media: MediaId,
+    /// The episode that has no release.
+    pub episode: u32,
+    /// Why, for the HUD: the auto-select failure.
+    pub reason: String,
+}
+
+impl NoRelease {
+    /// `episode` of `media` has no release, because of `reason`.
+    #[must_use]
+    pub fn new(media: MediaId, episode: u32, reason: impl Into<String>) -> Self {
+        Self {
+            media,
+            episode,
+            reason: reason.into(),
+        }
+    }
+}
+
 /// Whether to pause or resume the active player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

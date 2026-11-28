@@ -12,7 +12,10 @@
 //! cannot replace a file.
 //!
 //! A torrent source first goes through the `Preparing` phase (#217, #179):
-//! see the `stream` submodule.
+//! see the `stream` submodule. Halfway through a torrent stream the next
+//! episode is preloaded (#224, #208): see the `preload` submodule. Auto-next
+//! for a torrent stream tries the library, then the same batch torrent,
+//! then the preload (#179 Q5).
 
 use std::{
     ffi::OsStr,
@@ -23,7 +26,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc, Mutex, MutexGuard,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, SystemTime},
 };
@@ -45,10 +48,12 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, warn};
 
-use crate::{BoxFuture, TorrentStreams, chapters, library};
+use crate::{AutoSelectRequest, AutoSelector, BoxFuture, TorrentStreams, chapters, library};
 
+mod preload;
 mod stream;
 
+pub use preload::{AniZipAiring, EpisodeAiring, Preloaded};
 use stream::LiveStream;
 
 /// How long a saved position is worth resuming. Home uses the same cutoff
@@ -117,6 +122,9 @@ pub struct PlayRequest {
     pub continuity_key: u32,
     /// The kind of file; only episodes sync progress and offer auto-next.
     pub kind: PlaybackFileKind,
+    /// The auto-select search that found this episode's torrent stream; a
+    /// preload searches one episode on (#208 Q4).
+    pub auto_select: Option<AutoSelectRequest>,
 }
 
 impl PlayRequest {
@@ -130,6 +138,7 @@ impl PlayRequest {
             details: None,
             continuity_key: episode,
             kind: PlaybackFileKind::Regular,
+            auto_select: None,
         }
     }
 
@@ -164,6 +173,7 @@ impl PlayRequest {
             details: None,
             continuity_key: kind.continuity_key(number),
             kind,
+            auto_select: None,
         }
     }
 
@@ -171,6 +181,13 @@ impl PlayRequest {
     #[must_use]
     pub fn with_details(mut self, details: PlaybackDetails) -> Self {
         self.details = Some(details);
+        self
+    }
+
+    /// Attaches the auto-select search that found this episode's stream.
+    #[must_use]
+    pub fn with_auto_select(mut self, request: AutoSelectRequest) -> Self {
+        self.auto_select = Some(request);
         self
     }
 }
@@ -641,6 +658,10 @@ impl SessionControl {
 }
 
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent per-episode flags, each set once by a different event"
+)]
 struct SessionState {
     resume: Option<db::Continuity>,
     duration: Option<f64>,
@@ -651,6 +672,8 @@ struct SessionState {
     eof: bool,
     /// Whether the episode is over and the next one was offered.
     end: EpisodeEnd,
+    /// The next episode's preload was started (#208 Q3: once per session).
+    preload_started: bool,
 }
 
 /// How far the episode is from offering the next one.
@@ -674,6 +697,7 @@ impl SessionState {
             watched: false,
             eof: false,
             end: EpisodeEnd::Playing,
+            preload_started: false,
         }
     }
 
@@ -756,6 +780,19 @@ pub struct PlaybackManager {
     prepare_tick: Duration,
     /// How long without a peer before "No peers found" (#179 Q2).
     no_peers_after: Duration,
+    /// The `Preload next episode` setting (#208 Q1).
+    preload_enabled: AtomicBool,
+    /// Auto-select and air dates; `None` preloads nothing.
+    preload_deps: Option<preload::PreloadDeps>,
+    /// The one preload (#208 Q7).
+    preload: Mutex<Option<preload::Preload>>,
+    /// Whether the current torrent stream is buffering, for the yield.
+    buffering: tokio::sync::watch::Sender<bool>,
+    /// How long the current stream must go without buffering before a
+    /// yielded preload resumes: 10 s.
+    preload_resume_after: Duration,
+    /// How long a preload is kept after the player closes: 10 min.
+    preload_grace: Duration,
 }
 
 impl PlaybackManager {
@@ -822,6 +859,12 @@ impl PlaybackManager {
             torrent: None,
             prepare_tick: stream::PREPARE_TICK,
             no_peers_after: stream::NO_PEERS_AFTER,
+            preload_enabled: AtomicBool::new(settings.preload_next),
+            preload_deps: None,
+            preload: Mutex::new(None),
+            buffering: tokio::sync::watch::Sender::new(false),
+            preload_resume_after: preload::RESUME_AFTER,
+            preload_grace: preload::GRACE,
         }
     }
 
@@ -829,6 +872,23 @@ impl PlaybackManager {
     #[must_use]
     pub fn with_torrent(mut self, streams: Arc<TorrentStreams>) -> Self {
         self.torrent = Some(streams);
+        self
+    }
+
+    /// Preloads the next episode with `selector`, `airing` and the
+    /// auto-select `profiles` (#224).
+    #[must_use]
+    pub fn with_preload(
+        mut self,
+        selector: Arc<std::sync::RwLock<AutoSelector>>,
+        airing: Arc<dyn EpisodeAiring>,
+        profiles: settings::AutoSelectSettings,
+    ) -> Self {
+        self.preload_deps = Some(preload::PreloadDeps {
+            selector,
+            airing,
+            profiles: Mutex::new(profiles),
+        });
         self
     }
 
@@ -843,9 +903,32 @@ impl PlaybackManager {
     ///
     /// Returns an error when the previous position or the player cannot be
     /// opened. A failed launch leaves no session running.
-    pub async fn play(self: &Arc<Self>, request: PlayRequest) -> Result<(), PlaybackError> {
+    pub async fn play(self: &Arc<Self>, mut request: PlayRequest) -> Result<(), PlaybackError> {
         let _command = self.commands.lock().await;
+        // A play of the preloaded episode consumes it; any other drops it
+        // (#208 Q7). A library file still wins over the preload.
+        let consumed = if matches!(request.source, StreamSource::Torrent { .. }) {
+            self.take_preload(request.media, request.episode)
+        } else {
+            None
+        };
+        if consumed.is_none() {
+            self.drop_preload().await;
+        }
         self.stop_inner().await;
+        if let Some(fetch) = consumed {
+            request.source = fetch.source();
+        }
+        let result = self.play_stopped(request).await;
+        if let Some(fetch) = consumed {
+            // Playback holds the torrent now, so this never drops it.
+            self.release_preload_hold(fetch).await;
+        }
+        result
+    }
+
+    /// The body of [`Self::play`] once the previous session is stopped.
+    async fn play_stopped(self: &Arc<Self>, request: PlayRequest) -> Result<(), PlaybackError> {
         let resume = self
             .db
             .continuity()
@@ -931,9 +1014,11 @@ impl PlaybackManager {
         }
     }
 
-    /// Stops the active session and waits for its final position to be saved.
+    /// Stops the active session and waits for its final position to be
+    /// saved. The preload is dropped too (#208 Q7).
     pub async fn stop(&self) {
         let _command = self.commands.lock().await;
+        self.drop_preload().await;
         self.stop_inner().await;
     }
 
@@ -1003,6 +1088,10 @@ impl PlaybackManager {
         clippy::too_many_arguments,
         reason = "the session loop owns its player, stop signal, HUD commands, completion signal and torrent stream"
     )]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one select loop; each arm is already a call"
+    )]
     async fn drive(
         self: &Arc<Self>,
         id: u64,
@@ -1021,6 +1110,8 @@ impl PlaybackManager {
         let mut tick = tokio::time::interval(self.save_interval);
         tick.tick().await; // The first tick is immediate; nothing to save yet.
         let mut unexpected = false;
+        // The player went away on its own, rather than a Stop or a new play.
+        let mut closed = false;
         let mut countdown: Option<Countdown> = None;
         loop {
             enum Step {
@@ -1047,10 +1138,15 @@ impl PlaybackManager {
             let play_next = match step {
                 Step::Event(None) => {
                     unexpected = !state.eof;
+                    closed = true;
                     break;
                 }
                 Step::Stop => break,
                 Step::Control(control) => {
+                    if matches!(control, Control::CancelAutoNext) && countdown.is_some() {
+                        // Kept for the grace period (#208 Q7).
+                        self.start_grace();
+                    }
                     self.control(
                         session.as_ref(),
                         &mut state,
@@ -1064,6 +1160,7 @@ impl PlaybackManager {
                 Step::Event(Some(event)) => {
                     if matches!(event, PlayerEvent::Exited) {
                         unexpected = !state.eof;
+                        closed = true;
                     }
                     if !self
                         .handle(
@@ -1077,6 +1174,7 @@ impl PlaybackManager {
                     {
                         break;
                     }
+                    self.preload_when_halfway(&mut state, &request).await;
                     None
                 }
                 Step::Tick => {
@@ -1085,6 +1183,7 @@ impl PlaybackManager {
                 }
                 Step::Buffering(stalled) => {
                     let _ = self.events.send(AppEvent::PlaybackBuffering(stalled));
+                    self.set_stream_buffering(stalled);
                     None
                 }
                 Step::Countdown => self.count_down(&mut countdown),
@@ -1093,19 +1192,26 @@ impl PlaybackManager {
                 state.end = EpisodeEnd::Offered;
                 countdown = self.offer_next(&request).await;
             }
-            if let Some(next) = play_next
-                && !self
+            if let Some(next) = play_next {
+                match self
                     .switch_to(
                         &mut session,
                         &mut state,
                         &mut chapter_state,
                         &mut request,
+                        &mut stream,
+                        &mut stopped,
                         next,
                     )
                     .await
-            {
-                unexpected = true;
-                break;
+                {
+                    Switch::Done => {}
+                    Switch::Failed => {
+                        unexpected = true;
+                        break;
+                    }
+                    Switch::Stopped => break,
+                }
             }
         }
         if self
@@ -1114,7 +1220,29 @@ impl PlaybackManager {
         {
             let _ = self.events.send(AppEvent::PlaybackStopped { unexpected });
         }
+        if closed {
+            self.start_grace();
+        }
         let _ = done.send(());
+    }
+
+    /// Starts the next episode's preload once the position reaches half the
+    /// duration; a seek past it counts (#208 Q3).
+    async fn preload_when_halfway(
+        self: &Arc<Self>,
+        state: &mut SessionState,
+        request: &PlayRequest,
+    ) {
+        if state.preload_started {
+            return;
+        }
+        let Some(duration) = state.duration else {
+            return;
+        };
+        if state.position >= preload::PRELOAD_AT * duration {
+            state.preload_started = true;
+            self.start_preload(request).await;
+        }
     }
 
     /// Saves the position, and for a torrent stream moves the relay to the
@@ -1155,7 +1283,9 @@ impl PlaybackManager {
         if let Some(stream) = stream {
             stream.end().await;
             let _ = self.events.send(AppEvent::PlaybackBuffering(false));
+            self.set_stream_buffering(false);
         }
+        let _ = self.events.send(AppEvent::PlaybackNoRelease(None));
         let is_current = lock(&self.current)
             .as_ref()
             .is_some_and(|control| control.id() == id);
@@ -1360,16 +1490,18 @@ impl PlaybackManager {
         }
     }
 
-    /// Looks up the next regular episode in the library and, when auto-next
-    /// is on and it exists, starts its countdown.
+    /// Looks up the next regular episode and, when auto-next is on and it
+    /// exists, starts its countdown: the library first, then for a torrent
+    /// stream the same batch, then the preload (#179 Q5).
     async fn offer_next(&self, request: &PlayRequest) -> Option<Countdown> {
-        // Auto-next for a torrent stream (library, then the same batch) is
-        // #224.
-        if !request.kind.is_regular() || !matches!(request.source, StreamSource::Local { .. }) {
+        if !request.kind.is_regular() {
             return None;
         }
         let seconds = self.auto_next?;
-        let next = self.next_episode(request).await?;
+        let next = match self.next_episode(request).await {
+            Some(next) => next,
+            None => self.next_stream(request).await?,
+        };
         let step = self.countdown_step;
         let mut countdown = Countdown {
             next,
@@ -1400,17 +1532,47 @@ impl PlaybackManager {
                 && !file.ignored
                 && !file.shelved
         })?;
-        let details = request.details.as_ref().map(|details| {
-            PlaybackDetails::new(details.media_title.clone(), None, details.poster.clone())
-        });
-        Some(PlayRequest {
-            media: request.media,
+        Some(next_request(
+            request,
             episode,
-            source: StreamSource::local(file.path),
-            details,
-            continuity_key: episode,
-            kind: PlaybackFileKind::Regular,
-        })
+            StreamSource::local(file.path),
+        ))
+    }
+
+    /// The torrent stream of the episode after a torrent stream: the same
+    /// batch torrent, else the preload. A failed preload is shown now, at
+    /// episode end, and nothing is offered (#208 Q4).
+    async fn next_stream(&self, request: &PlayRequest) -> Option<PlayRequest> {
+        let StreamSource::Torrent {
+            info_hash,
+            file_index,
+        } = request.source
+        else {
+            return None;
+        };
+        let episode = request.episode.checked_add(1)?;
+        let outcome = self.preload_outcome(request.media, episode);
+        if let Some(preload::Outcome::Ready(fetch)) = outcome {
+            return Some(next_request(request, episode, fetch.source()));
+        }
+        let session = self.torrent.as_ref()?.session().await.ok()?;
+        if let Some(next) = preload::batch_file(&session, info_hash, file_index, request).await {
+            return Some(next_request(
+                request,
+                episode,
+                StreamSource::torrent(info_hash, next),
+            ));
+        }
+        if let Some(preload::Outcome::Failed(reason)) = outcome {
+            let _ = self
+                .events
+                .send(AppEvent::PlaybackNoRelease(Some(domain::NoRelease::new(
+                    request.media,
+                    episode,
+                    reason,
+                ))));
+        }
+        None
     }
 
     fn publish_auto_next(&self, countdown: Option<&Countdown>) {
@@ -1425,21 +1587,24 @@ impl PlaybackManager {
     }
 
     /// Moves the session to `next`: the player replaces its file when it
-    /// can, otherwise it is relaunched. Returns `false` when no player is
-    /// left to drive.
+    /// can, otherwise it is relaunched. A torrent stream first goes through
+    /// `Preparing`, which a stop interrupts.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the switch replaces the session loop's player, state, chapters, request and stream"
+    )]
     async fn switch_to(
         &self,
         session: &mut Box<dyn PlaybackSession>,
         state: &mut SessionState,
         chapter_state: &mut ChapterState,
         request: &mut PlayRequest,
+        stream: &mut Option<LiveStream>,
+        stopped: &mut oneshot::Receiver<()>,
         next: PlayRequest,
-    ) -> bool {
+    ) -> Switch {
         self.publish_auto_next(None);
         self.mark_watched(state, request).await;
-        let StreamSource::Local { path } = &next.source else {
-            return false;
-        };
         let resume = match self
             .db
             .continuity()
@@ -1452,8 +1617,56 @@ impl PlaybackManager {
                 None
             }
         };
-        let container_chapters = self.container_chapters(path).await;
-        let replaced = match session.load_file(path).await {
+        let container_chapters = match &next.source {
+            StreamSource::Local { path } => {
+                // A library file needs no relay: the old stream ends.
+                if let Some(old) = stream.take() {
+                    old.end().await;
+                    self.set_stream_buffering(false);
+                }
+                let container_chapters = self.container_chapters(path).await;
+                if !self
+                    .open_next(session, &next, path, sidecar_subtitles(path), None)
+                    .await
+                {
+                    return Switch::Failed;
+                }
+                container_chapters
+            }
+            StreamSource::Torrent {
+                info_hash,
+                file_index,
+            } => {
+                match self
+                    .switch_stream(session, stream, stopped, &next, *info_hash, *file_index)
+                    .await
+                {
+                    Switch::Done => Vec::new(),
+                    other => return other,
+                }
+            }
+            _ => return Switch::Failed,
+        };
+        *state = SessionState::new(resume);
+        *chapter_state = ChapterState::new(container_chapters);
+        *request = next;
+        self.publish_chapters(chapter_state);
+        self.publish(state, request);
+        Switch::Done
+    }
+
+    /// Opens `next` at `file` in the running player, or relaunches it on
+    /// `next` (with `stream_url` for a torrent stream). Returns `false` when
+    /// no player is left to drive.
+    async fn open_next(
+        &self,
+        session: &mut Box<dyn PlaybackSession>,
+        next: &PlayRequest,
+        file: &Path,
+        subtitles: Vec<PathBuf>,
+        stream_url: Option<String>,
+    ) -> bool {
+        let replaced = match session.load_file(file).await {
             Ok(replaced) => replaced,
             Err(error) => {
                 debug!(%error, "the player could not replace its file; relaunching");
@@ -1465,28 +1678,24 @@ impl PlaybackManager {
         if replaced && let Err(error) = session.set_playback_state(PlaybackControl::Resume).await {
             debug!(%error, "could not resume the next episode");
         }
-        if !replaced {
-            if let Err(error) = session.quit().await {
-                debug!(%error, "player quit before the next episode");
+        if replaced {
+            return true;
+        }
+        if let Err(error) = session.quit().await {
+            debug!(%error, "player quit before the next episode");
+        }
+        let mut launch = self.player_launch(next, subtitles);
+        launch.stream_url = stream_url;
+        match self.launcher.launch(launch).await {
+            Ok(fresh) => {
+                *session = fresh;
+                true
             }
-            match self
-                .launcher
-                .launch(self.player_launch(&next, sidecar_subtitles(path)))
-                .await
-            {
-                Ok(fresh) => *session = fresh,
-                Err(error) => {
-                    warn!(%error, "could not launch the next episode");
-                    return false;
-                }
+            Err(error) => {
+                warn!(%error, "could not launch the next episode");
+                false
             }
         }
-        *state = SessionState::new(resume);
-        *chapter_state = ChapterState::new(container_chapters);
-        *request = next;
-        self.publish_chapters(chapter_state);
-        self.publish(state, request);
-        true
     }
 
     /// Auto-skip only when the position is inside a matching chapter.
@@ -1665,6 +1874,34 @@ impl PlaybackManager {
             .await
             .ok()
             .and_then(|load| load.cached.value.summary.episodes)
+    }
+}
+
+/// How a switch to the next episode ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Switch {
+    /// The next episode plays.
+    Done,
+    /// No player is left to drive.
+    Failed,
+    /// A stop arrived while the next stream prepared.
+    Stopped,
+}
+
+/// The play request for `episode`, the one after `request`, from `source`.
+/// It keeps the media's HUD labels and searches one episode on.
+fn next_request(request: &PlayRequest, episode: u32, source: StreamSource) -> PlayRequest {
+    let details = request.details.as_ref().map(|details| {
+        PlaybackDetails::new(details.media_title.clone(), None, details.poster.clone())
+    });
+    PlayRequest {
+        media: request.media,
+        episode,
+        source,
+        details,
+        continuity_key: episode,
+        kind: PlaybackFileKind::Regular,
+        auto_select: preload::next_search(request),
     }
 }
 

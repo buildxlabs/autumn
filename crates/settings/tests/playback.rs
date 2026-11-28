@@ -16,6 +16,7 @@ fn playback() -> PlaybackSettings {
         resume: false,
         auto_next: false,
         auto_next_seconds: 3,
+        preload_next: false,
         skip_op_ed: false,
         opening_patterns: vec!["Opening".to_owned()],
         ending_patterns: vec!["Ending".to_owned()],
@@ -32,6 +33,17 @@ fn defaults_are_phase_two_policy() {
     assert!(settings.resume, "resume where I stopped is on by default");
     assert_eq!(settings.mpchc_host, "127.0.0.1");
     assert_eq!(settings.mpchc_port, 13579);
+    assert!(
+        settings.preload_next,
+        "#208: Preload next episode is on by default"
+    );
+}
+
+#[test]
+fn a_row_saved_before_the_preload_toggle_existed_keeps_it_on() {
+    let old: PlaybackSettings = serde_json::from_str(r#"{"auto_next": true}"#).unwrap();
+
+    assert!(old.preload_next);
 }
 
 #[test]

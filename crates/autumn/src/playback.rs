@@ -4,9 +4,10 @@
 //! runtime and the `player` crate, so they live in `autumn` and reach the
 //! screen as plain callbacks. The screen never names `player` or the engine.
 
-use std::{cell::RefCell, path::Path, path::PathBuf};
+use std::{cell::RefCell, path::Path, path::PathBuf, sync::Arc};
 
 use db::Db;
+use engine::PlaybackManager;
 use gpui_kit::App;
 use player::{
     Error as PlayerError, InstalledPlayer, LaunchCommand, LaunchOptions, PlayerKind, SearchEnv,
@@ -69,7 +70,14 @@ fn map_error(error: PlayerError) -> PlaybackTestError {
 }
 
 /// Builds the callbacks the Playback tab calls through the Tokio bridge.
-pub(crate) fn services(db: Db, settings: Settings, cache_dir: &Path) -> PlaybackServices {
+///
+/// A save also turns the next-episode preload on or off live (#224).
+pub(crate) fn services(
+    db: Db,
+    settings: Settings,
+    cache_dir: &Path,
+    manager: Arc<PlaybackManager>,
+) -> PlaybackServices {
     let current = RefCell::new(settings);
     let save = move |playback: &PlaybackSettings, cx: &mut App| {
         let rows = {
@@ -87,7 +95,9 @@ pub(crate) fn services(db: Db, settings: Settings, cache_dir: &Path) -> Playback
             }
         };
         let db = db.clone();
+        let (manager, preload) = (Arc::clone(&manager), playback.preload_next);
         let write = ui_state::bridge::run(cx, async move {
+            manager.set_preload(preload).await;
             if rows.is_empty() {
                 return Ok(());
             }

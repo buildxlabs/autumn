@@ -212,6 +212,9 @@ pub struct PlaybackSettings {
     pub auto_next: bool,
     /// Seconds to wait before starting the next episode.
     pub auto_next_seconds: u8,
+    /// Fetch the next episode's torrent stream while a torrent stream plays,
+    /// so auto-next can start it without waiting (#208). Needs auto-next.
+    pub preload_next: bool,
     /// Skip opening and ending chapters automatically.
     pub skip_op_ed: bool,
     /// Chapter titles treated as an opening, matched case-insensitively.
@@ -231,6 +234,7 @@ impl Default for PlaybackSettings {
             resume: true,
             auto_next: true,
             auto_next_seconds: 5,
+            preload_next: true,
             skip_op_ed: true,
             opening_patterns: vec!["^OP$".to_owned(), "Opening".to_owned(), "Intro".to_owned()],
             ending_patterns: vec!["^ED$".to_owned(), "Ending".to_owned(), "Credits".to_owned()],

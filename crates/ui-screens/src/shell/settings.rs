@@ -1189,6 +1189,26 @@ impl AppShell {
                         ),
                     ),
                     SettingItem::new(
+                        "Preload next episode",
+                        SettingField::switch(
+                            {
+                                let shell = cx.entity();
+                                move |cx: &gpui_kit::App| shell.read(cx).playback.preload_next
+                            },
+                            {
+                                let shell = cx.entity();
+                                move |value: bool, cx: &mut gpui_kit::App| {
+                                    shell.update(cx, |shell, cx| {
+                                        shell.update_playback(
+                                            |settings| settings.preload_next = value,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ),
+                    ),
+                    SettingItem::new(
                         "Countdown seconds",
                         SettingField::input(
                             {

@@ -174,6 +174,7 @@ fn main() -> ExitCode {
         engine.db().clone(),
         engine.settings().clone(),
         started.paths.cache_dir(),
+        Arc::clone(engine.playback()),
     );
     let general_services = general::saver(engine.db().clone(), engine.settings().clone());
     let auto_select_settings = engine.settings().auto_select.clone();

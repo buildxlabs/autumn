@@ -19,8 +19,8 @@ pub use info_hash::{InfoHash, InfoHashError};
 pub use list_entry::{AdvancedScores, ListEntry, ListStatus};
 pub use media::{ExternalId, MediaId, MediaKind};
 pub use playback::{
-    AutoNext, ChapterKind, PieceProgress, PlaybackChapter, PlaybackControl, PlaybackDetails,
-    PlaybackState, PrepareStage, Preparing, StreamSource,
+    AutoNext, ChapterKind, NoRelease, PieceProgress, PlaybackChapter, PlaybackControl,
+    PlaybackDetails, PlaybackState, PrepareStage, Preparing, StreamSource,
 };
 pub use score::{Score, ScoreError};
 pub use transfer::{
@@ -97,6 +97,9 @@ pub enum AppEvent {
     /// The next-episode countdown changed, or `None` when it ended or was
     /// cancelled.
     PlaybackAutoNext(Option<AutoNext>),
+    /// The episode ended and auto-next found no release for the next one,
+    /// or `None` when that notice no longer applies.
+    PlaybackNoRelease(Option<NoRelease>),
     /// The session ended, so the HUD has nothing to show.
     PlaybackStopped {
         /// Whether the player quit on its own rather than through a command.
