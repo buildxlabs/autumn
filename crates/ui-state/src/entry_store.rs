@@ -135,7 +135,10 @@ impl EntryStore {
     }
 
     /// The AniList id of the Entry currently shown, if one is open.
-    fn current_id(&self) -> Option<u32> {
+    ///
+    /// The buffer overlay's "Choose another release" uses it to return to
+    /// that Entry's torrent tab (#219).
+    pub fn current_id(&self) -> Option<u32> {
         match &self.state {
             EntryState::Ready { detail, .. } => Some(detail.summary.anilist_id),
             _ => None,

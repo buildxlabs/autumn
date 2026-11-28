@@ -21,9 +21,10 @@ use gpui_kit::{
 };
 use metadata::{AniList, CatalogCache};
 use ui_components::{
-    ACCOUNT_ID, AutoNextView, ChapterMark, LruImageCache, PLAYBACK_HUD_HEIGHT,
-    POSTER_IMAGE_CAPACITY, PlaybackHud, PlaybackHudActions, PlaybackHudView, PosterGrid,
-    RAIL_WIDTH, Rail, RailExpansion, RailItem, SkipKind,
+    ACCOUNT_ID, AutoNextView, BufferOverlay, BufferOverlayActions, BufferOverlayView, BufferStage,
+    BufferingView, ChapterMark, LruImageCache, PLAYBACK_HUD_HEIGHT, POSTER_IMAGE_CAPACITY,
+    PieceProgressView, PlaybackHud, PlaybackHudActions, PlaybackHudView, PosterGrid, RAIL_WIDTH,
+    Rail, RailExpansion, RailItem, SkipKind,
     fetch_status::{
         FetchError, error_card, fetch_loader, offline_banner, offline_empty, rate_limit_chip,
     },
@@ -1129,10 +1130,25 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Option<gpui_kit::AnyElement> {
-        let (state, details, chapters, skip, auto_next, closed) = {
+        let (
+            state,
+            preparing,
+            preparing_elapsed,
+            buffering,
+            buffering_stats,
+            details,
+            chapters,
+            skip,
+            auto_next,
+            closed,
+        ) = {
             let playback = self.playback_store.read(cx);
             (
                 playback.state(),
+                playback.preparing(),
+                playback.preparing_elapsed(),
+                playback.buffering(),
+                playback.buffering_stats(),
                 playback.details().cloned(),
                 playback.chapters().to_vec(),
                 playback.skip_kind(),
@@ -1140,6 +1156,78 @@ impl AppShell {
                 playback.closed(),
             )
         };
+        let poster = details
+            .as_ref()
+            .and_then(|details| details.poster.as_deref())
+            .map(|url| Resource::Uri(url.to_owned().into()));
+        let media = state.map_or(preparing.map(|preparing| preparing.media), |state| {
+            Some(state.media)
+        });
+        let media_title = details.as_ref().map_or_else(
+            || format!("Media {}", media.map_or(0, domain::MediaId::get)),
+            |details| details.media_title.clone(),
+        );
+        let episode_title = details
+            .as_ref()
+            .and_then(|details| details.episode_title.clone());
+
+        // A torrent stream renders in this same slot while it prepares, on
+        // any screen; the app stays usable (#182 Q8).
+        if let Some(preparing) = preparing {
+            let view = BufferOverlayView {
+                poster,
+                media_title: media_title.into(),
+                episode: Some(preparing.episode),
+                episode_title: episode_title.map(Into::into),
+                stage: match preparing.stage {
+                    domain::PrepareStage::Peers => BufferStage::Peers,
+                    domain::PrepareStage::Buffering => BufferStage::Buffering,
+                    _ => BufferStage::Metadata,
+                },
+                head: PieceProgressView {
+                    done: preparing.head.done,
+                    total: preparing.head.total,
+                },
+                tail: PieceProgressView {
+                    done: preparing.tail.done,
+                    total: preparing.tail.total,
+                },
+                peers: preparing.peers,
+                download_bps: preparing.download_bps,
+                elapsed: preparing_elapsed,
+                no_peers: preparing.no_peers,
+            };
+            let shell = self.shell_handle.clone();
+            let actions = BufferOverlayActions::new()
+                .on_cancel({
+                    let store = self.playback_store.clone();
+                    move |_, cx| store.update(cx, PlaybackStore::stop)
+                })
+                .on_choose_another(move |_, cx| {
+                    let _ = shell.update(cx, |shell, cx| {
+                        shell.playback_store.update(cx, PlaybackStore::stop);
+                        let id = shell.entry_store.read(cx).current_id().or_else(|| {
+                            match shell.route() {
+                                Route::Entry { id, .. } => Some(id),
+                                _ => None,
+                            }
+                        });
+                        // The release-list sheet (#221) and the Torrents tab
+                        // (#220) are not here yet: open the plain Entry.
+                        if let Some(id) = id {
+                            shell.navigate(Route::Entry { id, tab: None }, cx);
+                        }
+                    });
+                });
+            return Some(
+                div()
+                    .id("playback-hud")
+                    .test_support()
+                    .child(BufferOverlay::new("playback-hud-bar", view, actions))
+                    .into_any_element(),
+            );
+        }
+
         let Some(state) = state else {
             return closed.then(|| {
                 div()
@@ -1158,24 +1246,11 @@ impl AppShell {
             });
         };
 
-        let poster = details
-            .as_ref()
-            .and_then(|details| details.poster.as_deref())
-            .map(|url| Resource::Uri(url.to_owned().into()));
         let view = PlaybackHudView {
             poster,
-            media_title: details
-                .as_ref()
-                .map_or_else(
-                    || format!("Media {}", state.media.get()),
-                    |d| d.media_title.clone(),
-                )
-                .into(),
+            media_title: media_title.into(),
             episode: Some(state.episode),
-            episode_title: details
-                .as_ref()
-                .and_then(|details| details.episode_title.clone())
-                .map(Into::into),
+            episode_title: episode_title.map(Into::into),
             player: self.player_name().into(),
             position: state.position,
             duration: state.duration,
@@ -1193,6 +1268,13 @@ impl AppShell {
             auto_next: auto_next.map(|next| AutoNextView {
                 episode: next.episode,
                 remaining: next.remaining,
+            }),
+            buffering: buffering.then(|| {
+                let (peers, download_bps) = buffering_stats;
+                BufferingView {
+                    peers,
+                    download_bps,
+                }
             }),
         };
         let store = self.playback_store.clone();
@@ -1857,7 +1939,8 @@ mod tests {
     };
     use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
     use domain::{
-        AniListAccountState, AniListWait, AppEvent, MediaId, PlaybackState, SectionFetch,
+        AniListAccountState, AniListWait, AppEvent, MediaId, PieceProgress, PlaybackState,
+        PrepareStage, Preparing, SectionFetch,
     };
     use gpui_kit::{
         App, AppContext, Bounds, Entity, MouseButton, NavigationDirection, Pixels, Point,
@@ -2516,6 +2599,90 @@ mod tests {
             assert!(
                 window.try_find("playback-hud").is_none(),
                 "the HUD is hidden"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_buffer_overlay_renders_in_the_hud_slot_while_preparing(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .expect("a test runtime");
+        cx.update(|cx| ui_state::bridge::init(cx, runtime.handle().clone()));
+
+        let services = PlaybackServices::default();
+        let calls = services.clone();
+        let shell = Shell::open_with_playback(cx, services);
+        let sender = shell.events(cx);
+        let mut preparing = Preparing::new(MediaId::new(7), 3);
+        preparing.stage = PrepareStage::Buffering;
+        preparing.peers = 6;
+        preparing.download_bps = 2_000_000;
+        preparing.head = PieceProgress::new(3, 4);
+        preparing.tail = PieceProgress::new(2, 2);
+        preparing.no_peers = true;
+
+        sender
+            .send(AppEvent::PlaybackPreparing(Some(preparing)))
+            .unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                window.try_find("playback-hud").is_some(),
+                "the overlay takes the playback bar slot"
+            );
+            assert!(has_text(window, "No peers found. Try another release."));
+            assert!(has_text(window, "6 peers · 2.0 MB/s"));
+            assert!(has_text(window, "Head 8 MiB 3/4"));
+        });
+
+        shell.click(cx, "buffer-overlay-cancel");
+        cx.run_until_parked();
+        assert_eq!(
+            calls.calls(),
+            [PlaybackCall::Stop],
+            "Cancel drops the preparing stream"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_buffering_chip_shows_during_a_stalled_read(cx: &mut TestAppContext) {
+        let shell = Shell::open_with_playback(cx, PlaybackServices::default());
+        let sender = shell.events(cx);
+        let mut preparing = Preparing::new(MediaId::new(7), 3);
+        preparing.peers = 6;
+        preparing.download_bps = 2_000_000;
+
+        for event in [
+            AppEvent::PlaybackPreparing(Some(preparing)),
+            AppEvent::PlaybackPreparing(None),
+            AppEvent::PlaybackState(PlaybackState {
+                media: MediaId::new(7),
+                episode: 3,
+                position: Duration::from_secs(42),
+                duration: Some(Duration::from_mins(24)),
+                paused: false,
+            }),
+            AppEvent::PlaybackBuffering(true),
+        ] {
+            sender.send(event).unwrap();
+        }
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                has_text(window, "Buffering · 6 peers · 2.0 MB/s"),
+                "the chip follows the last preparing report"
+            );
+        });
+
+        sender.send(AppEvent::PlaybackBuffering(false)).unwrap();
+        cx.run_until_parked();
+        shell.act(cx, |window, _| {
+            assert!(
+                !has_text(window, "Buffering · 6 peers · 2.0 MB/s"),
+                "the chip clears when reads unblock"
             );
         });
     }

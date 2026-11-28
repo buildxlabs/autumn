@@ -19,6 +19,8 @@ use gpui_kit::{
     div, img, px, relative,
 };
 
+use crate::buffer_overlay::{amber, speed};
+
 /// Height of the bottom bar.
 pub const PLAYBACK_HUD_HEIGHT: f32 = 60.;
 /// Thickness of the seek track.
@@ -41,6 +43,7 @@ const SKIP: &str = "playback-hud-skip";
 const NEXT_COUNTDOWN: &str = "playback-hud-next-countdown";
 const PLAY_NEXT: &str = "playback-hud-play-next";
 const CANCEL_NEXT: &str = "playback-hud-cancel-next";
+const BUFFERING_CHIP: &str = "playback-hud-buffering-chip";
 
 /// A chapter the HUD can offer to skip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +71,15 @@ pub struct AutoNextView {
     pub remaining: Duration,
 }
 
+/// The in-HUD chip for a torrent stream whose relay reads are stalled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufferingView {
+    /// Connected peers from the last `Preparing` report.
+    pub peers: u32,
+    /// Download speed from the last `Preparing` report, in bytes per second.
+    pub download_bps: u64,
+}
+
 /// Everything the HUD draws, supplied by the store and the shell.
 #[derive(Debug, Clone, Default)]
 pub struct PlaybackHudView {
@@ -93,6 +105,8 @@ pub struct PlaybackHudView {
     pub skip: Option<SkipKind>,
     /// The next-episode countdown, while one runs.
     pub auto_next: Option<AutoNextView>,
+    /// The buffering chip, while the relay reports stalled reads.
+    pub buffering: Option<BufferingView>,
 }
 
 /// One button callback: the screen updates its store from it.
@@ -297,7 +311,24 @@ impl RenderOnce for PlaybackHud {
                                     .text_xs()
                                     .text_color(colors.muted_foreground)
                                     .child(Label::new(title_line)),
-                            ),
+                            )
+                            .children(self.view.buffering.map(|buffering| {
+                                div()
+                                    .id(BUFFERING_CHIP)
+                                    .test_support()
+                                    .debug_selector(|| BUFFERING_CHIP.into())
+                                    .flex_none()
+                                    .rounded_full()
+                                    .bg(amber())
+                                    .px_2()
+                                    .text_xs()
+                                    .text_color(colors.background)
+                                    .child(Label::new(format!(
+                                        "Buffering · {} peers · {}",
+                                        buffering.peers,
+                                        speed(buffering.download_bps)
+                                    )))
+                            })),
                     )
                     .child(
                         div()
@@ -558,8 +589,8 @@ mod tests {
     };
 
     use super::{
-        AutoNextView, CANCEL_NEXT, ChapterMark, PLAY_NEXT, PlaybackHud, PlaybackHudActions,
-        PlaybackHudView, SEEK_TRACK, SKIP, SkipKind,
+        AutoNextView, BUFFERING_CHIP, BufferingView, CANCEL_NEXT, ChapterMark, PLAY_NEXT,
+        PlaybackHud, PlaybackHudActions, PlaybackHudView, SEEK_TRACK, SKIP, SkipKind,
     };
 
     struct HudTest {
@@ -676,6 +707,32 @@ mod tests {
         cx.update(|window, app| window.click(PLAY_NEXT, app));
         cx.update(|window, app| window.click(CANCEL_NEXT, app));
         assert_eq!(*pressed.borrow(), ["play now", "cancel"]);
+    }
+
+    #[gpui_kit::test]
+    fn the_buffering_chip_shows_peers_and_speed_until_reads_flow(cx: &mut TestAppContext) {
+        let mut buffering = view();
+        buffering.buffering = Some(BufferingView {
+            peers: 4,
+            download_bps: 1_500_000,
+        });
+        {
+            let (_, cx) = open(cx, buffering);
+            assert!(
+                has_text(cx, "Buffering · 4 peers · 1.5 MB/s"),
+                "the chip follows the stream stats"
+            );
+            assert!(
+                cx.update(|window, _| window.try_find(BUFFERING_CHIP).is_some()),
+                "the chip is drawn next to the title"
+            );
+        }
+
+        let (_, cx) = open(cx, view());
+        assert!(
+            cx.update(|window, _| window.try_find(BUFFERING_CHIP).is_none()),
+            "the chip disappears when reads unblock"
+        );
     }
 
     #[gpui_kit::test]
