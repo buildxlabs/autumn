@@ -5,6 +5,7 @@
 mod discover;
 mod entry;
 mod entry_library;
+mod entry_torrent;
 mod home;
 mod library_explorer;
 mod lists;

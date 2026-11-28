@@ -45,8 +45,9 @@ use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
 
 pub use auto_select::{
-    AniZipEpisodeIds, AutoSelectError, AutoSelectRequest, AutoSelection, AutoSelector, EpisodeIds,
-    FILE_LIST_TIMEOUT, FileListError, FileLister, SessionFiles, TorrentSearch, VERIFY_CANDIDATES,
+    AniZipEpisodeIds, AutoSelectError, AutoSelectProgress, AutoSelectRequest, AutoSelection,
+    AutoSelector, EpisodeIds, FILE_LIST_TIMEOUT, FileListError, FileLister, SessionFiles,
+    TorrentSearch, VERIFY_CANDIDATES,
 };
 pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
@@ -312,6 +313,40 @@ pub trait EngineServices: Send + Sync + 'static {
         _anilist_id: u32,
     ) -> BoxFuture<Result<Option<EpisodeMetadata>, EngineError>> {
         Box::pin(async { Ok(None) })
+    }
+
+    /// Runs auto-select for `request` with `profile`, reporting
+    /// [`AutoSelectProgress`] to `progress`. The default is a no-op failure
+    /// for fakes; [`Engine`] runs [`AutoSelector::select_with_progress`].
+    fn auto_select(
+        &self,
+        _request: AutoSelectRequest,
+        _profile: settings::AutoSelectProfile,
+        _progress: Box<dyn FnMut(AutoSelectProgress) + Send>,
+    ) -> BoxFuture<Result<AutoSelection, AutoSelectError>> {
+        Box::pin(async {
+            Err(AutoSelectError::IndexerError(search::Error::Transport {
+                indexer: search::Indexer::Nyaa,
+                message: "auto-select is unavailable".to_owned(),
+            }))
+        })
+    }
+
+    /// Auto-select profiles, the global default and per-media overrides.
+    /// The default is the shipped defaults for fakes.
+    fn auto_select_settings(&self) -> BoxFuture<Result<settings::AutoSelectSettings, EngineError>> {
+        Box::pin(async { Ok(settings::AutoSelectSettings::default()) })
+    }
+
+    /// Sets or clears `media`'s per-media profile override. `media` is a raw
+    /// [`MediaId`]; `profile` names a profile, `None` clears. The default is
+    /// a no-op for fakes.
+    fn set_media_profile(
+        &self,
+        _media: i64,
+        _profile: Option<String>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
     }
 
     /// The saved resume positions of `media`, by episode. The default is
@@ -1078,6 +1113,64 @@ impl EngineServices for Engine {
                 .media(anilist_id, Aging::Airing)
                 .await
                 .map_err(EngineError::from)
+        })
+    }
+
+    fn auto_select(
+        &self,
+        request: AutoSelectRequest,
+        profile: settings::AutoSelectProfile,
+        progress: Box<dyn FnMut(AutoSelectProgress) + Send>,
+    ) -> BoxFuture<Result<AutoSelection, AutoSelectError>> {
+        let selector = self.auto_selector();
+        Box::pin(async move {
+            match selector {
+                Some(selector) => {
+                    selector
+                        .select_with_progress(request, &profile, progress)
+                        .await
+                }
+                None => Err(AutoSelectError::IndexerError(search::Error::Transport {
+                    indexer: search::Indexer::Nyaa,
+                    message: "auto-select is unavailable".to_owned(),
+                })),
+            }
+        })
+    }
+
+    fn auto_select_settings(&self) -> BoxFuture<Result<settings::AutoSelectSettings, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            let rows = db.settings().rows().await?;
+            let (settings, _) = settings::Settings::from_rows(rows);
+            Ok(settings.auto_select)
+        })
+    }
+
+    fn set_media_profile(
+        &self,
+        media: i64,
+        profile: Option<String>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            let rows = db.settings().rows().await?;
+            let (mut settings, _) = settings::Settings::from_rows(rows);
+            match profile {
+                Some(name) => {
+                    settings.auto_select.media_profiles.insert(media, name);
+                }
+                None => {
+                    settings.auto_select.media_profiles.remove(&media);
+                }
+            }
+            let row = settings
+                .to_rows()?
+                .into_iter()
+                .filter(|(tab, _)| tab == "auto_select")
+                .collect::<Vec<_>>();
+            db.settings().save(&row).await?;
+            Ok(())
         })
     }
 

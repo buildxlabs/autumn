@@ -163,6 +163,12 @@ impl EntryStore {
         }
     }
 
+    /// The shared engine services, for sibling stores.
+    #[must_use]
+    pub fn services(&self) -> Arc<dyn EngineServices> {
+        Arc::clone(&self.services)
+    }
+
     /// Opens the Entry of AniList `anilist_id`: fetches the detail and the
     /// Local entry, and resets the draft to what the list holds.
     pub fn open(&mut self, anilist_id: u32, cx: &mut Context<'_, Self>) {

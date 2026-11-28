@@ -8,6 +8,7 @@ mod badges;
 pub mod bridge;
 pub mod entry_library;
 pub mod entry_store;
+pub mod entry_torrent;
 pub mod events;
 pub mod fetch_status;
 pub mod home_store;
@@ -33,6 +34,9 @@ pub use entry_library::{
     aired_episodes, missing_episodes, missing_label,
 };
 pub use entry_store::{EntryDraft, EntryState, EntryStore};
+pub use entry_torrent::{
+    EntryTorrentStore, IN_LIBRARY, TorrentEpisode, TorrentRowState, TorrentStage, WATCHED,
+};
 pub use library_explorer::{ExplorerFilter, ExplorerRow, LibraryExplorerStore};
 pub use library_store::{LibraryStore, ScanOutcome, ScanState};
 pub use lists::{

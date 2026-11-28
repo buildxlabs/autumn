@@ -32,6 +32,7 @@ use ui_state::{
 
 use crate::{
     entry_library::{PlayLabels, play, render as library_tab},
+    entry_torrent::render as torrents_tab,
     shell::AppShell,
 };
 
@@ -147,6 +148,8 @@ pub(crate) struct EntryScreen<'a> {
     pub(crate) library: &'a Entity<EntryLibraryStore>,
     /// Where the Library tab sends play requests.
     pub(crate) playback: &'a Entity<PlaybackStore>,
+    /// The Torrents tab's store (#220).
+    pub(crate) torrents: &'a Entity<ui_state::EntryTorrentStore>,
     /// The bounded cache for the banner, carousels and thumbnails.
     pub(crate) cache: &'a Entity<LruImageCache>,
 }
@@ -251,12 +254,9 @@ fn render_ready(
         poster: summary.poster.clone(),
     };
     let has_files = screen.library.read(cx).has_files();
-    // The Library tab leads once the media has files; Overview is Phase 1's page.
-    let tab = match tab {
-        Some(tab) if has_files => tab,
-        None if has_files => EntryTab::Library,
-        _ => EntryTab::Overview,
-    };
+    let torrents_enabled = screen.torrents.read(cx).torrents_enabled();
+    // The tab bar rules (#182 Q1); the default tab is unchanged.
+    let tab = EntryTab::resolve(tab, has_files, torrents_enabled);
     let page = div()
         .flex()
         .flex_col()
@@ -264,7 +264,7 @@ fn render_ready(
         .p_6()
         .child(hero)
         .child(actions_bar(screen, &labels, cx))
-        .children(has_files.then(|| tab_bar(tab, cx)));
+        .child(tab_bar(tab, has_files, torrents_enabled, cx));
     if tab == EntryTab::Library {
         return page
             .child(library_tab(
@@ -273,6 +273,11 @@ fn render_ready(
                 missing_banner(screen, summary, cx),
                 cx,
             ))
+            .into_any_element();
+    }
+    if tab == EntryTab::Torrents {
+        return page
+            .child(torrents_tab(screen, &labels, id, cx))
             .into_any_element();
     }
     let [relations_carousel, recommendations_carousel] =
@@ -380,10 +385,20 @@ fn actions_bar(
             .label("Open local folder")
             .on_click(move |_, _, cx| cx.open_with_system(&folder))
     });
+    // The next unwatched aired episode with no library file (#182 Q2, #220).
+    let stream_episode = screen.torrents.read(cx).next_streamable().map(|episode| {
+        let number = episode.number;
+        let torrents = screen.torrents.clone();
+        Button::new("entry-stream-episode")
+            .primary()
+            .label(format!("Stream episode {number}"))
+            .on_click(move |_, _, cx| torrents.update(cx, |store, cx| store.stream(number, cx)))
+    });
     div()
         .flex()
         .justify_end()
         .gap_2()
+        .children(stream_episode)
         .children(play_next)
         .children(open_folder)
         .child(
@@ -395,33 +410,38 @@ fn actions_bar(
         )
 }
 
-/// The Overview and Library tabs, shown once the media has local files.
-fn tab_bar(tab: EntryTab, cx: &mut Context<'_, AppShell>) -> impl IntoElement {
-    let tabs = [EntryTab::Overview, EntryTab::Library];
-    TabBar::new("entry-tabs")
+/// `Overview · Library (only with files) · Torrents` (#182 Q1).
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "two independent tab conditions"
+)]
+fn tab_bar(
+    tab: EntryTab,
+    has_files: bool,
+    torrents_enabled: bool,
+    cx: &mut Context<'_, AppShell>,
+) -> impl IntoElement {
+    let tabs = EntryTab::visible(has_files, torrents_enabled);
+    let selected = tabs
+        .iter()
+        .position(|candidate| *candidate == tab)
+        .unwrap_or(0);
+    let mut bar = TabBar::new("entry-tabs")
         .underline()
-        .selected_index(usize::from(tab == EntryTab::Library))
-        .child(
-            Tab::new().child(
-                div()
-                    .id("entry-tab-overview")
-                    .test_support()
-                    .child("Overview"),
-            ),
-        )
-        .child(
-            Tab::new().child(
-                div()
-                    .id("entry-tab-library")
-                    .test_support()
-                    .child("Library"),
-            ),
-        )
-        .on_click(cx.listener(move |shell, index: &usize, _, cx| {
-            if let Some(&tab) = tabs.get(*index) {
-                shell.select_entry_tab(tab, cx);
-            }
-        }))
+        .selected_index(selected);
+    for candidate in &tabs {
+        let (id, label) = match candidate {
+            EntryTab::Overview => ("entry-tab-overview", "Overview"),
+            EntryTab::Library => ("entry-tab-library", "Library"),
+            EntryTab::Torrents => ("entry-tab-torrents", "Torrents"),
+        };
+        bar = bar.child(Tab::new().child(div().id(id).test_support().child(label)));
+    }
+    bar.on_click(cx.listener(move |shell, index: &usize, _, cx| {
+        if let Some(&tab) = tabs.get(*index) {
+            shell.select_entry_tab(tab, cx);
+        }
+    }))
 }
 
 /// The Relations and Recommendations carousels. Clicking a card opens that
@@ -799,6 +819,17 @@ fn format_fuzzy_date(date: FuzzyDate) -> String {
         (Some(year), None, None) => format!("{year:04}"),
         _ => "–".to_owned(),
     }
+}
+
+/// Today as `YYYY-MM-DD` in UTC.
+pub(crate) fn iso_today() -> String {
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day()
+    )
 }
 
 /// Today's date in the user's local time. AniList accepts a partial date, but

@@ -19,6 +19,8 @@ engine.workspace    = true
 flume.workspace     = true
 gpui-kit.workspace  = true
 metadata.workspace  = true
+search.workspace    = true
+settings.workspace  = true
 thiserror.workspace = true
 tokio               = { features = [ "rt" ], workspace = true }
 tracing.workspace   = true
