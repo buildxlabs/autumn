@@ -5,6 +5,7 @@
 pub mod account;
 pub mod actions;
 mod badges;
+pub mod batch_suggestions;
 pub mod bridge;
 pub mod entry_library;
 pub mod entry_store;
