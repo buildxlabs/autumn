@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use domain::ExtensionId;
 use thiserror::Error;
 
 use crate::result::Indexer;
@@ -56,4 +57,29 @@ pub enum Error {
     /// Every lane failed, or there were no lanes, so the search has no answer.
     #[error("every indexer lane failed")]
     AllLanesFailed,
+
+    /// A torrent-provider extension call failed (ADR 0011).
+    #[error("{id} failed: {message}")]
+    Provider {
+        /// The extension that failed.
+        id: ExtensionId,
+        /// What the provider reported.
+        message: String,
+    },
+
+    /// A provider returned rows but none survived validation.
+    #[error("{id} returned an invalid result: {message}")]
+    ProviderInvalidResult {
+        /// The extension that answered.
+        id: ExtensionId,
+        /// The first row's first required-field error.
+        message: String,
+    },
+
+    /// A provider call exceeded the search deadline and was cancelled.
+    #[error("{id} timed out")]
+    ProviderTimeout {
+        /// The extension whose call was dropped.
+        id: ExtensionId,
+    },
 }

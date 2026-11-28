@@ -1,5 +1,9 @@
 //! The indexer-neutral [`Torrent`] result, plain data shared with `debrid`.
 
+use std::sync::Arc;
+
+use domain::ExtensionId;
+
 use crate::Error;
 
 /// Which indexer produced a [`Torrent`].
@@ -10,6 +14,18 @@ pub enum Indexer {
     Nyaa,
     /// `AnimeTosho`'s live `feed.animetosho.net` JSON API.
     AnimeTosho,
+    /// An enabled torrent-provider extension (ADR 0011).
+    ///
+    /// Its rows are validated and deduped after the built-ins. The label a
+    /// user sees is the manifest display name, or `name (id)` when two
+    /// installed providers share a name.
+    Extension {
+        /// The manifest slug, unique across installed extensions.
+        id: ExtensionId,
+        /// Display name copied when the search runs. When two installed
+        /// providers share a name, this reads `name (id)`.
+        name: Arc<str>,
+    },
 }
 
 impl Indexer {
@@ -19,11 +35,15 @@ impl Indexer {
         match self {
             Self::Nyaa => "Nyaa",
             Self::AnimeTosho => "AnimeTosho",
+            Self::Extension { name, .. } => name,
         }
     }
 }
 
 /// One indexer lane that failed, with the reason it reported (ADR 0011).
+///
+/// A provider that times out or returns an error becomes one of these, and
+/// the release list shows its name and a short reason as an inline notice.
 #[derive(Debug, Clone)]
 pub struct LaneFailure {
     /// The lane that failed.
@@ -36,7 +56,10 @@ pub struct LaneFailure {
 ///
 /// A search with no answer fails only when every lane failed, or when there
 /// were no lanes (ADR 0011). Partial failures are carried here so callers can
-/// report them without losing the results that did arrive.
+/// report them without losing the results that did arrive. Results are in
+/// lane order (Nyaa, `AnimeTosho`, then extensions by id) with the first
+/// duplicate infohash winning, so a built-in result keeps its flags and file
+/// list over an extension duplicate.
 #[derive(Debug, Clone, Default)]
 pub struct SearchOutcome {
     /// All results, merged in lane order and deduped by infohash.
