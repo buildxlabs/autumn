@@ -48,6 +48,15 @@ pub struct InstalledExtension {
     pub updated_at: SystemTime,
 }
 
+/// An extension's stored health, apart from the user's toggle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StoredHealth<'a> {
+    /// Set after repeated CPU or memory kills (#269).
+    pub auto_disabled: bool,
+    /// The last recorded failure, encoded by `extensions`.
+    pub last_error: Option<&'a str>,
+}
+
 /// Storage for installed extensions.
 #[derive(Debug, Clone, Copy)]
 pub struct ExtensionRepo<'a> {
@@ -204,6 +213,33 @@ impl<'a> ExtensionRepo<'a> {
         Ok(())
     }
 
+    /// Stores the extension's health, leaving `enabled` alone.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::enable`].
+    pub async fn set_health(
+        &self,
+        id: &ExtensionId,
+        health: StoredHealth<'_>,
+        now: SystemTime,
+    ) -> Result<(), DbError> {
+        let changed = sqlx::query(
+            "UPDATE extensions SET auto_disabled = ?, last_error = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(i64::from(health.auto_disabled))
+        .bind(health.last_error)
+        .bind(seconds(now))
+        .bind(id.as_str())
+        .execute(self.pool)
+        .await?
+        .rows_affected();
+        if changed == 0 {
+            return Err(DbError::UnknownExtension(id.clone()));
+        }
+        Ok(())
+    }
+
     /// Deletes the extension's row.
     ///
     /// # Errors
@@ -293,6 +329,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn health_is_stored_apart_from_the_toggle() {
+        let (_dir, db) = db().await;
+        let repo = db.extensions();
+        repo.install(&package("my-ext"), at(10)).await.unwrap();
+        let id = ExtensionId::new("my-ext");
+
+        let failing = StoredHealth {
+            auto_disabled: true,
+            last_error: Some("boom"),
+        };
+        repo.set_health(&id, failing, at(20)).await.unwrap();
+        let row = repo.get(&id).await.unwrap().unwrap();
+        assert!(row.enabled && row.auto_disabled, "the toggle is untouched");
+        assert_eq!(row.last_error.as_deref(), Some("boom"));
+        assert_eq!(row.updated_at, at(20));
+
+        repo.set_health(&id, StoredHealth::default(), at(30))
+            .await
+            .unwrap();
+        let row = repo.get(&id).await.unwrap().unwrap();
+        assert!(!row.auto_disabled);
+        assert_eq!(row.last_error, None);
+    }
+
+    #[tokio::test]
     async fn a_duplicate_id_is_refused_and_leaves_the_first() {
         let (_dir, db) = db().await;
         let repo = db.extensions();
@@ -321,6 +382,9 @@ mod tests {
             repo.disable(&id, at(1)).await.unwrap_err(),
             repo.enable(&id, at(1)).await.unwrap_err(),
             repo.uninstall(&id).await.unwrap_err(),
+            repo.set_health(&id, StoredHealth::default(), at(1))
+                .await
+                .unwrap_err(),
         ] {
             assert!(matches!(error, DbError::UnknownExtension(_)), "{error:?}");
         }

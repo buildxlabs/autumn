@@ -7,6 +7,7 @@
 
 mod actor;
 mod error;
+mod health;
 mod host;
 mod limits;
 mod manifest;
@@ -16,6 +17,7 @@ mod runtime;
 
 pub use actor::{ExtensionHost, ProviderInfo, ProviderSource};
 pub use error::ExtensionError;
+pub use health::{HealthChange, HealthMonitor, STRIKES, failure_kind};
 pub use host::{AUTUMN_D_LUAU, SUPPORTED_API_VERSIONS};
 pub use manifest::{
     ExtensionKind, MAX_DESCRIPTOR_BYTES, MAX_PAYLOAD_BYTES, Manifest, ManifestError, Payload,

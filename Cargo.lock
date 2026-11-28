@@ -2214,6 +2214,7 @@ version = "0.1.0"
 dependencies = [
  "db",
  "domain",
+ "extensions",
  "flume",
  "futures",
  "library",
@@ -2226,6 +2227,7 @@ dependencies = [
  "relay",
  "reqwest",
  "search",
+ "serde_json",
  "settings",
  "tempfile",
  "thiserror 2.0.21",
