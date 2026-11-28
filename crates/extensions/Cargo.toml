@@ -10,11 +10,18 @@ publish                = false
 workspace = true
 
 [dependencies]
-domain.workspace    = true
-mlua.workspace      = true
-thiserror.workspace = true
-tokio.workspace     = true
-tracing.workspace   = true
+base64.workspace     = true
+domain.workspace     = true
+mlua.workspace       = true
+scraper.workspace    = true
+serde_json.workspace = true
+sha1.workspace       = true
+sha2.workspace       = true
+thiserror.workspace  = true
+time.workspace       = true
+tokio.workspace      = true
+tracing.workspace    = true
+url.workspace        = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

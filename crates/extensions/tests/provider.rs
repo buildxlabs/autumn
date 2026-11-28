@@ -165,8 +165,8 @@ async fn print_goes_to_tracing_tagged_with_the_extension() {
         "load-time print is logged: {log}"
     );
     assert!(
-        log.contains("extension: searching\t1\ttrue extension=my-ext"),
-        "arguments are tab-joined: {log}"
+        log.contains("extension: searching 1 true extension=my-ext"),
+        "arguments are space-joined: {log}"
     );
 }
 
