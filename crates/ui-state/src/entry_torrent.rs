@@ -403,7 +403,7 @@ impl EntryTorrentStore {
         let pump = cx.spawn(async move |_, cx| {
             while let Ok(progress) = progress_rx.recv_async().await {
                 let _ = pump_store.update(cx, |store, cx| {
-                    store.apply_progress(episode, progress, cx);
+                    store.apply_progress(episode, &progress, cx);
                 });
             }
         });
@@ -505,7 +505,7 @@ impl EntryTorrentStore {
     fn apply_progress(
         &mut self,
         episode: u32,
-        progress: AutoSelectProgress,
+        progress: &AutoSelectProgress,
         cx: &mut Context<'_, Self>,
     ) {
         // Only a running row tracks progress.
@@ -515,8 +515,8 @@ impl EntryTorrentStore {
         let stage = match progress {
             AutoSelectProgress::Searching => TorrentStage::Searching,
             AutoSelectProgress::Verifying { checking, total } => TorrentStage::VerifyingFiles {
-                done: checking,
-                total,
+                done: *checking,
+                total: *total,
             },
             _ => return,
         };
@@ -684,7 +684,7 @@ impl EntryTorrentStore {
         let request = self.batch_search_request();
         let services = Arc::clone(&self.services);
         let task = cx.spawn(async move |store, cx| {
-            let run = services.search_torrents(request);
+            let run = services.search_torrents(request, search::LaneFilter::All);
             let result = match cx.update(|app| bridge::run(app, run)).await {
                 Ok(result) => result,
                 Err(error) => {
@@ -699,8 +699,8 @@ impl EntryTorrentStore {
             let _ = store.update(cx, |store, cx| {
                 store.batch.loading = false;
                 match result {
-                    Ok(torrents) => {
-                        store.batch.raw = torrents;
+                    Ok(outcome) => {
+                        store.batch.raw = outcome.torrents;
                         store.re_rank_batch_suggestions();
                     }
                     Err(error) => {
@@ -884,10 +884,15 @@ impl EntryTorrentStore {
         let task = cx.spawn(async move |_, cx| {
             loop {
                 let outcome = match cx
-                    .update(|app| bridge::run(app, services.search_torrents(request.clone())))
+                    .update(|app| {
+                        bridge::run(
+                            app,
+                            services.search_torrents(request.clone(), search::LaneFilter::BuiltIn),
+                        )
+                    })
                     .await
                 {
-                    Ok(Ok(torrents)) => Ok(torrents),
+                    Ok(Ok(outcome)) => Ok(outcome.torrents),
                     _ => Err(()),
                 };
                 let result = weak.update(cx, |store, cx| {
@@ -896,7 +901,7 @@ impl EntryTorrentStore {
                             let found = torrents
                                 .iter()
                                 .filter(|torrent| search::matches_torrent(torrent, &target))
-                                .map(|torrent| torrent.indexer)
+                                .map(|torrent| torrent.indexer.clone())
                                 .collect::<Vec<_>>();
                             store.tracker.complete(media, episode, &found);
                         }
@@ -909,7 +914,7 @@ impl EntryTorrentStore {
                         .cached(media, episode)
                         .into_iter()
                         .filter_map(|(indexer, found, checked_at)| {
-                            record_indexer(indexer).map(|indexer| db::AvailabilityRecord {
+                            record_indexer(&indexer).map(|indexer| db::AvailabilityRecord {
                                 media,
                                 episode,
                                 indexer,
@@ -971,7 +976,7 @@ fn search_indexer(indexer: db::AvailabilityIndexer) -> Indexer {
 /// The row code for an indexer the tracker has just checked, or `None` for an
 /// indexer this build cannot store.
 #[must_use]
-fn record_indexer(indexer: Indexer) -> Option<db::AvailabilityIndexer> {
+fn record_indexer(indexer: &Indexer) -> Option<db::AvailabilityIndexer> {
     match indexer {
         Indexer::Nyaa => Some(db::AvailabilityIndexer::Nyaa),
         Indexer::AnimeTosho => Some(db::AvailabilityIndexer::AnimeTosho),
@@ -1185,7 +1190,7 @@ mod tests {
             store.update(cx, |store, cx| {
                 store.apply_progress(
                     ep,
-                    AutoSelectProgress::Verifying {
+                    &AutoSelectProgress::Verifying {
                         checking: 1,
                         total: 3,
                     },
@@ -1204,7 +1209,7 @@ mod tests {
             store.update(cx, |store, cx| {
                 store.apply_progress(
                     ep,
-                    AutoSelectProgress::Verifying {
+                    &AutoSelectProgress::Verifying {
                         checking: 2,
                         total: 3,
                     },

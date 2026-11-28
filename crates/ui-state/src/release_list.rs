@@ -15,7 +15,7 @@ use std::{
 use domain::{MediaId, PlaybackDetails, StreamSource, TorrentFileRow};
 use engine::EngineServices;
 use gpui_kit::{Context, Task};
-use search::{Availability, EpisodeTarget, Indexer, Torrent, rank_with_status};
+use search::{Availability, EpisodeTarget, Indexer, LaneFailure, Torrent, rank_with_status};
 use settings::AutoSelectProfile;
 
 /// The `no peers` status of a release that failed to start this session.
@@ -56,6 +56,28 @@ pub struct ReleaseRow {
     pub status: Option<String>,
     /// Whether this release was marked `no peers` this app session.
     pub no_peers: bool,
+}
+
+/// One inline notice for a failed indexer lane (ADR 0011).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LaneNotice {
+    /// Display name of the lane that failed.
+    pub indexer: String,
+    /// Short reason the lane reported.
+    pub reason: String,
+}
+
+/// One notice per failed lane, in lane order, for the release list.
+#[must_use]
+pub fn lane_notices(failures: &[LaneFailure]) -> Vec<LaneNotice> {
+    failures
+        .iter()
+        .map(|failure| LaneNotice {
+            indexer: failure.indexer.label().to_owned(),
+            reason: failure.error.to_string(),
+        })
+        .collect()
 }
 
 /// A sortable column.
@@ -294,7 +316,7 @@ pub fn build_rows(
             };
             ReleaseRow {
                 name: torrent.name.clone(),
-                indexer: torrent.indexer,
+                indexer: torrent.indexer.clone(),
                 resolution: release.resolution,
                 codec: release.video_codec.map(codec_label),
                 group: release.group,
@@ -517,6 +539,8 @@ pub struct ReleaseListStore {
     amber: BTreeMap<String, String>,
     /// Session-level `no peers` infohashes.
     no_peers: BTreeSet<String>,
+    /// One inline notice per failed lane from the last search.
+    notices: Vec<LaneNotice>,
     /// A search is in flight.
     searching: bool,
     /// Last search error.
@@ -557,6 +581,7 @@ impl ReleaseListStore {
             batches: BTreeMap::new(),
             amber: BTreeMap::new(),
             no_peers: BTreeSet::new(),
+            notices: Vec::new(),
             searching: false,
             error: None,
             task: None,
@@ -578,6 +603,7 @@ impl ReleaseListStore {
         self.expanded = None;
         self.batches = BTreeMap::new();
         self.amber = BTreeMap::new();
+        self.notices = Vec::new();
         self.error = None;
         self.task = None;
         self.batch_task = None;
@@ -629,7 +655,7 @@ impl ReleaseListStore {
         self.error = None;
         cx.notify();
         self.task = Some(cx.spawn(async move |store, cx| {
-            let result: Result<Vec<Torrent>, String> = cx
+            let result: Result<search::SearchOutcome, String> = cx
                 .update(|app| crate::bridge::run(app, services.search_releases(keyword, refresh)))
                 .await
                 .map_err(|error| error.to_string())
@@ -637,11 +663,13 @@ impl ReleaseListStore {
             let _ = store.update(cx, |store, cx| {
                 store.searching = false;
                 match result {
-                    Ok(results) => {
-                        store.raw_results = results;
+                    Ok(outcome) => {
+                        store.notices = lane_notices(&outcome.failures);
+                        store.raw_results = outcome.torrents;
                         store.rerank(ctx.target);
                     }
                     Err(error) => {
+                        store.notices = Vec::new();
                         store.error = Some(error);
                     }
                 }
@@ -660,6 +688,12 @@ impl ReleaseListStore {
     #[must_use]
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// One inline notice per failed indexer lane from the last search.
+    #[must_use]
+    pub fn notices(&self) -> &[LaneNotice] {
+        &self.notices
     }
 
     /// The active one-shot profile.
@@ -1189,6 +1223,50 @@ mod tests {
         assert_eq!(
             rows.first().and_then(|r| r.batch_range.clone()).as_deref(),
             Some("Batch 1–8")
+        );
+    }
+
+    #[test]
+    fn lane_notices_name_each_failed_lane_with_a_reason() {
+        let failures = vec![
+            LaneFailure {
+                indexer: Indexer::Nyaa,
+                error: search::Error::Http {
+                    indexer: Indexer::Nyaa,
+                    status: 503,
+                },
+            },
+            LaneFailure {
+                indexer: Indexer::AnimeTosho,
+                error: search::Error::Transport {
+                    indexer: Indexer::AnimeTosho,
+                    message: "timed out".to_owned(),
+                },
+            },
+        ];
+
+        let notices = lane_notices(&failures);
+
+        assert_eq!(notices.len(), 2, "one notice per failed lane");
+        assert_eq!(
+            notices.first().map(|notice| notice.indexer.as_str()),
+            Some("Nyaa")
+        );
+        assert!(
+            notices
+                .first()
+                .is_some_and(|notice| notice.reason.contains("503")),
+            "the short reason is kept"
+        );
+        assert_eq!(
+            notices.get(1).map(|notice| notice.indexer.as_str()),
+            Some("AnimeTosho")
+        );
+        assert!(
+            notices
+                .get(1)
+                .is_some_and(|notice| notice.reason.contains("timed out")),
+            "the transport reason is kept"
         );
     }
 }

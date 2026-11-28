@@ -52,4 +52,8 @@ pub enum Error {
         /// The delay the indexer advertised, or the backoff used.
         retry_after: Duration,
     },
+
+    /// Every lane failed, or there were no lanes, so the search has no answer.
+    #[error("every indexer lane failed")]
+    AllLanesFailed,
 }

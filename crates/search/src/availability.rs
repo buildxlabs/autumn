@@ -212,7 +212,7 @@ impl<C: WallClock> AvailabilityTracker<C> {
         let at = self.clock.now();
         for indexer in [Indexer::Nyaa, Indexer::AnimeTosho] {
             self.results.insert(
-                (media, episode, indexer),
+                (media, episode, indexer.clone()),
                 Checked {
                     found: found.contains(&indexer),
                     at,
@@ -246,7 +246,7 @@ impl<C: WallClock> AvailabilityTracker<C> {
             .into_iter()
             .filter_map(|indexer| {
                 self.results
-                    .get(&(media, episode, indexer))
+                    .get(&(media, episode, indexer.clone()))
                     .map(|checked| (indexer, checked.found, checked.at))
             })
             .collect()
@@ -297,13 +297,13 @@ impl<C: WallClock> AvailabilityTracker<C> {
         let all = [Indexer::Nyaa, Indexer::AnimeTosho];
         if !all
             .iter()
-            .any(|indexer| self.results.contains_key(&(key.0, key.1, *indexer)))
+            .any(|indexer| self.results.contains_key(&(key.0, key.1, indexer.clone())))
         {
             return Availability::Waiting;
         }
         if all.iter().any(|indexer| {
             self.results
-                .get(&(key.0, key.1, *indexer))
+                .get(&(key.0, key.1, indexer.clone()))
                 .is_some_and(|checked| checked.found)
         }) {
             Availability::Available
@@ -328,7 +328,7 @@ impl<C: WallClock> AvailabilityTracker<C> {
         }
         let last = [Indexer::Nyaa, Indexer::AnimeTosho]
             .iter()
-            .filter_map(|indexer| self.results.get(&(key.0, key.1, *indexer)))
+            .filter_map(|indexer| self.results.get(&(key.0, key.1, indexer.clone())))
             .map(|checked| checked.at)
             .min();
         last.is_none_or(|at| {

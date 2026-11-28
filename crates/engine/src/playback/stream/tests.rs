@@ -365,9 +365,18 @@ async fn a_stop_while_preparing_drops_the_request_and_the_torrent() {
 struct FakeSearch(Vec<Torrent>);
 
 impl TorrentSearch for FakeSearch {
-    fn search(&self, _request: SearchRequest) -> BoxFuture<Result<Vec<Torrent>, search::Error>> {
+    fn search(
+        &self,
+        _request: SearchRequest,
+        _lanes: search::LaneFilter,
+    ) -> BoxFuture<Result<search::SearchOutcome, search::Error>> {
         let results = self.0.clone();
-        Box::pin(async move { Ok(results) })
+        Box::pin(async move {
+            Ok(search::SearchOutcome {
+                torrents: results,
+                failures: Vec::new(),
+            })
+        })
     }
 }
 
