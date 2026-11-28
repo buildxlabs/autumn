@@ -12,10 +12,10 @@ Seanime puts four debrid services behind one Go `Provider` interface
 status normalisation and link resolution; a `client.Repository` holds exactly
 one active provider and adds the app-level flow around it. The recurring shape is:
 
-1. **Cache check** — batched by infohash, but it is *not* uniform: TorBox has a
+1. **Cache check** — batched by infohash, but it is _not_ uniform: TorBox has a
    real per-file cache endpoint, Premiumize a per-hash aggregate, Real-Debrid's
    endpoint is gone (seanime disabled it) and AllDebrid is unused. Cache status
-   is only used to *reorder* auto-select candidates, never to gate streaming.
+   is only used to _reorder_ auto-select candidates, never to gate streaming.
 2. **Add** — dedupe by infohash against the provider's own list, then submit the
    magnet/questionable `.torrent` URL. Only Real-Debrid supports selecting files;
    seanime selects **all** files there because partial selection makes RD
@@ -39,7 +39,7 @@ one active provider and adds the app-level flow around it. The recurring shape i
    `rate_limit_reached`, TorBox `createtorrent` 60/h uncached) are not mapped or
    retried with backoff; seanime uses a few ad-hoc `time.Sleep`s instead.
 
-For Autumn the behavior is a useful template for the *flow*, but nearly every
+For Autumn the behavior is a useful template for the _flow_, but nearly every
 security-relevant choice should be inverted: no API keys in SQLite (ADR 0002,
 0012), no raw provider URL to the player (ADR 0005), and typed errors +
 `net` rate limiting rather than string errors and sleeps.
@@ -63,17 +63,17 @@ security-relevant choice should be inverted: no API keys in SQLite (ADR 0002,
 `internal/debrid/debrid/debrid.go:30-43` defines the interface. The methods
 (and who calls them) are:
 
-| Method | Called from | Purpose |
-| --- | --- | --- |
-| `GetSettings() Settings` | `client/repository.go:265` | stable id (`realdebrid`, `torbox`, `alldebrid`, `premiumize`, `dummy`) for DB rows and queue filtering |
-| `Authenticate(apiKey)` | `client/repository.go:179` | store/verify the key |
-| `AddTorrent(AddTorrentOptions)` | `client/stream.go:226`, `client/repository.go:254` | magnet → provider torrent id |
-| `GetTorrentStreamUrl(ctx, StreamTorrentOptions, itemCh)` | `client/stream.go:299` | **blocking**; pushes status items on `itemCh`, returns a direct URL |
-| `GetTorrentDownloadUrl(DownloadTorrentOptions)` | `client/download.go:144`, and inside each `GetTorrentStreamUrl` | direct URL(s) for local download |
-| `GetInstantAvailability([]hash)` | `finder.go:59`, `finder.go:115` | cheap cached-hash lookup |
-| `GetTorrentInfo(GetTorrentInfoOptions)` | `finder.go:133`, `autoselect/file_selection.go:224`, `previews.go:45` | file list for a magnet/hash *before* streaming |
-| `GetTorrent`, `GetTorrents` | dashboard and download loop | status list |
-| `DeleteTorrent(id)` | `client/stream.go:605`, `GetTorrentInfo` cleanup | remove from provider |
+| Method                                                   | Called from                                                           | Purpose                                                                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GetSettings() Settings`                                 | `client/repository.go:265`                                            | stable id (`realdebrid`, `torbox`, `alldebrid`, `premiumize`, `dummy`) for DB rows and queue filtering |
+| `Authenticate(apiKey)`                                   | `client/repository.go:179`                                            | store/verify the key                                                                                   |
+| `AddTorrent(AddTorrentOptions)`                          | `client/stream.go:226`, `client/repository.go:254`                    | magnet → provider torrent id                                                                           |
+| `GetTorrentStreamUrl(ctx, StreamTorrentOptions, itemCh)` | `client/stream.go:299`                                                | **blocking**; pushes status items on `itemCh`, returns a direct URL                                    |
+| `GetTorrentDownloadUrl(DownloadTorrentOptions)`          | `client/download.go:144`, and inside each `GetTorrentStreamUrl`       | direct URL(s) for local download                                                                       |
+| `GetInstantAvailability([]hash)`                         | `finder.go:59`, `finder.go:115`                                       | cheap cached-hash lookup                                                                               |
+| `GetTorrentInfo(GetTorrentInfoOptions)`                  | `finder.go:133`, `autoselect/file_selection.go:224`, `previews.go:45` | file list for a magnet/hash _before_ streaming                                                         |
+| `GetTorrent`, `GetTorrents`                              | dashboard and download loop                                           | status list                                                                                            |
+| `DeleteTorrent(id)`                                      | `client/stream.go:605`, `GetTorrentInfo` cleanup                      | remove from provider                                                                                   |
 
 `AddTorrentOptions` carries `MagnetLink`, `InfoHash` and `SelectFileId`
 (`:45-49`, marked "Real-Debrid only"); `StreamTorrentOptions` and
@@ -82,7 +82,7 @@ security-relevant choice should be inverted: no API keys in SQLite (ADR 0002,
 completion %, ETA, status, added-at, speed, seeders, `IsReady`, and two
 seanime-specific flags `IsQueuedForLocalDownload` / `IsDownloadingLocally`.
 `TorrentItemFile` is `{ID, Index, Name, Path, Size}` (`:82-88`); note `ID` is
-provider-defined and is *not* always the index (TorBox uses the original file
+provider-defined and is _not_ always the index (TorBox uses the original file
 name as the id, `torbox.go:658`; AllDebrid uses the flattened index,
 `alldebrid.go:601`).
 
@@ -118,12 +118,12 @@ expired link, missing file or API failure.
 - **Add:** dedupe by infohash over `GET /torrents?limit=500` then a 1 s sleep,
   otherwise `POST /torrents/addMagnet` (`:281-319`, `:629-645`).
   `selectCachedFiles` always calls `_selectFiles(id, "all")`:
-  *"Real Debrid will re-download cached torrent if we select only a few files"*
+  _"Real Debrid will re-download cached torrent if we select only a few files"_
   (`:568-622`).
 - **Ready + resolve:** `GetTorrentStreamUrl` (`:322-434`) polls
   `GET /torrents/info/{id}` immediately then every 1.5 s, gives up after 5
   consecutive status errors, emits each status to `itemCh`, and when
-  `status == "downloaded"` matches the selected file id against the *index* of
+  `status == "downloaded"` matches the selected file id against the _index_ of
   `ti.Links` and calls `POST /unrestrict/link` to get `download`.
   `GetTorrentDownloadUrl` (`:451-505`) returns one unrestricted URL for a
   `FileId`, or a comma-separated list for all selected files.
@@ -153,7 +153,7 @@ expired link, missing file or API failure.
   returns a CDN string (`:379-428`); without a `FileId` it requests
   `zip_link=true`. `encodeFilename`/`normalizeDownloadUrl` (`:430-485`) escape
   the `filename=` query value so the player sees a usable name.
-  Official docs: the `requestdl` link is open **3 hours to *start* a download**
+  Official docs: the `requestdl` link is open **3 hours to _start_ a download**
   (once started it may run as long as needed); CDN links are not permanent, and
   `redirect=true` gives a permalink that mints a fresh CDN link. The docs also
   give `createtorrent` limits of 60/hour for uncached items and 300/min when
@@ -220,7 +220,7 @@ expired link, missing file or API failure.
 - **`GetTorrentInfo` deliberately has no side effects** (`:524-596`): it checks
   an existing transfer via the hash cache, otherwise tries
   `POST /transfer/directdl` (which the official docs describe as resolving links
-  *without storing* the transfer), and otherwise fails with "not cached and
+  _without storing_ the transfer), and otherwise fails with "not cached and
   cannot be previewed without downloading it first". The comment explicitly
   says auto-select calls this for multiple candidates and must not start real
   downloads. This is the opposite of RD/AllDebrid and is the behavior Autumn
@@ -315,7 +315,7 @@ served by `ServeEchoStream` (`serve.go:14-19`).
 
 **Link lifetime in practice.** Seanime resolves a fresh provider URL at stream
 start and holds it in `httpBaseStream.streamUrl`. Official lifelimits: TorBox
-CDN links are open for 3 h to *start* (with `redirect=true` permalinks for
+CDN links are open for 3 h to _start_ (with `redirect=true` permalinks for
 minting fresh ones); the other three return an on-demand link with no stated
 window in seanime's code. On expiry mid-playback the proxy forwards a fresh
 `Range` request and receives a non-2xx, which becomes `CDN error: <status>` —
@@ -339,7 +339,7 @@ exit criterion.
   comma-separated download URL string via `GetTorrentDownloadUrl`, and starts
   one goroutine per URL. Each URL gets `DownloadAttempts = 3` with
   `2n` second delays (`:26-30`, `:228-246`). The destination is created; a hidden
-  `.tmp-*` staging dir is created *inside the destination* on desktop (app temp
+  `.tmp-*` staging dir is created _inside the destination_ on desktop (app temp
   dir on mobile) and removed on exit (`:272-279`, `:506-511`).
 - **Progress / cancellation.** A 32 KiB read loop writes to a plain file, emits
   `DebridDownloadProgress` at most every 2 s with aggregated bytes, total size
@@ -396,17 +396,17 @@ the id has a queued DB row (`IsQueuedForLocalDownload`) and whether it is in
 
 ## 7. What maps onto Autumn
 
-| Seanime behavior | Autumn decision it informs |
-| --- | --- |
-| One `mo.Option[Provider]`, rebuilt on settings save | One active provider; debrid is in the live-reload list (`ARCHITECTURE.md` §6). Reuse `settings` + keychain-only secrets (ADR 0002, ADR 0012), never a DB `api_key` column or a settings API that returns it. |
-| Provider-specific cache endpoints, RD endpoint gone, AD unused | Treat cached-ness as a hint, not a gate; keep the no-relaxing rule of ADR 0007. `debrid → search` is an allowed edge (`ARCHITECTURE.md` §3) so the provider consumes the shared result type. |
-| `GetTorrentInfo` adds-then-deletes (RD, AD) vs. PM's side-effect-free preview | Prefer PM's contract: listing files must never start a download. A read that mutates the account is unacceptable for auto-select. |
-| Poll to ready, then resolve to a CDN URL | `DebridProvider::resolve` is async and returns a direct URL; the engine owns the poll/cancel task (`bridge::run` + stored `Task`), not the UI. |
-| Native player gets an HMAC loopback proxy; external link gets the raw URL | Extend ADR 0005: **all** debrid playback goes through the token-gated loopback relay, including external players; never put a provider URL (or `token=` API key) in the player's argv/history. |
-| Single resolve, no expiry refresh; proxy returns `CDN error` | Autumn needs a re-resolve policy on 401/403/410 and a decision about retaining the same relay token across it (ties to the map's continuity/remote-stream question). |
-| Queue in SQLite, 1-min loop, 3 attempts, no resume, `.tmp-*` staging, zip/rar extraction | Download-to-library is a separate explicit action from streaming (ADR 0006 keeps streams disposable). Decide whether Phase 5 needs resume/`.part` and archive extraction, or defers them to the Backlog multi-segment downloader. |
-| String errors, ad-hoc sleeps | Use a per-crate `thiserror` enum and route all provider HTTP through `net`, with per-provider rate limits and typed `RateLimited { retry_after }`; ADR 0015's guard is for extensions, but the same client can throttle debrid traffic. |
-| `HashStore` for Premiumize transfers | Autumn's shared `InfoHash` (`domain`) needs a decision: either persist a provider-id ↔ infohash cross-reference, or key debrid rows by provider id alone and accept that some providers cannot report a hash. |
+| Seanime behavior                                                                         | Autumn decision it informs                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One `mo.Option[Provider]`, rebuilt on settings save                                      | One active provider; debrid is in the live-reload list (`ARCHITECTURE.md` §6). Reuse `settings` + keychain-only secrets (ADR 0002, ADR 0012), never a DB `api_key` column or a settings API that returns it.                            |
+| Provider-specific cache endpoints, RD endpoint gone, AD unused                           | Treat cached-ness as a hint, not a gate; keep the no-relaxing rule of ADR 0007. `debrid → search` is an allowed edge (`ARCHITECTURE.md` §3) so the provider consumes the shared result type.                                            |
+| `GetTorrentInfo` adds-then-deletes (RD, AD) vs. PM's side-effect-free preview            | Prefer PM's contract: listing files must never start a download. A read that mutates the account is unacceptable for auto-select.                                                                                                       |
+| Poll to ready, then resolve to a CDN URL                                                 | `DebridProvider::resolve` is async and returns a direct URL; the engine owns the poll/cancel task (`bridge::run` + stored `Task`), not the UI.                                                                                          |
+| Native player gets an HMAC loopback proxy; external link gets the raw URL                | Extend ADR 0005: **all** debrid playback goes through the token-gated loopback relay, including external players; never put a provider URL (or `token=` API key) in the player's argv/history.                                          |
+| Single resolve, no expiry refresh; proxy returns `CDN error`                             | Autumn needs a re-resolve policy on 401/403/410 and a decision about retaining the same relay token across it (ties to the map's continuity/remote-stream question).                                                                    |
+| Queue in SQLite, 1-min loop, 3 attempts, no resume, `.tmp-*` staging, zip/rar extraction | Download-to-library is a separate explicit action from streaming (ADR 0006 keeps streams disposable). Decide whether Phase 5 needs resume/`.part` and archive extraction, or defers them to the Backlog multi-segment downloader.       |
+| String errors, ad-hoc sleeps                                                             | Use a per-crate `thiserror` enum and route all provider HTTP through `net`, with per-provider rate limits and typed `RateLimited { retry_after }`; ADR 0015's guard is for extensions, but the same client can throttle debrid traffic. |
+| `HashStore` for Premiumize transfers                                                     | Autumn's shared `InfoHash` (`domain`) needs a decision: either persist a provider-id ↔ infohash cross-reference, or key debrid rows by provider id alone and accept that some providers cannot report a hash.                           |
 
 ## Open questions surfaced
 
