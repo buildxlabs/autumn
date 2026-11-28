@@ -31,6 +31,26 @@ pub enum ExtensionError {
         /// compile error.
         traceback: String,
     },
+    /// The call used more than its active Luau CPU time (1 s).
+    #[error("the extension used too much CPU time")]
+    CpuLimit,
+    /// The call ran longer than its wall-clock limit (30 s), host waits
+    /// included.
+    #[error("the extension took too long")]
+    WallTimeout,
+    /// The VM ran out of its memory cap (32 MiB), even if the script caught
+    /// the error.
+    #[error("the extension ran out of memory")]
+    MemoryLimit,
+    /// The call made more HTTP requests than allowed (8).
+    #[error("the extension made too many requests")]
+    RequestLimit,
+    /// The outbound guard refused a request (#305).
+    #[error("blocked: {0}")]
+    NetworkBlocked(String),
+    /// The caller left mid-call, or the extension was stopped.
+    #[error("the extension call was cancelled")]
+    Cancelled,
     /// The VM failed outside the script, for example while building a table.
     #[error("extension VM failed: {0}")]
     Vm(String),
@@ -50,7 +70,10 @@ impl ExtensionError {
 
 impl From<mlua::Error> for ExtensionError {
     fn from(error: mlua::Error) -> Self {
-        Self::Vm(error.to_string())
+        match error {
+            mlua::Error::MemoryError(_) => Self::MemoryLimit,
+            error => Self::Vm(error.to_string()),
+        }
     }
 }
 

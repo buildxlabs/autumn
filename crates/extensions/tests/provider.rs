@@ -339,34 +339,79 @@ fn spinner(seconds: f64) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_busy_extension_does_not_delay_another() {
-    let host = ExtensionHost::start(vec![
-        source("slow", &spinner(2.0)),
-        source("fast", &spinner(0.0)),
-    ]);
-    let slow = tokio::spawn({
+async fn a_looping_extension_is_killed_without_delaying_another() {
+    let looping = r#"
+        local calls = 0
+        return { search = function(request)
+            calls += 1
+            if request.keyword == "loop" then
+                while true do end
+            end
+            return { { name = tostring(calls) } }
+        end }
+    "#;
+    let host = ExtensionHost::start(vec![source("loop", looping), source("fast", &spinner(0.0))]);
+    let started = Instant::now();
+    let looped = tokio::spawn({
         let host = host.clone();
         async move {
-            host.search(&ExtensionId::new("slow"), ProviderRequest::keyword("spin"))
+            host.search(&ExtensionId::new("loop"), ProviderRequest::keyword("loop"))
                 .await
         }
     });
-    // Let the slow call start spinning first.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let started = Instant::now();
+    let asked = Instant::now();
     let fast = host
         .search(&ExtensionId::new("fast"), ProviderRequest::keyword("x"))
         .await
         .unwrap();
     assert!(
-        started.elapsed() < Duration::from_secs(1),
+        asked.elapsed() < Duration::from_millis(500),
         "fast answered in {:?}",
-        started.elapsed()
+        asked.elapsed()
     );
     assert_eq!(fast.len(), 1);
-    assert!(!slow.is_finished(), "the slow call is still spinning");
-    assert_eq!(slow.await.unwrap().map(|rows| rows.len()), Ok(1));
+    assert!(!looped.is_finished(), "the loop is still running");
+
+    assert_eq!(looped.await.unwrap(), Err(ExtensionError::CpuLimit));
+    let killed_after = started.elapsed();
+    assert!(
+        (Duration::from_secs(1)..Duration::from_secs(2)).contains(&killed_after),
+        "killed after 1 s of CPU, took {killed_after:?}"
+    );
+    let rebuilt = single_name_on(&host, "loop").await;
+    assert_eq!(
+        rebuilt, "1",
+        "the rebuilt VM re-ran the chunk, resetting `calls`"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pcall_cannot_swallow_a_kill() {
+    let lua = r#"
+        return { search = function()
+            for _ = 1, 3 do
+                pcall(function() while true do end end)
+                xpcall(function() while true do end end, function(e) return e end)
+                coroutine.resume(coroutine.create(function() while true do end end))
+            end
+            return { { name = "survived" } }
+        end }
+    "#;
+    assert_eq!(
+        run(lua, ProviderRequest::keyword("x")).await,
+        Err(ExtensionError::CpuLimit)
+    );
+}
+
+/// The single row name from one call on `host`.
+async fn single_name_on(host: &ExtensionHost, id: &str) -> String {
+    let rows = host
+        .search(&ExtensionId::new(id), ProviderRequest::keyword("x"))
+        .await
+        .unwrap();
+    rows.into_iter().next().and_then(|row| row.name).unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
