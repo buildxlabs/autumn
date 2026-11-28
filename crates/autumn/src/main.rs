@@ -1,6 +1,7 @@
 //! Autumn, a desktop app for anime and manga.
 
 mod account;
+mod auto_select;
 mod fetch_status;
 mod general;
 mod http_client;
@@ -175,6 +176,8 @@ fn main() -> ExitCode {
         started.paths.cache_dir(),
     );
     let general_services = general::saver(engine.db().clone(), engine.settings().clone());
+    let auto_select_settings = engine.settings().auto_select.clone();
+    let auto_select_services = auto_select::saver(engine.db().clone(), engine.settings().clone());
     let torrent = engine.settings().torrent.clone();
     let torrent_services = torrent::services(
         engine.db().clone(),
@@ -251,6 +254,8 @@ fn main() -> ExitCode {
                 library_services,
                 torrent,
                 torrent_services,
+                auto_select_settings,
+                auto_select_services,
                 library_store,
                 scan_summaries,
                 explorer,
@@ -325,6 +330,8 @@ fn open_main_window(
     library_services: ui_screens::LibraryServices,
     torrent: TorrentSettings,
     torrent_services: TorrentServices,
+    auto_select: ui_screens::AutoSelectSettings,
+    auto_select_services: ui_screens::AutoSelectServices,
     library_store: Entity<LibraryStore>,
     scan_summaries: Entity<ScanSummariesStore>,
     explorer: Entity<LibraryExplorerStore>,
@@ -359,6 +366,8 @@ fn open_main_window(
                 library_services,
                 torrent,
                 torrent_services,
+                auto_select,
+                auto_select_services,
                 library_store,
                 scan_summaries,
                 explorer,
@@ -476,6 +485,8 @@ mod tests {
                 ui_screens::LibraryServices::inert(),
                 TorrentSettings::default(),
                 TorrentServices::inert(),
+                ui_screens::AutoSelectSettings::default(),
+                ui_screens::AutoSelectServices::inert(),
                 library_store,
                 scan_summaries,
                 explorer,

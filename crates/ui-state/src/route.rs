@@ -26,6 +26,8 @@ pub enum SettingsTab {
     Storage,
     /// Torrent networking, proxies and indexer mirrors (#210 / ADR-0010).
     Network,
+    /// Auto-select profiles (#228); torrent folder and cache stay on Storage.
+    Torrents,
     /// Data-source attribution and licences.
     About,
 }

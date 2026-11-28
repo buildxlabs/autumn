@@ -22,8 +22,8 @@ pub use discover::{
 };
 
 pub use shell::{
-    AppShell, GeneralServices, GeneralSettings, LibraryServices, LibrarySettings, NetworkServices,
-    NetworkSettings, PlaybackServices, PlaybackSettings, PlaybackTestError, PlayerOption,
-    PosterCacheAction, RailMode, RailPrefs, SYSTEM_ROUTES, TorrentCacheAction, TorrentServices,
-    TorrentSettings,
+    AppShell, AutoSelectServices, AutoSelectSettings, GeneralServices, GeneralSettings,
+    LibraryServices, LibrarySettings, NetworkServices, NetworkSettings, PlaybackServices,
+    PlaybackSettings, PlaybackTestError, PlayerOption, PosterCacheAction, RailMode, RailPrefs,
+    SYSTEM_ROUTES, TorrentCacheAction, TorrentServices, TorrentSettings,
 };

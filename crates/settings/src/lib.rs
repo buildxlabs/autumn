@@ -9,6 +9,7 @@ mod settings;
 
 pub use auto_select::{
     AutoSelectProfile, AutoSelectSettings, Codec, DEFAULT_PROFILE_NAME, Preference, Source,
+    move_item,
 };
 pub use error::SettingsError;
 pub use paths::AppPaths;

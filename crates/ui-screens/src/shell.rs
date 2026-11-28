@@ -51,11 +51,12 @@ use ui_state::{
 
 use ::settings::PlayerChoice;
 pub use ::settings::{
-    GeneralSettings, LibrarySettings, NetworkSettings, PlaybackSettings, TorrentSettings,
+    AutoSelectSettings, GeneralSettings, LibrarySettings, NetworkSettings, PlaybackSettings,
+    TorrentSettings,
 };
 pub use settings::{
-    GeneralServices, LibraryServices, NetworkServices, PlaybackServices, PlaybackTestError,
-    PlayerOption, PosterCacheAction, TorrentCacheAction, TorrentServices,
+    AutoSelectServices, GeneralServices, LibraryServices, NetworkServices, PlaybackServices,
+    PlaybackTestError, PlayerOption, PosterCacheAction, TorrentCacheAction, TorrentServices,
 };
 use settings::{PlaybackTestStatus, PosterCacheRequest, StorageStatus, TorrentCacheStatus};
 
@@ -209,6 +210,17 @@ pub struct AppShell {
     network_services: NetworkServices,
     network_error: Option<String>,
     save_network_task: Option<Task<()>>,
+    /// The Torrents tab's auto-select profiles and its composition-root callback (#228).
+    auto_select: AutoSelectSettings,
+    auto_select_services: AutoSelectServices,
+    auto_select_error: Option<String>,
+    save_auto_select_task: Option<Task<()>>,
+    /// The name of the auto-select profile the Torrents tab edits.
+    selected_profile: String,
+    /// Whether the profile rename input is shown.
+    renaming_profile: bool,
+    /// The text field used to rename a profile.
+    rename_input: Entity<InputState>,
     /// The Library tab's values, store and composition-root callback (#127).
     library: LibrarySettings,
     library_services: LibraryServices,
@@ -317,6 +329,8 @@ impl AppShell {
             library_services,
             TorrentSettings::default(),
             TorrentServices::inert(),
+            AutoSelectSettings::default(),
+            AutoSelectServices::inert(),
             library_store,
             scan_summaries,
             explorer,
@@ -356,6 +370,8 @@ impl AppShell {
         library_services: LibraryServices,
         torrent: TorrentSettings,
         torrent_services: TorrentServices,
+        auto_select: AutoSelectSettings,
+        auto_select_services: AutoSelectServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
         explorer: Entity<ui_state::LibraryExplorerStore>,
@@ -446,6 +462,7 @@ impl AppShell {
         });
         let token_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Paste the token from AniList"));
+        let rename_input = cx.new(|cx| InputState::new(window, cx).placeholder("Profile name"));
         let entry_editor = EntryEditor::new(window, cx);
         let entry_events = observe_entry(&entry_store, &entry_editor, window, cx);
         let home_carousels = HomeCarousels::new(cx);
@@ -544,6 +561,13 @@ impl AppShell {
             network_services,
             network_error: None,
             save_network_task: None,
+            auto_select,
+            auto_select_services,
+            auto_select_error: None,
+            save_auto_select_task: None,
+            selected_profile: ::settings::DEFAULT_PROFILE_NAME.to_owned(),
+            renaming_profile: false,
+            rename_input,
             library,
             library_services,
             library_store,
@@ -601,6 +625,8 @@ impl AppShell {
         library_services: LibraryServices,
         torrent: TorrentSettings,
         torrent_services: TorrentServices,
+        auto_select: AutoSelectSettings,
+        auto_select_services: AutoSelectServices,
         library_store: Entity<LibraryStore>,
         scan_summaries: Entity<ScanSummariesStore>,
         explorer: Entity<ui_state::LibraryExplorerStore>,
@@ -636,6 +662,8 @@ impl AppShell {
             library_services,
             torrent,
             torrent_services,
+            auto_select,
+            auto_select_services,
             library_store,
             scan_summaries,
             explorer,
@@ -2092,6 +2120,8 @@ mod tests {
                                 },
                                 PathBuf::from("/cache/torrents"),
                             ),
+                            settings::AutoSelectSettings::default(),
+                            crate::shell::AutoSelectServices::inert(),
                             cx.new(|_| ui_state::LibraryStore::new(pending_services())),
                             cx.new(|_| ui_state::ScanSummariesStore::new(pending_services())),
                             cx.new(|_| ui_state::LibraryExplorerStore::new(pending_services())),
@@ -3677,6 +3707,8 @@ mod tests {
                             crate::shell::LibraryServices::inert(),
                             TorrentSettings::default(),
                             TorrentServices::inert(),
+                            settings::AutoSelectSettings::default(),
+                            crate::shell::AutoSelectServices::inert(),
                             cx.new(|_| {
                                 ui_state::LibraryStore::new(
                                     ui_state::test_support::pending_services(),
