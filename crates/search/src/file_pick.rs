@@ -78,6 +78,21 @@ pub fn is_video_path(path: &str) -> bool {
         .is_some_and(|extension| VIDEO_EXTENSIONS.contains(&extension))
 }
 
+/// Whether a file inside a torrent can be played as an episode: a video
+/// extension, not a sample/extra folder, and a regular episode kind (not
+/// NCOP/NCED/special/extra). NCOP/NCED/sample/extra files are dimmed and
+/// cannot be played (#182 Q7).
+#[must_use]
+pub fn is_playable_file(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let release = parse(name);
+    let is_video = release
+        .extension
+        .as_deref()
+        .is_some_and(|extension| VIDEO_EXTENSIONS.contains(&extension));
+    is_video && !is_skipped(path) && release.kind == EpisodeKind::Episode
+}
+
 fn is_skipped(path: &str) -> bool {
     path.to_lowercase()
         .split(|c: char| !c.is_alphanumeric())

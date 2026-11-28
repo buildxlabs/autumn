@@ -13,18 +13,19 @@ workspace = true
 test-util = [  ]
 
 [dependencies]
-db.workspace        = true
-domain.workspace    = true
-engine.workspace    = true
-flume.workspace     = true
-gpui-kit.workspace  = true
-metadata.workspace  = true
-search.workspace    = true
-settings.workspace  = true
-thiserror.workspace = true
-tokio               = { features = [ "rt" ], workspace = true }
-tracing.workspace   = true
-tracker.workspace   = true
+db.workspace             = true
+domain.workspace         = true
+engine.workspace         = true
+flume.workspace          = true
+gpui-kit.workspace       = true
+metadata.workspace       = true
+release-parser.workspace = true
+search.workspace         = true
+settings.workspace       = true
+thiserror.workspace      = true
+tokio                    = { features = [ "rt" ], workspace = true }
+tracing.workspace        = true
+tracker.workspace        = true
 
 [dev-dependencies]
 gpui-kit           = { features = [ "test-support" ], workspace = true }

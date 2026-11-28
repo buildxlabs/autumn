@@ -80,6 +80,7 @@ fn rss_item(fields: &HashMap<String, String>) -> Option<Torrent> {
         .and_then(|value| util::parse_count(value));
     torrent.trusted = is_yes(fields.get("nyaa:trusted"));
     torrent.remake = is_yes(fields.get("nyaa:remake"));
+    torrent.published = fields.get("pubDate").and_then(|value| parse_rfc2822(value));
     Some(torrent)
 }
 
@@ -163,4 +164,12 @@ fn attribute(element: ElementRef<'_>, name: &str) -> Option<String> {
 
 fn text(element: ElementRef<'_>) -> String {
     element.text().collect::<String>().trim().to_owned()
+}
+
+/// `Nyaa` `pubDate` (RFC 2822) to Unix seconds.
+fn parse_rfc2822(value: &str) -> Option<u64> {
+    let parsed =
+        time::OffsetDateTime::parse(value.trim(), &time::format_description::well_known::Rfc2822)
+            .ok()?;
+    u64::try_from(parsed.unix_timestamp()).ok()
 }

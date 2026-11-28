@@ -41,7 +41,9 @@ fn a_torrent_source_names_one_file_of_a_torrent() {
         source,
         StreamSource::Torrent {
             info_hash,
-            file_index: 3
+            file_index: 3,
+            magnet: None,
+            trackers: Vec::new(),
         }
     );
 }

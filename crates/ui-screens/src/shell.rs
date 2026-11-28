@@ -170,6 +170,8 @@ pub struct AppShell {
     entry_library: Entity<EntryLibraryStore>,
     /// The Entry Torrents tab's store (#220).
     entry_torrents: Entity<ui_state::EntryTorrentStore>,
+    /// The release-list sheet store (#221).
+    release_list: Entity<ui_state::ReleaseListStore>,
     /// The AniList search behind the Library tab's Re-match (#133), built
     /// once startup has an AniList client.
     entry_rematch: Option<Entity<MediaSearchDialog>>,
@@ -519,6 +521,27 @@ impl AppShell {
             })
             .detach();
         }
+        // The release-list sheet store (#221); `no peers` persists per session.
+        let release_list_services = entry_store.read(cx).services();
+        let release_list_playback = playback_store.clone();
+        let release_list = cx
+            .new(|_| ui_state::ReleaseListStore::new(release_list_services, release_list_playback));
+        // Auto-select failure opens the release list automatically (#182 Q2).
+        {
+            cx.observe(&entry_torrents, move |shell, entry_torrents, cx| {
+                let pending = entry_torrents.update(cx, |store, _cx| {
+                    ui_state::entry_torrent::take_pending_open(store)
+                });
+                if let Some((episode, reason)) = pending
+                    && let Some(window_handle) = cx.active_window()
+                {
+                    let _ = window_handle.update(cx, |_, window, app| {
+                        shell.open_release_list(episode, Some(reason), window, app);
+                    });
+                }
+            })
+            .detach();
+        }
         // Home is the first route: load it now, as `show` does on return.
         home_store.update(cx, HomeStore::open);
         let user = account.read(cx).name().map(str::to_owned);
@@ -560,6 +583,7 @@ impl AppShell {
             _entry_events: entry_events,
             entry_library,
             entry_torrents,
+            release_list,
             entry_rematch: None,
             home_store,
             playback_store,
@@ -1035,6 +1059,35 @@ impl AppShell {
         }
     }
 
+    /// Opens the release-list sheet for `episode` (#221), optionally with an
+    /// auto-select failure reason.
+    pub fn open_release_list(
+        &mut self,
+        episode: u32,
+        failure_reason: Option<String>,
+        window: &mut Window,
+        cx: &mut gpui_kit::App,
+    ) {
+        let Some(context) = self
+            .entry_torrents
+            .read(cx)
+            .release_list_context(episode, failure_reason)
+        else {
+            return;
+        };
+        let store = self.release_list.clone();
+        store.update(cx, |store, cx| store.open(context, cx));
+        let screen_store = store.clone();
+        let screen =
+            cx.new(|cx| crate::release_list::ReleaseListScreen::new(screen_store, window, cx));
+        window.open_sheet(cx, move |sheet, _, _| {
+            sheet
+                .title("Release list")
+                .w(px(760.))
+                .child(screen.clone())
+        });
+    }
+
     /// Opens `route`, saving the current route's scroll offset.
     pub(crate) fn navigate(&mut self, route: Route, cx: &mut Context<'_, Self>) {
         let offset = self.leaving_scroll(cx);
@@ -1462,13 +1515,28 @@ impl AppShell {
                 no_peers: preparing.no_peers,
             };
             let shell = self.shell_handle.clone();
+            let preparing_episode = preparing.episode;
             let actions = BufferOverlayActions::new()
                 .on_cancel({
                     let store = self.playback_store.clone();
                     move |_, cx| store.update(cx, PlaybackStore::stop)
                 })
-                .on_choose_another(move |_, cx| {
+                .on_choose_another(move |window, cx| {
                     let _ = shell.update(cx, |shell, cx| {
+                        // The dead release is marked `no peers` for the
+                        // rest of the app session (#182 Q9).
+                        let dead =
+                            shell
+                                .playback_store
+                                .read(cx)
+                                .current_source()
+                                .and_then(|source| match source {
+                                    domain::StreamSource::Torrent { info_hash, .. } => {
+                                        Some(info_hash.to_string())
+                                    }
+                                    _ => None,
+                                });
+                        let episode = preparing_episode;
                         shell.playback_store.update(cx, PlaybackStore::stop);
                         let id = shell.entry_store.read(cx).current_id().or_else(|| {
                             match shell.route() {
@@ -1476,11 +1544,23 @@ impl AppShell {
                                 _ => None,
                             }
                         });
-                        // The release-list sheet (#221) and the Torrents tab
-                        // (#220) are not here yet: open the plain Entry.
-                        if let Some(id) = id {
-                            shell.navigate(Route::Entry { id, tab: None }, cx);
+                        if let Some(hash) = &dead {
+                            shell
+                                .release_list
+                                .update(cx, |store, cx| store.mark_no_peers(hash, cx));
                         }
+                        let Some(id) = id else {
+                            return;
+                        };
+                        shell.navigate(
+                            Route::Entry {
+                                id,
+                                tab: Some(ui_state::EntryTab::Torrents),
+                            },
+                            cx,
+                        );
+                        // Open the release-list sheet for that episode (#182 Q9).
+                        shell.open_release_list(episode, None, window, cx);
                     });
                 });
             return Some(

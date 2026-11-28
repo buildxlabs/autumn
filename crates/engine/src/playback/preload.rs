@@ -498,6 +498,7 @@ impl PlaybackManager {
         let StreamSource::Torrent {
             info_hash,
             file_index,
+            ..
         } = current.source
         else {
             return Ok(None);
@@ -541,6 +542,7 @@ impl PlaybackManager {
             StreamSource::Torrent {
                 info_hash,
                 file_index,
+                ..
             } => Ok(Some(Fetch::Torrent {
                 info_hash,
                 file_index,

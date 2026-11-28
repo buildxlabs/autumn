@@ -36,3 +36,17 @@ pub(crate) fn infohash_from_magnet(magnet: &str) -> Option<String> {
 pub(crate) fn magnet_for(infohash: &str) -> String {
     format!("magnet:?xt=urn:btih:{infohash}")
 }
+
+/// Tracker announce URLs from a magnet link's `tr=` parameters, in order.
+#[must_use]
+pub fn trackers_from_magnet(magnet: &str) -> Vec<String> {
+    let Some((_, query)) = magnet.split_once('?') else {
+        return Vec::new();
+    };
+    query
+        .split('&')
+        .filter_map(|pair| pair.strip_prefix("tr="))
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect()
+}

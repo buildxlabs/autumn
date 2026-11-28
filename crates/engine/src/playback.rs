@@ -937,6 +937,7 @@ impl PlaybackManager {
         if let StreamSource::Torrent {
             info_hash,
             file_index,
+            ..
         } = request.source
         {
             return self.start_torrent(request, info_hash, file_index, resume);
@@ -1546,6 +1547,7 @@ impl PlaybackManager {
         let StreamSource::Torrent {
             info_hash,
             file_index,
+            ..
         } = request.source
         else {
             return None;
@@ -1636,6 +1638,7 @@ impl PlaybackManager {
             StreamSource::Torrent {
                 info_hash,
                 file_index,
+                ..
             } => {
                 match self
                     .switch_stream(session, stream, stopped, &next, *info_hash, *file_index)

@@ -185,7 +185,7 @@ fn row(
                 div()
                     .flex()
                     .gap_2()
-                    .child(choose())
+                    .child(choose(id, Some(reason.clone()), cx))
                     .child(stream_button(&torrents, id, unaired)),
             )
             .into_any_element(),
@@ -194,7 +194,7 @@ fn row(
             .items_center()
             .gap_2()
             .child(stream_button(&torrents, id, unaired))
-            .child(choose())
+            .child(choose(id, None, cx))
             .into_any_element(),
     };
 
@@ -267,11 +267,18 @@ fn stream_button(
         .on_click(move |_, _, cx| torrents.update(cx, |store, cx| store.stream(id, cx)))
 }
 
-/// **Choose…**; no-op until #221.
-fn choose() -> impl IntoElement {
-    Button::new("entry-torrents-choose")
+/// **Choose…** opens the release list for this episode (#221); on a failed
+/// row the auto-select reason is carried into the sheet header.
+fn choose(
+    id: u32,
+    failure_reason: Option<String>,
+    cx: &mut Context<'_, AppShell>,
+) -> impl IntoElement {
+    Button::new(format!("entry-torrents-choose-{id}"))
         .label(CHOOSE)
-        .disabled(true)
+        .on_click(cx.listener(move |shell, _, window, cx| {
+            shell.open_release_list(id, failure_reason.clone(), window, cx);
+        }))
 }
 
 /// The `in library` pill; jumps to this episode in the Library tab (#182 Q3).

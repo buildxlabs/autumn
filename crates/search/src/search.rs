@@ -200,8 +200,48 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
         Ok(results)
     }
 
+    /// One keyword-only search on both indexers (no numbered or id-keyed
+    /// queries, no keyword fallback), within the same budget and 60 s cache.
+    /// `refresh` bypasses the cache for this call. Deduped by infohash.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::search`].
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    pub async fn search_keyword(
+        &self,
+        keyword: &str,
+        refresh: bool,
+    ) -> Result<Vec<Torrent>, Error> {
+        let keyword = keyword.trim();
+        let nyaa = Query::Nyaa {
+            keyword: keyword.to_owned(),
+        };
+        let tosho = Query::anime_tosho_fallback(keyword);
+        let (nyaa, tosho) = tokio::join!(
+            self.run_query_cached(&nyaa, refresh),
+            self.run_query_cached(&tosho, refresh),
+        );
+        let mut results = nyaa?;
+        results.extend(tosho?);
+        let mut seen = HashSet::new();
+        results.retain(|torrent| seen.insert(torrent.infohash.to_ascii_lowercase()));
+        Ok(results)
+    }
+
     async fn run_query(&self, query: &Query) -> Result<Vec<Torrent>, Error> {
-        if let Some(cached) = self.cached(query) {
+        self.run_query_cached(query, false).await
+    }
+
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    async fn run_query_cached(&self, query: &Query, refresh: bool) -> Result<Vec<Torrent>, Error> {
+        if !refresh && let Some(cached) = self.cached(query) {
             return Ok(cached);
         }
         let bytes = self.fetch_with_retry(query).await?;

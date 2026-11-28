@@ -116,7 +116,7 @@ player        → domain
 search        → net (indexer HTTP through the shared client, §6)
 search        → settings (ranks with the persisted AutoSelectProfile, #218)
 tracker       → domain, db
-ui-state      → domain, engine, metadata, tracker, db, search, settings (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker; search builds the auto-select `SearchRequest`, settings carries `AutoSelectSettings` for the Torrents tab #220)
+ui-state      → domain, engine, metadata, tracker, db, search, settings, release-parser (release-list view model #221) (the one active platform is exposed to screens through ui-state via opaque handles; db and metadata let it own gateway construction without screens naming tracker; search builds the auto-select `SearchRequest`, settings carries `AutoSelectSettings` for the Torrents tab #220)
 ui-components → (gpui-kit only)
 ui-screens    → ui-components, ui-state, db, metadata, domain, settings, futures, time (ui-theme as a dev-dependency only)
 autumn        → engine, settings, db, domain, metadata, net, player, auth, tracker, torrent, ui-state, ui-screens, ui-theme (the composition root builds the active platform and owns the torrent cache request)

@@ -9886,6 +9886,7 @@ dependencies = [
  "gpui-kit",
  "metadata",
  "net",
+ "release-parser",
  "search",
  "settings",
  "tempfile",

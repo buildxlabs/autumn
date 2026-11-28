@@ -53,6 +53,8 @@ pub struct PlaybackStore {
     /// Peers and speed of the last preparing report, kept for the in-HUD chip.
     stream_stats: Option<(u32, u64)>,
     buffering: bool,
+    /// The source of the active/last request, for `no peers` marking (#221).
+    source: Option<StreamSource>,
     request: Option<Task<()>>,
     control: Option<Task<()>>,
     closed: bool,
@@ -88,6 +90,7 @@ impl PlaybackStore {
             preparing_elapsed: Duration::ZERO,
             stream_stats: None,
             buffering: false,
+            source: None,
             request: None,
             control: None,
             closed: false,
@@ -254,6 +257,7 @@ impl PlaybackStore {
 
     /// Starts `request`; a newer request cancels the older one's task.
     pub fn play(&mut self, request: PlayRequest, cx: &mut Context<'_, Self>) {
+        self.source = Some(request.source.clone());
         self.details.clone_from(&request.details);
         self.upcoming = None;
         self.preparing_since = None;
@@ -305,6 +309,12 @@ impl PlaybackStore {
         self.request = Some(cx.spawn(async move |_, cx| {
             let _ = call(cx, services.stop()).await;
         }));
+    }
+
+    /// The source of the active (or last) request, for `no peers` marking.
+    #[must_use]
+    pub fn current_source(&self) -> Option<&StreamSource> {
+        self.source.as_ref()
     }
 
     /// Toggles play/pause from the HUD. The player's next event confirms it.
