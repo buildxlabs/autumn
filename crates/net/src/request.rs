@@ -43,6 +43,7 @@ pub struct Request {
     host: String,
     headers: Vec<(HeaderName, HeaderValue)>,
     body: Option<Vec<u8>>,
+    max_response_bytes: Option<u64>,
 }
 
 impl Request {
@@ -60,6 +61,7 @@ impl Request {
             host,
             headers: Vec::new(),
             body: None,
+            max_response_bytes: None,
         }
     }
 
@@ -82,6 +84,15 @@ impl Request {
         self
     }
 
+    /// Cap the response body; reading more fails with
+    /// [`Error::ResponseTooLarge`]. Extension requests are always capped at
+    /// 4 MiB, so a larger value has no effect there.
+    #[must_use]
+    pub fn max_response_bytes(mut self, limit: u64) -> Self {
+        self.max_response_bytes = Some(limit);
+        self
+    }
+
     /// The target URL.
     #[must_use]
     pub fn url(&self) -> &str {
@@ -90,6 +101,14 @@ impl Request {
 
     pub(crate) fn host(&self) -> &str {
         &self.host
+    }
+
+    pub(crate) fn body_len(&self) -> usize {
+        self.body.as_ref().map_or(0, Vec::len)
+    }
+
+    pub(crate) fn response_limit(&self) -> Option<u64> {
+        self.max_response_bytes
     }
 
     pub(crate) fn into_reqwest(self) -> Result<reqwest::Request, Error> {
@@ -110,15 +129,17 @@ impl Request {
 pub struct Response {
     status: u16,
     inner: reqwest::Response,
+    limit: Option<u64>,
     _in_flight: InFlight,
 }
 
 impl Response {
-    pub(crate) fn new(inner: reqwest::Response, in_flight: InFlight) -> Self {
+    pub(crate) fn new(inner: reqwest::Response, in_flight: InFlight, limit: Option<u64>) -> Self {
         let status = inner.status().as_u16();
         Self {
             status,
             inner,
+            limit,
             _in_flight: in_flight,
         }
     }
@@ -144,27 +165,68 @@ impl Response {
             .and_then(|value| value.to_str().ok())
     }
 
+    /// Every value of a repeated header, such as `Set-Cookie`, in order.
+    #[must_use]
+    pub fn header_values(&self, name: &str) -> Vec<&str> {
+        self.inner
+            .headers()
+            .get_all(name)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .collect()
+    }
+
     /// Read the entire body as bytes.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Body`] if the response cannot be read.
-    pub async fn bytes(self) -> Result<Vec<u8>, Error> {
-        self.inner
-            .bytes()
-            .await
-            .map(|bytes| bytes.to_vec())
-            .map_err(|source| Error::Body {
-                source: HttpError::new(source),
-            })
+    /// Returns [`Error::Body`] if the response cannot be read, and
+    /// [`Error::ResponseTooLarge`] as soon as it outgrows the request's cap.
+    pub async fn bytes(mut self) -> Result<Vec<u8>, Error> {
+        let body_error = |source: reqwest::Error| Error::Body {
+            source: HttpError::new(source.without_url()),
+        };
+        let Some(limit) = self.limit else {
+            return self
+                .inner
+                .bytes()
+                .await
+                .map(|bytes| bytes.to_vec())
+                .map_err(body_error);
+        };
+        let too_large = |inner: &reqwest::Response| Error::ResponseTooLarge {
+            host: inner.url().host_str().unwrap_or_default().to_owned(),
+            limit,
+        };
+        if self
+            .inner
+            .content_length()
+            .is_some_and(|length| length > limit)
+        {
+            return Err(too_large(&self.inner));
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = self.inner.chunk().await.map_err(body_error)? {
+            let length = u64::try_from(body.len() + chunk.len()).unwrap_or(u64::MAX);
+            if length > limit {
+                return Err(too_large(&self.inner));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
     }
 
     /// Read the entire body as UTF-8 text.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Body`] if the response cannot be read.
+    /// Returns [`Error::Body`] if the response cannot be read, and
+    /// [`Error::ResponseTooLarge`] as soon as it outgrows the request's cap.
     pub async fn text(self) -> Result<String, Error> {
+        if self.limit.is_some() {
+            let bytes = self.bytes().await?;
+            return Ok(String::from_utf8_lossy(&bytes).into_owned());
+        }
         self.inner.text().await.map_err(|source| Error::Body {
             source: HttpError::new(source),
         })

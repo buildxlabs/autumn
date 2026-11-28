@@ -46,6 +46,24 @@ pub enum Error {
         reason: BlockReason,
     },
 
+    /// An extension request body is larger than the 1 MiB cap.
+    #[error("request to {host} is larger than {limit} bytes")]
+    RequestTooLarge {
+        /// The host the request was addressed to.
+        host: String,
+        /// The cap in bytes.
+        limit: u64,
+    },
+
+    /// A response body grew past its cap and was abandoned.
+    #[error("response from {host} is larger than {limit} bytes")]
+    ResponseTooLarge {
+        /// The host that sent the response.
+        host: String,
+        /// The cap in bytes.
+        limit: u64,
+    },
+
     /// A declared host pattern or LAN host exception is malformed or too broad.
     #[error("invalid host pattern {pattern:?}: {reason}")]
     InvalidHostPattern {
