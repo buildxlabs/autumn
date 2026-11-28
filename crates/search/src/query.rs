@@ -310,7 +310,7 @@ fn dedup(queries: Vec<Query>) -> Vec<Query> {
         .collect()
 }
 
-fn ordered_titles(request: &SearchRequest) -> Vec<String> {
+pub(crate) fn ordered_titles(request: &SearchRequest) -> Vec<String> {
     let mut seen = HashSet::new();
     request
         .titles

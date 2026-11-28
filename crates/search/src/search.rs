@@ -1,12 +1,14 @@
 //! Search orchestration: URL construction, budget, retry, cache and dedupe.
 //!
-//! Each indexer runs its own serial queue and the two queues run concurrently.
-//! Numbered queries come first; keyword fallbacks only run when that indexer
-//! found nothing. Results are cached for 60 seconds and deduped by infohash.
+//! Each indexer, built-in or extension, runs in its own lane and the lanes
+//! run concurrently. Numbered queries come first; keyword fallbacks only run
+//! when that indexer found nothing. Results are cached for 60 seconds and
+//! deduped by infohash in lane order (ADR 0011).
 
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
+    pin::Pin,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU64, Ordering},
@@ -14,19 +16,32 @@ use std::{
     time::{Duration, Instant},
 };
 
+use domain::ExtensionId;
+use extensions::ProviderRequest;
 use url::Url;
 
 use crate::{
     Error, Indexer, LaneFailure, Query, QueryPlan, SearchOutcome, SearchRequest, Torrent,
     animetosho, nyaa, plan,
+    provider::{
+        NoProviders, ProviderMeta, ProviderSet, keyword_request, lane_metas, structured_request,
+    },
+    validation::validate_rows,
 };
 
 /// `Nyaa`'s default base URL; a mirror can be supplied in [`Config`].
 pub const NYAA_BASE_URL: &str = "https://nyaa.si";
 /// The live `AnimeTosho` successor feed, not the retired `.org` host.
 pub const ANIMETOSHO_BASE_URL: &str = "https://feed.animetosho.net";
-/// How long a query's results stay usable.
+/// How long a query's results stay usable. Extension rows are cached under
+/// `(id, version, request)`, so an update cannot serve stale results, and a
+/// failure is never cached.
 pub const CACHE_TTL: Duration = Duration::from_secs(60);
+/// How long a provider call may take before its lane is dropped (#264 Q2).
+///
+/// Dropping the call cancels it; it is not a VM kill and does not count toward
+/// extension auto-disable. The other lanes still return their results.
+pub const PROVIDER_DEADLINE: Duration = Duration::from_secs(10);
 const DEFAULT_BACKOFF: Duration = Duration::from_millis(250);
 
 /// Base URLs for the two indexers, supplied by Network settings later.
@@ -139,12 +154,43 @@ struct CacheEntry {
     results: Vec<Torrent>,
 }
 
-/// Runs queries against both indexers within the #181 budget.
+/// A provider call's cache key: id, version and the exact request (#264 Q5).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ProviderCacheKey {
+    id: ExtensionId,
+    version: String,
+    fingerprint: String,
+}
+
+impl ProviderCacheKey {
+    fn new(meta: &ProviderMeta, request: &ProviderRequest) -> Self {
+        Self {
+            id: meta.id.clone(),
+            version: meta.version.clone(),
+            // Debug is stable within a build and only a cache identity: a
+            // format change costs a refetch, never a wrong answer.
+            fingerprint: format!("{request:?}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum CacheKey {
+    Query(Query),
+    Extension(ProviderCacheKey),
+}
+
+type LaneFuture<'a> = Pin<Box<dyn Future<Output = Result<Vec<Torrent>, Error>> + Send + 'a>>;
+
+/// Runs queries against both built-in indexers and the extension lanes within
+/// the #181 budget.
 #[derive(Debug)]
 pub struct Searcher<T: Transport, C: Clock = SystemClock> {
     transport: T,
-    cache: Mutex<HashMap<Query, CacheEntry>>,
+    cache: Mutex<HashMap<CacheKey, CacheEntry>>,
     clock: C,
+    providers: Arc<dyn ProviderSet>,
+    provider_deadline: Duration,
 }
 
 impl<T: Transport> Searcher<T, SystemClock> {
@@ -163,7 +209,34 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
             transport,
             cache: Mutex::new(HashMap::new()),
             clock,
+            providers: Arc::new(NoProviders),
+            provider_deadline: PROVIDER_DEADLINE,
         }
+    }
+
+    /// Add the provider set used for `LaneFilter::All` searches.
+    ///
+    /// The lane set is read when each search starts. Every provider gets one
+    /// `search(request)` call, validated and deduped after the built-ins.
+    /// Availability badges pass `LaneFilter::BuiltIn` and never call a provider.
+    #[must_use]
+    pub fn with_providers(mut self, providers: Arc<dyn ProviderSet>) -> Self {
+        self.providers = providers;
+        self
+    }
+
+    /// Override the provider deadline, for tests that must not wait 10 s.
+    #[must_use]
+    pub fn with_provider_deadline(mut self, deadline: Duration) -> Self {
+        self.provider_deadline = deadline;
+        self
+    }
+
+    /// Drop every cached result for `id`, on extension update, disable or
+    /// removal (#264 Q8). Other extensions' cached rows are left alone.
+    pub fn purge_provider(&self, id: &ExtensionId) {
+        lock_cache(&self.cache)
+            .retain(|key, _| !matches!(key, CacheKey::Extension(provider) if &provider.id == id));
     }
 
     /// Search both indexers concurrently and return deduped results.
@@ -190,13 +263,94 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
         filter: LaneFilter,
     ) -> Result<SearchOutcome, Error> {
         let queries = plan(request);
-        let (nyaa, tosho) = tokio::join!(
-            self.run_indexer(&queries, Indexer::Nyaa),
-            self.run_indexer(&queries, Indexer::AnimeTosho),
+        let mut lanes: Vec<(Indexer, LaneFuture<'_>)> = vec![
+            (
+                Indexer::Nyaa,
+                Box::pin(self.run_indexer(&queries, Indexer::Nyaa)),
+            ),
+            (
+                Indexer::AnimeTosho,
+                Box::pin(self.run_indexer(&queries, Indexer::AnimeTosho)),
+            ),
+        ];
+        // Badges stay on the built-ins; only `All` calls user-installed hosts.
+        if filter == LaneFilter::All {
+            self.add_provider_lanes(&mut lanes, &structured_request(request), false);
+        }
+        tracing::debug!(?filter, lanes = lanes.len(), "running indexer lanes");
+        self.run_lanes(lanes).await
+    }
+
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    fn add_provider_lanes<'a>(
+        &'a self,
+        lanes: &mut Vec<(Indexer, LaneFuture<'a>)>,
+        request: &ProviderRequest,
+        refresh: bool,
+    ) {
+        for meta in lane_metas(self.providers.as_ref()) {
+            let indexer = Indexer::Extension {
+                id: meta.id.clone(),
+                name: Arc::clone(&meta.name),
+            };
+            lanes.push((
+                indexer,
+                Box::pin(self.run_extension(meta, request.clone(), refresh)),
+            ));
+        }
+    }
+
+    async fn run_lanes(
+        &self,
+        lanes: Vec<(Indexer, LaneFuture<'_>)>,
+    ) -> Result<SearchOutcome, Error> {
+        let indexers: Vec<Indexer> = lanes.iter().map(|(indexer, _)| indexer.clone()).collect();
+        let results = futures::future::join_all(lanes.into_iter().map(|(_, future)| future)).await;
+        outcome(indexers.into_iter().zip(results))
+    }
+
+    /// One provider call per search, under the deadline, with no host retry.
+    ///
+    /// # Errors
+    ///
+    /// Returns the provider or validation error for this lane only; `outcome`
+    /// decides whether the whole search fails.
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "refresh bypasses the cache"
+    )]
+    async fn run_extension(
+        &self,
+        meta: ProviderMeta,
+        request: ProviderRequest,
+        refresh: bool,
+    ) -> Result<Vec<Torrent>, Error> {
+        let key = ProviderCacheKey::new(&meta, &request);
+        if !refresh && let Some(cached) = self.cached(&CacheKey::Extension(key.clone())) {
+            return Ok(cached);
+        }
+        let call = self.providers.search(meta.id.clone(), request);
+        let rows = tokio::time::timeout(self.provider_deadline, call)
+            .await
+            .map_err(|_| Error::ProviderTimeout {
+                id: meta.id.clone(),
+            })?
+            .map_err(|error| Error::Provider {
+                id: meta.id.clone(),
+                message: error.to_string(),
+            })?;
+        let results = validate_rows(rows, &meta)?;
+        lock_cache(&self.cache).insert(
+            CacheKey::Extension(key),
+            CacheEntry {
+                at: self.clock.now(),
+                results: results.clone(),
+            },
         );
-        // Extensions join `All` in #303; both filters run the built-ins today.
-        tracing::debug!(?filter, "running indexer lanes");
-        outcome([(Indexer::Nyaa, nyaa), (Indexer::AnimeTosho, tosho)])
+        Ok(results)
     }
 
     async fn run_indexer(
@@ -268,12 +422,25 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
             keyword: keyword.to_owned(),
         };
         let tosho = Query::anime_tosho_fallback(keyword);
-        let (nyaa, tosho) = tokio::join!(
-            self.run_query_cached(&nyaa, refresh),
-            self.run_query_cached(&tosho, refresh),
+        let mut lanes: Vec<(Indexer, LaneFuture<'_>)> = vec![
+            (
+                Indexer::Nyaa,
+                Box::pin(self.run_query_cached(&nyaa, refresh)),
+            ),
+            (
+                Indexer::AnimeTosho,
+                Box::pin(self.run_query_cached(&tosho, refresh)),
+            ),
+        ];
+        if filter == LaneFilter::All {
+            self.add_provider_lanes(&mut lanes, &keyword_request(keyword), refresh);
+        }
+        tracing::debug!(
+            ?filter,
+            lanes = lanes.len(),
+            "running keyword indexer lanes"
         );
-        tracing::debug!(?filter, "running keyword indexer lanes");
-        outcome([(Indexer::Nyaa, nyaa), (Indexer::AnimeTosho, tosho)])
+        self.run_lanes(lanes).await
     }
 
     async fn run_query(&self, query: &Query) -> Result<Vec<Torrent>, Error> {
@@ -285,13 +452,13 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
         reason = "refresh bypasses the cache"
     )]
     async fn run_query_cached(&self, query: &Query, refresh: bool) -> Result<Vec<Torrent>, Error> {
-        if !refresh && let Some(cached) = self.cached(query) {
+        if !refresh && let Some(cached) = self.cached(&CacheKey::Query(query.clone())) {
             return Ok(cached);
         }
         let bytes = self.fetch_with_retry(query).await?;
         let results = parse_response(query, &bytes)?;
         lock_cache(&self.cache).insert(
-            query.clone(),
+            CacheKey::Query(query.clone()),
             CacheEntry {
                 at: self.clock.now(),
                 results: results.clone(),
@@ -315,9 +482,9 @@ impl<T: Transport, C: Clock> Searcher<T, C> {
         }
     }
 
-    fn cached(&self, query: &Query) -> Option<Vec<Torrent>> {
+    fn cached(&self, key: &CacheKey) -> Option<Vec<Torrent>> {
         let cache = lock_cache(&self.cache);
-        let entry = cache.get(query)?;
+        let entry = cache.get(key)?;
         let age = self.clock.now().saturating_duration_since(entry.at);
         (age < CACHE_TTL).then(|| entry.results.clone())
     }
@@ -487,8 +654,8 @@ fn net_error(indexer: Indexer, error: net::Error) -> Error {
 /// Locks the query cache. A poisoned lock still holds a usable map, since
 /// every write is a single insert or remove.
 fn lock_cache(
-    cache: &Mutex<HashMap<Query, CacheEntry>>,
-) -> MutexGuard<'_, HashMap<Query, CacheEntry>> {
+    cache: &Mutex<HashMap<CacheKey, CacheEntry>>,
+) -> MutexGuard<'_, HashMap<CacheKey, CacheEntry>> {
     cache.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

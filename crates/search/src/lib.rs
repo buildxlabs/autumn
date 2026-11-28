@@ -13,11 +13,13 @@ mod error;
 mod file_pick;
 mod matching;
 pub mod nyaa;
+pub mod provider;
 mod query;
 mod rank;
 mod result;
 pub mod search;
 mod util;
+mod validation;
 
 pub use availability::{
     Availability, AvailabilityTracker, FRESH_WINDOW, FakeWallClock, MAX_IN_FLIGHT,
@@ -28,6 +30,7 @@ pub use file_pick::{is_playable_file, is_video_path, pick_file};
 pub use matching::{
     EpisodeTarget, episode_suggestion, match_rejection, match_titles, matches, matches_torrent,
 };
+pub use provider::{ExtensionProviders, NoProviders, ProviderMeta, ProviderSet};
 pub use query::{
     MAX_REQUESTS_PER_INDEXER, MAX_TITLES, Query, QueryPlan, SearchRequest, clean_title,
     episode_season, plan,
@@ -35,6 +38,7 @@ pub use query::{
 pub use rank::{Ranked, rank, rank_with_status};
 pub use result::{Indexer, LaneFailure, SearchOutcome, Torrent};
 pub use search::{
-    Config, FakeClock, LaneFilter, NetTransport, Searcher, SystemClock, Transport, query_url,
+    CACHE_TTL, Config, FakeClock, LaneFilter, NetTransport, PROVIDER_DEADLINE, Searcher,
+    SystemClock, Transport, query_url,
 };
 pub use util::trackers_from_magnet;
