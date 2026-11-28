@@ -1,0 +1,269 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Extensions screen prototype</title>
+<style>
+/* App tokens from crates/ui-theme (ARCHITECTURE §5). Danger/amber/green are the gpui-component defaults already used for rail badges and pills. */
+body{background:#1a1a1a;margin:0;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"Inter",sans-serif}
+.app{--bg:#070707;--paper:#0B0B0B;--elev:#0D0D0D;--line:rgba(255,255,255,.10);--acc:#6152DF;--fg:#D1D1D1;--mut:rgba(255,255,255,.45);--wash:rgba(255,255,255,.06);--red:#ef5d5d;--amb:#e8bf6a;--grn:#7fd8a3;
+ background:var(--bg);color:var(--fg);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Inter",sans-serif;border-radius:8px;padding:16px;margin:0 0 20px;position:relative;overflow:hidden}
+.cap{font:600 12px/1.3 sans-serif;color:#aaa;margin:22px 0 6px;letter-spacing:.02em;text-transform:uppercase}
+.note{font:12px/1.5 sans-serif;color:#999;margin:-14px 0 18px;max-width:900px}
+.row{display:flex;align-items:center;gap:10px}.col{display:flex;flex-direction:column;gap:8px}.grow{flex:1;min-width:0}
+.btn{border:1px solid var(--line);background:var(--wash);color:var(--fg);border-radius:6px;padding:4px 10px;font-size:12px;white-space:nowrap}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}.btn.g{background:none;border-color:transparent;color:var(--mut)}.btn.d{background:rgba(239,93,93,.16);border-color:transparent;color:var(--red)}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin:10px 0 12px}.tabs span{padding:6px 0;color:var(--mut)}.tabs .on{color:var(--fg);border-bottom:2px solid var(--acc)}
+.tabs i{font-style:normal;font-size:10.5px;margin-left:5px;padding:0 6px;border-radius:99px;background:var(--wash)}
+.mut{color:var(--mut)}.sm{font-size:11px}.b{font-weight:600}.mono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.pill{font-size:10.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.pr{background:rgba(239,93,93,.16);color:var(--red);border-color:transparent}.pa{background:rgba(230,170,60,.15);color:var(--amb);border-color:transparent}
+.pg{background:rgba(70,190,120,.16);color:var(--grn);border-color:transparent}.pc{background:rgba(97,82,223,.22);color:#b4abff;border-color:transparent}.pn{background:var(--wash);color:var(--mut);border-color:transparent}
+.ext{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line)}
+.ico{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#2a2550,#13232b);flex:none;display:flex;align-items:center;justify-content:center;font-size:15px}
+.tog{width:30px;height:17px;border-radius:99px;background:var(--acc);position:relative;flex:none}.tog::after{content:"";position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff}
+.tog.off{background:var(--line)}.tog.off::after{left:2px;right:auto;background:#999}
+.banner{padding:8px 12px;border-radius:8px;display:flex;gap:10px;align-items:center;font-size:12px}
+.bc{background:rgba(97,82,223,.12);border:1px solid rgba(97,82,223,.35)}.ba{background:rgba(230,170,60,.10);border:1px solid rgba(230,170,60,.3);color:var(--amb)}.br{background:rgba(239,93,93,.10);border:1px solid rgba(239,93,93,.3)}
+.tb{background:#050505;border:1px solid var(--line);border-radius:6px;padding:8px 10px;white-space:pre;color:#bbb;overflow:hidden}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.sheet{position:absolute;top:0;right:0;bottom:0;width:62%;overflow:hidden;background:var(--elev);border-left:1px solid var(--line);padding:16px;box-shadow:-20px 0 40px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:12px}
+.sheet.w{width:86%}
+.sec{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.field{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}.field .l{width:180px}
+.inp{flex:1;border:1px solid var(--line);background:#050505;border-radius:6px;padding:4px 8px;color:var(--fg);font-size:12px}
+.modal{width:440px;margin:24px auto;background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:16px;position:relative;display:flex;flex-direction:column;gap:10px}
+.diff{background:#050505;border:1px solid var(--line);border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;overflow:hidden}
+.diff div{padding:0 10px;white-space:pre}.diff .a{background:rgba(70,190,120,.12);color:#9fe3bb}.diff .r{background:rgba(239,93,93,.12);color:#f2a0a0}.diff .h{color:var(--mut);background:var(--wash)}
+.rail{width:64px;background:var(--paper);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0;position:relative}
+.ri{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;color:var(--mut);font-size:16px}
+.ri.on{background:var(--wash);color:var(--fg)}.ri b{position:absolute;top:-4px;right:-6px;font-size:10px;line-height:15px;min-width:15px;padding:0 4px;border-radius:99px;text-align:center;color:#fff}
+.toast{width:330px;background:var(--elev);border:1px solid var(--line);border-left:3px solid var(--red);border-radius:8px;padding:10px 12px}
+table{width:100%;border-collapse:collapse;font-size:12px}th{font-weight:500;color:var(--mut);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
+.chip{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--mut)}.chip.on{color:var(--fg);border-color:var(--acc);background:rgba(97,82,223,.15)}
+.pal{width:520px;margin:10px auto;background:var(--elev);border:1px solid var(--line);border-radius:10px;overflow:hidden}.pal .q{padding:10px 12px;border-bottom:1px solid var(--line)}.pal .it{padding:7px 12px;display:flex;gap:10px}.pal .it.on{background:var(--wash)}
+</style></head><body>
+
+<!-- ========================================================= A -->
+<div class="cap">A · Extensions → Installed tab (default tab; rail click lands here)</div>
+<div class="note">Tabs: Installed · Marketplace · Repositories · Playground. Rows needing action sort first (failing, auto-disabled, needs configuration, update), then by name. Healthy rows show no health pill, the way “unknown” availability shows nothing on #182. The toggle is the user’s <code>enabled</code>; an auto-disabled row shows the toggle off.</div>
+<div class="app">
+ <div class="row"><div class="b grow" style="font-size:18px">Extensions</div><span class="mut sm">Checked for updates 4 min ago</span><span class="btn">↻ Check for updates</span><span class="btn">Install from URL…</span></div>
+ <div class="tabs"><span class="on">Installed<i>6</i></span><span>Marketplace</span><span>Repositories<i>2</i></span><span>Playground</span></div>
+ <div class="banner bc" style="margin-bottom:10px"><span class="pill pc">2 updates</span><span class="grow">AnimeRelay 1.3.0 and Tokyo Index 0.9.2 are ready to review. Updates never install without review.</span><span class="btn p">Review updates</span></div>
+ <div class="col">
+  <div class="ext" style="border-color:rgba(239,93,93,.45)"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">Loopy Tracker</span><span class="mut sm">1.0.4</span><span class="pill pr">Auto-disabled</span></div>
+    <div class="sm" style="color:var(--red)">Stopped after 3 CPU-limit kills in a row · 12 min ago</div>
+    <div class="mut sm">Torrent provider · Luau · Community Repo</div></div>
+   <span class="btn">Re-enable</span><div class="tog off"></div><span class="btn g">⋯</span></div>
+
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">AnimeRelay</span><span class="mut sm">1.2.0</span><span class="pill pr">Failing · Network blocked</span><span class="pill pc">Update 1.3.0</span></div>
+    <div class="sm" style="color:var(--red)">Host cdn.animerelay.net is not declared by this extension · 3 min ago · <u>Details</u></div>
+    <div class="mut sm">Torrent provider · Luau · Community Repo</div></div>
+   <span class="btn p">Review update</span><div class="tog"></div><span class="btn g">⋯</span></div>
+
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">Private Tracker X</span><span class="mut sm">2.1.0</span><span class="pill pa">Needs configuration</span></div>
+    <div class="sm" style="color:var(--amb)">API key is required before it can search</div>
+    <div class="mut sm">Torrent provider · Declarative · installed from manifest URL</div></div>
+   <span class="btn">Configure…</span><div class="tog"></div><span class="btn g">⋯</span></div>
+
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">Tokyo Index</span><span class="mut sm">0.9.1</span><span class="pill pc">Update 0.9.2</span></div>
+    <div class="mut sm">Torrent provider · Declarative · Community Repo</div></div>
+   <span class="btn p">Review update</span><div class="tog"></div><span class="btn g">⋯</span></div>
+
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">Old Mirror</span><span class="mut sm">0.4.0</span><span class="pill pn">Origin repository removed</span></div>
+    <div class="mut sm">Torrent provider · Luau · no update checks until the repository is re-added</div></div>
+   <div class="tog"></div><span class="btn g">⋯</span></div>
+
+  <div class="ext" style="opacity:.6"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+    <div class="row"><span class="b">SeaDex Lite</span><span class="mut sm">1.1.0</span><span class="pill pn">1.2.0 needs a newer Autumn</span></div>
+    <div class="mut sm">Torrent provider · Luau · Community Repo · disabled</div></div>
+   <div class="tog off"></div><span class="btn g">⋯</span></div>
+ </div>
+ <div class="mut sm" style="margin-top:10px">⋯ menu: Settings… · Open in Playground · Roll back to &lt;prev&gt; (only with a snapshot) · Remove…. Clicking a row opens the detail sheet (B).</div>
+</div>
+
+<!-- ========================================================= A2 -->
+<div class="cap">A2 · “Details” on a failing row expands it inline</div>
+<div class="app">
+ <div class="ext" style="flex-direction:column;align-items:stretch"><div class="row"><div class="ico">🧩</div><div class="grow col" style="gap:3px">
+   <div class="row"><span class="b">AnimeRelay</span><span class="mut sm">1.2.0</span><span class="pill pr">Failing · Runtime error</span></div>
+   <div class="sm" style="color:var(--red)">attempt to index nil with 'seeders' · during a search for “Frieren 05” · 3 min ago</div></div>
+   <div class="tog"></div><span class="btn g">⋯</span></div>
+  <div class="tb mono" style="margin:10px 0 0 48px">stack traceback:
+  [string "animerelay"]:84: in function 'parse_row'
+  [string "animerelay"]:112: in function 'search'</div>
+  <div class="row" style="margin:8px 0 0 48px"><span class="btn">Clear error</span><span class="btn">Open in Playground</span><span class="btn g">Copy</span><span class="mut sm grow" style="text-align:right">Clears on its own after the next successful search</span></div>
+ </div>
+</div>
+
+<!-- ========================================================= B -->
+<div class="cap">B · Detail sheet (row click, ⋯ → Settings…, Configure…, or a deep link)</div>
+<div class="note">One right-side sheet per extension, like the release list (#182). Settings are a <code>gpui-component</code> <code>setting</code> form that saves on valid input; secrets go to the keychain and never show their value. LAN host exceptions live here (#270). Re-add repository appears only for an orphaned install.</div>
+<div class="app" style="height:640px;padding:0">
+ <div style="padding:16px" class="mut">… Installed tab behind …</div><div class="dim"></div>
+ <div class="sheet">
+  <div class="row"><div class="ico">🧩</div><div class="grow"><div class="b" style="font-size:15px">Private Tracker X <span class="mut sm">2.1.0</span></div><div class="mut sm">private-tracker-x · by kuro · Torrent provider · Declarative · GPL-3.0</div></div><div class="tog"></div><span class="btn g">✕</span></div>
+  <div class="banner ba">Needs configuration: fill in API key to let it search.</div>
+  <div class="sec">Settings</div>
+  <div>
+   <div class="field"><div class="l">API key <span style="color:var(--amb)">*</span><div class="mut sm">Stored in the system keychain</div></div><div class="inp" style="color:var(--mut)">••••••••  (not set)</div></div>
+   <div class="field"><div class="l">Base URL</div><div class="inp">https://pt-x.example</div></div>
+   <div class="field"><div class="l">Freeleech only</div><div class="tog off"></div></div>
+   <div class="field"><div class="l">Category</div><div class="inp">Anime ▾</div></div>
+  </div>
+  <div class="sec">Network</div>
+  <div class="sm">Declared hosts: <span class="mono">pt-x.example</span>, <span class="mono">api.pt-x.example</span></div>
+  <div class="row sm"><span class="grow">LAN host exceptions <span class="mut">(lets this extension reach a host on your network, e.g. a self-hosted Prowlarr)</span></span><span class="btn">Add host…</span></div>
+  <div class="sec">Health</div>
+  <div class="sm mut">No errors recorded.</div>
+  <div class="sec">Source</div>
+  <div class="sm">Installed from <span class="mono">https://pt-x.example/autumn/manifest.json</span> · manifest URL</div>
+  <div class="grow"></div>
+  <div class="row" style="border-top:1px solid var(--line);padding-top:10px"><span class="btn">Open in Playground</span><span class="btn">Roll back to 2.0.3</span><span class="grow"></span><span class="btn d">Remove…</span></div>
+ </div>
+</div>
+
+<!-- ========================================================= C -->
+<div class="cap">C · Update review sheet (Review update / Review updates)</div>
+<div class="note">Wide sheet. Order is #266’s: version and notes → permission changes → settings changes → payload diff (<code>gpui-component</code> <code>diff</code>, unified, collapsed when the payload is unchanged). Host additions turn the primary button into “Allow new hosts and update”. “Review updates” walks the queue: after Update or Skip, the next pending update loads. No “Update all”.</div>
+<div class="app" style="height:720px;padding:0">
+ <div style="padding:16px" class="mut">… Installed tab behind …</div><div class="dim"></div>
+ <div class="sheet w">
+  <div class="row"><div class="ico">🧩</div><div class="grow"><div class="b" style="font-size:15px">AnimeRelay · 1.2.0 → 1.3.0</div><div class="mut sm">Community Repo · api_version 1 · Update 1 of 2</div></div><span class="btn g">✕</span></div>
+  <div class="tb" style="white-space:normal;font:12px/1.5 sans-serif">“Moved to the new CDN, fixed seeders parsing on mobile pages.” <span class="mut">— release notes</span></div>
+  <div class="banner br"><span class="pill pr">Permission change</span><span class="grow">Adds a host this extension may contact: <span class="mono">cdn.animerelay.net</span>. Removes <span class="mono">old.animerelay.net</span>.</span></div>
+  <div class="banner ba"><span class="pill pa">Settings</span><span class="grow">New required setting <b>Region</b>: the extension needs configuration after updating. Removed setting <b>Legacy mode</b> (saved value is cleared).</span></div>
+  <div class="row"><span class="sec grow" style="margin:0">Code · animerelay.luau · +6 −3</span><span class="chip on">Unified</span><span class="chip">Split</span></div>
+  <div class="diff grow">
+   <div class="h">@@ -78,9 +78,12 @@ local function parse_row(row)</div>
+   <div>   local cells = row:select("td")</div>
+   <div class="r">-  local seeders = tonumber(cells[5]:text())</div>
+   <div class="a">+  local cell = cells[5]</div>
+   <div class="a">+  local seeders = cell and tonumber(cell:text()) or 0</div>
+   <div>   return {</div>
+   <div>     name = cells[2]:text(),</div>
+   <div class="h">@@ -104,4 +107,7 @@ local function search(request)</div>
+   <div class="r">-  local base = "https://old.animerelay.net"</div>
+   <div class="a">+  local base = "https://cdn.animerelay.net"</div>
+   <div class="a">+  local region = autumn.settings.get("region")</div>
+  </div>
+  <div class="row" style="border-top:1px solid var(--line);padding-top:10px"><span class="mut sm grow">Updating stops any running call, then keeps 1.2.0 for one-step rollback.</span><span class="btn g">Later</span><span class="btn">Skip 1.3.0</span><span class="btn p">Allow new hosts and update</span></div>
+ </div>
+</div>
+
+<div class="cap">C2 · Same sheet for a cross-repository replace (Marketplace → Replace…)</div>
+<div class="app">
+ <div class="banner br"><span class="pill pr">Origin change</span><span class="grow">Replaces AnimeRelay from <b>Community Repo</b> with the one from <b>Mirror Repo</b>. Future updates come from Mirror Repo only.</span></div>
+ <div class="mut sm" style="margin-top:8px">… then the same sections as C. Buttons: Cancel · Replace. Rollback works afterwards the same way.</div>
+</div>
+
+<!-- ========================================================= D -->
+<div class="cap">D · Marketplace tab (listings from enabled repositories; 15 min cache)</div>
+<div class="app">
+ <div class="tabs"><span>Installed<i>6</i></span><span class="on">Marketplace</span><span>Repositories<i>2</i></span><span>Playground</span></div>
+ <div class="row" style="margin-bottom:8px"><span class="inp" style="flex:1;color:var(--mut)">Search extensions…</span><span class="chip on">All repositories</span><span class="chip">Community Repo</span><span class="chip">Mirror Repo</span><span class="btn">↻ Refresh</span></div>
+ <div class="banner ba" style="margin-bottom:8px"><span class="grow">Mirror Repo could not be refreshed (timed out). Showing listings from 2 days ago.</span><span class="btn g">Repositories ›</span></div>
+ <div class="col">
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:2px"><div class="row"><span class="b">Nekoindex</span><span class="mut sm">0.3.0 · by mio</span></div><div class="mut sm">Public tracker with batch support · Declarative · Community Repo</div></div><span class="btn p">Install</span></div>
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:2px"><div class="row"><span class="b">Tokyo Index</span><span class="mut sm">0.9.2</span><span class="pill pg">Installed 0.9.1</span></div><div class="mut sm">Declarative · Community Repo</div></div><span class="btn">Review update</span></div>
+  <div class="ext"><div class="ico">🧩</div><div class="grow col" style="gap:2px"><div class="row"><span class="b">AnimeRelay</span><span class="mut sm">1.3.1</span><span class="pill pn">Installed from Community Repo</span></div><div class="mut sm">Luau · Mirror Repo</div></div><span class="btn">Replace…</span></div>
+  <div class="ext" style="opacity:.55"><div class="ico">🧩</div><div class="grow col" style="gap:2px"><div class="row"><span class="b">MangaThing</span><span class="pill pn">Incompatible</span></div><div class="mut sm">type “manga-provider” isn’t supported · Community Repo</div></div><span class="btn" style="opacity:.5">Install</span></div>
+ </div>
+ <div class="mut sm" style="margin-top:8px">Installed rows stay listed with a pill. Invalid entries are hidden; incompatible ones show dimmed with the reason.</div>
+</div>
+
+<div class="cap">D2 · Install summary dialog (Install, or Install from URL… after the fetch)</div>
+<div class="app" style="height:440px"><div class="dim"></div>
+ <div class="modal">
+  <div class="row"><div class="ico">🧩</div><div><div class="b">Install Nekoindex 0.3.0?</div><div class="mut sm">nekoindex · by mio · Declarative torrent provider</div></div></div>
+  <div class="sm"><span class="mut">From</span> Community Repo <span class="mono mut">https://ext.example.org/index.json</span></div>
+  <div class="sec">Can contact</div><div class="mono">nekoindex.example · api.nekoindex.example</div>
+  <div class="sec">Settings</div><div class="sm">Username · <b>Passkey</b> <span class="pill pa">secret · keychain</span> · Category</div>
+  <div class="sm mut">Autumn doesn’t review third-party extensions. It runs them in a sandbox and only lets them reach the hosts listed above.</div>
+  <div class="row"><span class="grow"></span><span class="btn g">Cancel</span><span class="btn p">Install</span></div>
+ </div>
+</div>
+
+<div class="cap">D3 · Empty Marketplace (no repositories yet) — two variants, decided by #274</div>
+<div class="app">
+ <div class="row" style="gap:16px;align-items:stretch">
+  <div class="grow col" style="padding:24px;border:1px dashed var(--line);border-radius:8px;align-items:center;text-align:center"><div class="b">No repositories yet</div><div class="mut sm">Add a repository URL to browse extensions.</div><span class="btn p">Add repository…</span><div class="mut sm">variant 1: nothing preset</div></div>
+  <div class="grow col" style="padding:24px;border:1px dashed var(--line);border-radius:8px;align-items:center;text-align:center"><div class="b">Autumn Extensions</div><div class="mut sm">The first-party repository is suggested but not added.</div><span class="btn p">Add Autumn Extensions</span><span class="btn g">Add another URL…</span><div class="mut sm">variant 2: preset URL offered (if #274 ships one)</div></div>
+ </div>
+</div>
+
+<!-- ========================================================= E -->
+<div class="cap">E · Repositories tab</div>
+<div class="app">
+ <div class="tabs"><span>Installed<i>6</i></span><span>Marketplace</span><span class="on">Repositories<i>2</i></span><span>Playground</span></div>
+ <div class="row" style="margin-bottom:8px"><span class="grow"></span><span class="btn p">Add repository…</span></div>
+ <table>
+  <tr><th>Repository</th><th>Extensions</th><th>Refreshed</th><th>Status</th><th>Shown</th><th></th></tr>
+  <tr><td><div class="b">Community Repo</div><div class="mono mut">https://ext.example.org/index.json</div></td><td>14 · 4 installed</td><td>6 min ago</td><td><span class="pill pg">OK</span></td><td><div class="tog"></div></td><td><span class="btn g">↻</span><span class="btn g">Remove…</span></td></tr>
+  <tr><td><div class="b">Mirror Repo</div><div class="mono mut">https://mirror.example.net/autumn.json</div></td><td>9 · 0 installed</td><td>2 days ago</td><td><span class="pill pa">Stale</span><div class="sm" style="color:var(--amb)">Timed out</div></td><td><div class="tog"></div></td><td><span class="btn g">↻</span><span class="btn g">Remove…</span></td></tr>
+ </table>
+ <div class="mut sm" style="margin-top:8px">“Shown” off hides its listings and skips its update checks; installed extensions keep running.</div>
+ <div class="row" style="gap:16px;align-items:flex-start;margin-top:12px">
+  <div class="modal" style="margin:0;width:auto;flex:1"><div class="b">Add repository</div><div class="inp" style="color:var(--mut)">https://…/index.json</div><div class="sm mut">Autumn doesn’t audit third-party repositories. HTTPS proves only who serves the file. Extensions run in Autumn’s sandbox with the hosts they declare.</div><div class="row"><span class="grow"></span><span class="btn g">Cancel</span><span class="btn p">Add</span></div></div>
+  <div class="modal" style="margin:0;width:auto;flex:1"><div class="b">Remove Community Repo?</div><div class="sm">Its listings go away. The 4 extensions installed from it stay installed and keep working, but stop getting updates until you re-add it.</div><div class="row"><span class="grow"></span><span class="btn g">Cancel</span><span class="btn d">Remove</span></div></div>
+ </div>
+</div>
+
+<div class="cap">E2 · Remove extension and roll back confirmations</div>
+<div class="app"><div class="row" style="gap:16px;align-items:flex-start">
+ <div class="modal" style="margin:0;width:auto;flex:1"><div class="b">Remove AnimeRelay?</div><div class="sm">Its settings and saved secrets are deleted. Streams already running keep going.</div><div class="row"><span class="grow"></span><span class="btn g">Cancel</span><span class="btn d">Remove</span></div></div>
+ <div class="modal" style="margin:0;width:auto;flex:1"><div class="b">Roll back AnimeRelay to 1.2.0?</div><div class="sm">1.3.0 is replaced by the copy kept on update. Settings migrate the same way as an update; you may need to re-enter a secret.</div><div class="row"><span class="grow"></span><span class="btn g">Cancel</span><span class="btn p">Roll back</span></div></div>
+</div></div>
+
+<!-- ========================================================= F -->
+<div class="cap">F · Playground tab (layout owned by #273; shown for the tab bar only)</div>
+<div class="app">
+ <div class="tabs"><span>Installed<i>6</i></span><span>Marketplace</span><span>Repositories<i>2</i></span><span class="on">Playground</span></div>
+ <div class="row" style="margin-bottom:8px"><span class="mut sm">Scratch copy of</span><span class="btn">AnimeRelay 1.2.0 ▾</span><span class="grow"></span><span class="btn">Load JSON…</span><span class="btn">Export JSON</span><span class="btn p">▶ Run</span></div>
+ <div class="row" style="align-items:stretch;gap:10px;height:150px"><div class="tb mono grow">local function search(request)
+  local res = autumn.http.fetch(...)
+  ...</div><div class="col" style="width:42%;border:1px solid var(--line);border-radius:6px;padding:8px"><div class="row" style="gap:6px"><span class="chip on">Results</span><span class="chip">Logs</span><span class="chip">Error</span><span class="chip">HTTP</span></div><div class="mut sm">Ok · 812 ms · cpu 41 ms · 3.1 MiB · 2/8 HTTP</div></div></div>
+ <div class="mut sm" style="margin-top:6px">No “Install to Autumn”: #266 disallowed local installs in Phase 4, so the tab exports only.</div>
+</div>
+
+<!-- ========================================================= G -->
+<div class="cap">G · Sidebar badge (collapsed rail) and the 3-strike toast</div>
+<div class="note">One count per extension that needs action (deduped): pending update, failing, auto-disabled, needs configuration. Red when any of them is failing or auto-disabled; accent when only updates / configuration are pending. Not counted: user-disabled, incompatible updates, skipped versions, orphaned. Nothing clears on view; each clears when its cause does.</div>
+<div class="app" style="display:flex;gap:30px;align-items:flex-start;padding:0">
+ <div class="rail"><div class="ri">⌂</div><div class="ri">◎</div><div class="ri">⬇</div><div class="ri">▦</div><div style="flex:1;height:40px"></div><div class="ri on">🧩<b style="background:var(--red)">3</b></div><div class="ri">⟳</div><div class="ri">⚙</div></div>
+ <div class="rail"><div class="ri">⌂</div><div class="ri">◎</div><div class="ri">⬇</div><div class="ri">▦</div><div style="flex:1;height:40px"></div><div class="ri">🧩<b style="background:var(--acc)">2</b></div><div class="ri">⟳</div><div class="ri">⚙</div></div>
+ <div class="col" style="padding:16px;gap:14px">
+  <div class="sm mut">left: 1 auto-disabled + 1 failing-with-update + 1 needs config = 3, red · right: 2 updates only, accent</div>
+  <table style="width:560px"><tr><th>Counts because</th><th>Clears when</th></tr>
+   <tr><td>update offer pending</td><td>update applied, version skipped, or extension removed</td></tr>
+   <tr><td>failing (last non-cancelled error)</td><td>next Ok call, Clear error, update/rollback, remove</td></tr>
+   <tr><td>auto-disabled</td><td>Re-enable, update/rollback, remove</td></tr>
+   <tr><td>needs configuration</td><td>required settings saved, or disabled/removed</td></tr></table>
+  <div class="toast"><div class="row"><span class="b grow">Loopy Tracker was disabled</span><span class="mut">✕</span></div><div class="sm mut">It hit the CPU limit 3 times in a row.</div><div class="row" style="margin-top:6px"><span class="grow"></span><span class="btn">Open</span></div></div>
+ </div>
+</div>
+
+<!-- ========================================================= H -->
+<div class="cap">H · Deep links and command palette</div>
+<div class="app">
+ <table>
+  <tr><th>Route</th><th>Opens</th><th>Used by</th></tr>
+  <tr><td class="mono">Route::Extensions { tab: None, extension: None }</td><td>Installed tab</td><td>rail item, palette “Extensions”</td></tr>
+  <tr><td class="mono">{ tab: Some(Marketplace | Repositories | Playground), .. }</td><td>that tab</td><td>palette entries, empty states, stale banner</td></tr>
+  <tr><td class="mono">{ tab: None, extension: Some(id) }</td><td>Installed tab + that extension’s detail sheet (B)</td><td>3-strike toast “Open”, release-list lane notice (#264), palette</td></tr>
+  <tr><td class="mono">{ tab: Some(Playground), extension: Some(id) }</td><td>Playground with a scratch copy of id</td><td>“Open in Playground”</td></tr>
+ </table>
+ <div class="pal" style="margin-top:14px"><div class="q">/extensions anim<span class="mut">|</span></div>
+  <div class="it on">🧩 <span class="grow">AnimeRelay</span><span class="mut sm">open settings</span></div>
+  <div class="it">↻ <span class="grow">Check for extension updates</span></div>
+  <div class="it">＋ <span class="grow">Add extension repository…</span></div>
+  <div class="it">⤓ <span class="grow">Install extension from URL…</span></div>
+  <div class="it">▶ <span class="grow">Extension playground</span></div>
+ </div>
+ <div class="mut sm" style="text-align:center">No query: “Extensions” joins the palette’s route list. <span class="mono">/extensions</span> lists the actions, then installed extensions matching the rest of the query.</div>
+</div>
+
+</body></html>
