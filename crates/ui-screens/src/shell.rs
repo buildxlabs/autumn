@@ -31,7 +31,7 @@ use ui_components::{
 };
 use ui_state::{
     EntryLibraryStore, EntryTab, LibraryStore, RailBadges, Route, RouterState, ScanOutcome,
-    ScanSummariesStore, ScrollRestore, SearchFilters, SettingsTab,
+    ScanSummariesStore, ScrollRestore, SearchFilters, SettingsTab, TorrentStore,
     account::{AccountCommand, AccountStore},
     actions::{
         GoBack, GoForward, OpenCommandPalette, OpenLibraryExplorer, OpenSearch, PLAYER, PlayPause,
@@ -73,6 +73,7 @@ use crate::{
     placeholder::{episode_gallery, mock_media_views, placeholder},
     scan_summaries::{MediaSearchDialog, MediaSearchEvent, ScanSummariesScreen},
     search::{SearchEvent, SearchScreen},
+    torrents::render as render_torrents,
 };
 
 /// Height of the transparent titlebar; macOS traffic lights are centred in it.
@@ -85,7 +86,12 @@ const PALETTE_WIDTH: f32 = 560.;
 pub(crate) const HOVER_OPEN_DELAY: Duration = Duration::from_millis(150);
 
 /// Rail entries from the top, top to bottom.
-const RAIL_ROUTES: [Route; 3] = [Route::Home, Route::Discover, Route::Schedule];
+const RAIL_ROUTES: [Route; 4] = [
+    Route::Home,
+    Route::Discover,
+    Route::Torrents,
+    Route::Schedule,
+];
 /// The system group at the rail's bottom, top to bottom.
 /// The rail's system group, which never folds into "More".
 pub const SYSTEM_ROUTES: [Route; 3] = [
@@ -258,6 +264,8 @@ pub struct AppShell {
     rail_menus: usize,
     /// The counts on the rail's items.
     badges: Entity<RailBadges>,
+    /// The Torrent List's rows, mirrored from 4 Hz engine snapshots.
+    torrent_store: Entity<TorrentStore>,
     /// The virtualized mock media grid behind the debug fetch-status demo:
     /// built, and shown on Home, once a debug fetch reports on it.
     home_grid: Option<Entity<PosterGrid>>,
@@ -594,6 +602,7 @@ impl AppShell {
             rail_hovered: false,
             rail_menus: 0,
             badges,
+            torrent_store: cx.new(|_| TorrentStore::inert()),
             home_grid: None,
             lists: None,
             lists_events: None,
@@ -803,6 +812,29 @@ impl AppShell {
     /// The route on screen.
     pub fn route(&self) -> Route {
         self.router.current().clone()
+    }
+
+    /// Supplies the real Torrent store from the composition root and keeps the
+    /// rail's active-torrents badge in step with it (#207 Q12).
+    pub fn set_torrent_store(&mut self, store: Entity<TorrentStore>, cx: &mut Context<'_, Self>) {
+        // A snapshot may have arrived before the shell existed; seed the
+        // badge from it instead of waiting for the next 4 Hz change.
+        let count = store.read(cx).active_count();
+        self.badges.update(cx, |badges, cx| {
+            badges.set(Route::Torrents, count);
+            cx.notify();
+        });
+        cx.observe(&store, |shell, store, cx| {
+            let count = store.read(cx).active_count();
+            shell.badges.update(cx, |badges, cx| {
+                badges.set(Route::Torrents, count);
+                cx.notify();
+            });
+            cx.notify();
+        })
+        .detach();
+        self.torrent_store = store;
+        cx.notify();
     }
 
     /// Opens `route`, saving the current route's scroll offset.
@@ -1031,6 +1063,9 @@ impl AppShell {
             }
             Route::Home => {
                 self.home_store.update(cx, HomeStore::open);
+            }
+            Route::Torrents => {
+                self.torrent_store.update(cx, TorrentStore::open);
             }
             _ => {}
         }
@@ -1518,7 +1553,7 @@ impl AppShell {
         clippy::too_many_lines,
         reason = "one renderer lists every route's view and its fallback"
     )]
-    fn render_route(&self, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render_route(&self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let route = self.route();
         let route_view = div()
@@ -1612,6 +1647,14 @@ impl AppShell {
                     },
                     *id,
                     *tab,
+                    cx,
+                ))
+                .into_any_element(),
+            Route::Torrents => route_view
+                .child(render_torrents(
+                    &self.torrent_store,
+                    &self.playback_store,
+                    &self.shell_handle,
                     cx,
                 ))
                 .into_any_element(),
@@ -1721,10 +1764,10 @@ impl Render for AppShell {
         // collapsed-width and the rail is drawn after the route view, so an
         // expanded rail covers the content without moving it.
         let body = if self.prefs.mode == RailMode::ClickPin {
-            body.child(rail).child(self.render_route(cx))
+            body.child(rail).child(self.render_route(window, cx))
         } else {
             body.child(div().flex_none().w(px(RAIL_WIDTH)).h_full())
-                .child(self.render_route(cx))
+                .child(self.render_route(window, cx))
                 .child(div().absolute().top_0().left_0().h_full().child(rail))
         };
         let shell = div()
@@ -1905,6 +1948,7 @@ pub(crate) fn title(route: &Route) -> SharedString {
         Route::Lists { .. } => "My Lists",
         Route::Search(_) => "Advanced Search",
         Route::Schedule => "Schedule",
+        Route::Torrents => "Torrents",
         Route::ScanSummaries => "Scan Summaries",
         Route::Extensions => "Extensions",
         Route::Sync => "Offline / Sync",
@@ -1923,6 +1967,7 @@ fn rows(route: &Route) -> usize {
         | Route::Lists { .. }
         | Route::Search(_)
         | Route::Schedule
+        | Route::Torrents
         | Route::ScanSummaries
         | Route::Extensions
         | Route::Sync
@@ -1938,6 +1983,7 @@ pub(crate) fn icon(route: &Route) -> IconName {
         Route::Lists { .. } => IconName::List,
         Route::Search(_) => IconName::Search,
         Route::Schedule => IconName::Calendar,
+        Route::Torrents => IconName::Download,
         Route::ScanSummaries | Route::Sync => IconName::FolderSync,
         Route::Extensions => IconName::Puzzle,
         Route::Settings { .. } => IconName::Settings,

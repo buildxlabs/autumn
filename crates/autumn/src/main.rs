@@ -31,7 +31,7 @@ use ui_screens::{
 };
 use ui_state::{
     AniListHandle, EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlatformGateway,
-    ScanSummariesStore,
+    ScanSummariesStore, TorrentStore,
     account::{AccountCommand, AccountStore},
     entry_store::EntryStore,
     fetch_status::FetchStatus,
@@ -217,6 +217,7 @@ fn main() -> ExitCode {
             let library_store = cx.new(|_| LibraryStore::new(Arc::clone(&services)));
             let scan_summaries = cx.new(|_| ScanSummariesStore::new(Arc::clone(&services)));
             let explorer = cx.new(|_| LibraryExplorerStore::new(Arc::clone(&services)));
+            let torrent_store = cx.new(|_| TorrentStore::new(Arc::clone(&services)));
             let playback_store = cx.new(|_| PlaybackStore::new(services));
             #[cfg(debug_assertions)]
             fetch_status::debug::bind(&fetch_status, client, engine_events, cx);
@@ -227,6 +228,7 @@ fn main() -> ExitCode {
                 let summaries = scan_summaries.clone();
                 let explorer = explorer.clone();
                 let playback = playback_store.clone();
+                let torrent = torrent_store.clone();
                 let entry_library = entry_library.clone();
                 let home = home_store.clone();
                 move |event, cx| {
@@ -237,6 +239,7 @@ fn main() -> ExitCode {
                     summaries.update(cx, |store, cx| store.apply(&event, cx));
                     explorer.update(cx, |store, cx| store.apply(&event, cx));
                     entry_library.update(cx, |store, cx| store.apply(&event, cx));
+                    torrent.update(cx, |store, cx| store.apply(event.clone(), cx));
                     playback.update(cx, |store, cx| store.apply(event, cx));
                 }
             })
@@ -271,6 +274,7 @@ fn main() -> ExitCode {
                 entry_library,
                 home_store,
                 playback_store,
+                torrent_store,
                 engine.db().clone(),
                 anilist,
                 catalog,
@@ -347,6 +351,7 @@ fn open_main_window(
     entry_library: Entity<EntryLibraryStore>,
     home_store: Entity<HomeStore>,
     playback_store: Entity<PlaybackStore>,
+    torrent_store: Entity<TorrentStore>,
     db: Db,
     anilist: AniList,
     catalog: CatalogCache,
@@ -357,7 +362,7 @@ fn open_main_window(
     let options = main_window_options(bounds);
     gpui_kit::open_window(options, cx, |window, cx| {
         cx.new(|cx| {
-            AppShell::new_with_palette_sources(
+            let mut shell = AppShell::new_with_palette_sources(
                 prefs,
                 playback,
                 playback_services,
@@ -392,7 +397,9 @@ fn open_main_window(
                 gateway,
                 window,
                 cx,
-            )
+            );
+            shell.set_torrent_store(torrent_store, cx);
+            shell
         })
     })?;
     Ok(())
@@ -440,8 +447,8 @@ mod tests {
     use ui_state::PlatformGateway;
     use ui_state::{
         EntryLibraryStore, LibraryExplorerStore, LibraryStore, PlaybackStore, ScanSummariesStore,
-        account::AccountStore, bridge::BridgeError, entry_store::EntryStore, home_store::HomeStore,
-        test_support::pending_services,
+        TorrentStore, account::AccountStore, bridge::BridgeError, entry_store::EntryStore,
+        home_store::HomeStore, test_support::pending_services,
     };
 
     use super::{FetchStatus, open_main_window};
@@ -504,6 +511,7 @@ mod tests {
                 cx.new(|_| EntryLibraryStore::new(pending_services())),
                 home_store,
                 cx.new(|_| PlaybackStore::new(ui_state::test_support::pending_services())),
+                cx.new(|_| TorrentStore::inert()),
                 db.clone(),
                 anilist,
                 catalog,

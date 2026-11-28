@@ -78,6 +78,8 @@ pub enum Route {
     Search(SearchFilters),
     /// The airing schedule.
     Schedule,
+    /// The live list of torrents in Autumn's own session (#207).
+    Torrents,
     /// The audit log of recent library scans (#134); not a rail item.
     ScanSummaries,
     /// Installed and available extensions.
@@ -93,9 +95,10 @@ pub enum Route {
 
 impl Route {
     /// The default destination for each rail item, in rail order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Home,
         Self::Discover,
+        Self::Torrents,
         Self::Schedule,
         Self::Extensions,
         Self::Sync,
@@ -106,7 +109,7 @@ impl Route {
 
     /// Every route that has a stable settings key, including screens that
     /// are not rail items. [`Self::ALL`] stays the rail's default set.
-    pub const ALL_KEYED: [Self; 9] = [
+    pub const ALL_KEYED: [Self; 10] = [
         Self::Home,
         Self::Discover,
         Self::Lists {
@@ -114,6 +117,7 @@ impl Route {
         },
         Self::Search(SearchFilters::EMPTY),
         Self::Schedule,
+        Self::Torrents,
         Self::ScanSummaries,
         Self::Extensions,
         Self::Sync,
@@ -133,6 +137,7 @@ impl Route {
             Self::Lists { .. } => "lists",
             Self::Search(_) => "search",
             Self::Schedule => "schedule",
+            Self::Torrents => "torrents",
             Self::ScanSummaries => "scan_summaries",
             Self::Extensions => "extensions",
             Self::Sync => "sync",

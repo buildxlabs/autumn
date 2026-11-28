@@ -23,6 +23,7 @@ mod scroll;
 pub mod search;
 #[cfg(any(test, feature = "test-util"))]
 pub mod test_support;
+pub mod torrent_store;
 
 pub use account::{AccountCommand, AccountStore};
 pub use badges::RailBadges;
@@ -47,3 +48,4 @@ pub use search::{
     Catalog, CatalogError, MediaPreview, RestoredPage, SearchFilters, SearchFormat, SearchPage,
     SearchSeason, SearchSession, SearchSort, SearchStatus,
 };
+pub use torrent_store::TorrentStore;

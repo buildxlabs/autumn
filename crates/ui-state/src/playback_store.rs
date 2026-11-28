@@ -10,8 +10,8 @@ use std::{
 };
 
 use domain::{
-    AppEvent, AutoNext, ChapterKind, MediaId, PlaybackChapter, PlaybackControl, PlaybackDetails,
-    PlaybackState, Preparing,
+    AppEvent, AutoNext, ChapterKind, InfoHash, MediaId, PlaybackChapter, PlaybackControl,
+    PlaybackDetails, PlaybackState, Preparing, StreamSource,
 };
 use engine::{EngineServices, PlayRequest};
 use gpui_kit::{Context, Task, WeakEntity};
@@ -278,6 +278,22 @@ impl PlaybackStore {
                     ),
                 },
             ));
+    }
+
+    /// Plays one completed file of a torrent from the Torrent List (#207 Q9).
+    /// The row already knows the media and episode; NCOP/NCED files are not
+    /// offered by the screen, so this is always a regular episode.
+    pub fn play_torrent_file(
+        &mut self,
+        media: MediaId,
+        episode: u32,
+        info_hash: InfoHash,
+        file_index: usize,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let request =
+            PlayRequest::new(media, episode, StreamSource::torrent(info_hash, file_index));
+        self.play(request, cx);
     }
 
     /// Stops the active session, or cancels a torrent stream that is still

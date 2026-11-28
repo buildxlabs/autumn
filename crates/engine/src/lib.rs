@@ -15,6 +15,7 @@ pub mod network;
 mod phase2_exit;
 mod playback;
 mod settings_store;
+mod torrent_list;
 mod torrent_streams;
 
 use std::{
@@ -24,11 +25,15 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
+    time::Duration,
 };
 
 use ::library::{AutoScan, Library, ScanSummary};
 use db::{Continuity, Db, FileFlag, LocalFile, ResumePoint};
-use domain::{AppEvent, ExternalId, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl};
+use domain::{
+    AppEvent, ExternalId, InfoHash, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl,
+    StreamSource, TorrentLink, TorrentListRow, TorrentOrigin,
+};
 use flume::Sender;
 use metadata::{
     Aging, AiringEpisode, AniList, AniZip, CatalogCache, HomeLoad, Load, Media as EpisodeMetadata,
@@ -118,6 +123,9 @@ pub enum EngineError {
     /// A HUD command arrived with no session to receive it.
     #[error("no playback session is running")]
     NoSession,
+    /// The embedded torrent session failed an operation.
+    #[error("the torrent session failed: {0}")]
+    Torrent(#[from] torrent::Error),
 }
 
 /// The engine's services: what the Anime Entry and Home screens call through
@@ -314,6 +322,28 @@ pub trait EngineServices: Send + Sync + 'static {
     ) -> BoxFuture<Result<Vec<(u32, Continuity)>, EngineError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+
+    /// A fresh Torrent List snapshot, newest first. The default is empty for
+    /// fakes that do not exercise the Torrent screen.
+    fn torrent_rows(&self) -> BoxFuture<Result<Vec<TorrentListRow>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Pauses a torrent, without dropping its files. The default is a no-op.
+    fn torrent_pause(&self, _info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Resumes a paused torrent. The default is a no-op.
+    fn torrent_resume(&self, _info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Removes a torrent and its cached files, ending a streaming playback
+    /// session first. The default is a no-op.
+    fn torrent_remove(&self, _info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
 }
 
 /// The engine: owns the database, the shared client, the catalog cache and
@@ -431,7 +461,7 @@ impl Engine {
                 db.clone(),
                 catalog.clone(),
                 Arc::new(LocalProgressSync::new(db.clone())),
-                events,
+                events.clone(),
                 &settings.playback,
                 paths.cache_dir().to_path_buf(),
             )
@@ -445,6 +475,23 @@ impl Engine {
                 settings.auto_select.clone(),
             ),
         );
+        // The Torrent List is pulled from librqbit, never polled by render().
+        // One shared 4 Hz sampler feeds the store; it emits only on change so
+        // an idle session produces no redraws (ARCHITECTURE §4, #207 Q5).
+        let sampler_torrent = Arc::clone(&torrent);
+        runtime.handle().spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_millis(250));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut last: Vec<TorrentListRow> = Vec::new();
+            loop {
+                tick.tick().await;
+                let rows = sampler_torrent.rows().await.unwrap_or_default();
+                if rows != last {
+                    last.clone_from(&rows);
+                    let _ = events.send(AppEvent::TorrentList(rows));
+                }
+            }
+        });
         Ok(Self {
             db,
             client,
@@ -740,8 +787,31 @@ impl EngineServices for Engine {
 
     fn play(&self, request: &PlayRequest) -> BoxFuture<Result<(), EngineError>> {
         let playback = Arc::clone(&self.playback);
+        let torrent = Arc::clone(&self.torrent);
+        let db = self.db.clone();
         let request = request.clone();
-        Box::pin(async move { playback.play(request).await.map_err(EngineError::from) })
+        Box::pin(async move {
+            if let StreamSource::Torrent { info_hash, .. } = request.source {
+                // The row is a stream and, when the media is known, links to
+                // its Entry and episode (#207 Q1, Q8).
+                let anilist_id = db
+                    .media()
+                    .external_ids(request.media)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find_map(|id| match id {
+                        ExternalId::AniList(id) => Some(id),
+                        _ => None,
+                    });
+                torrent.register(
+                    info_hash,
+                    TorrentOrigin::Stream,
+                    Some(TorrentLink::new(request.media, request.episode, anilist_id)),
+                );
+            }
+            playback.play(request).await.map_err(EngineError::from)
+        })
     }
 
     fn stop(&self) -> BoxFuture<Result<(), EngineError>> {
@@ -1016,6 +1086,47 @@ impl EngineServices for Engine {
         Box::pin(async move {
             db.continuity()
                 .for_media(media)
+                .await
+                .map_err(EngineError::from)
+        })
+    }
+
+    fn torrent_rows(&self) -> BoxFuture<Result<Vec<TorrentListRow>, EngineError>> {
+        let torrent = Arc::clone(&self.torrent);
+        Box::pin(async move { torrent.rows().await.map_err(EngineError::from) })
+    }
+
+    fn torrent_pause(&self, info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        let torrent = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            let session = torrent.session().await?;
+            session.pause(info_hash).await?;
+            Ok(())
+        })
+    }
+
+    fn torrent_resume(&self, info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        let torrent = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            let session = torrent.session().await?;
+            session.resume(info_hash).await?;
+            Ok(())
+        })
+    }
+
+    fn torrent_remove(&self, info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        let torrent = Arc::clone(&self.torrent);
+        let playback = Arc::clone(&self.playback);
+        Box::pin(async move {
+            let streaming = torrent.is_streaming_torrent(info_hash);
+            torrent
+                .remove(info_hash, async {
+                    if streaming {
+                        // stops the session: revoke the relay token, drop
+                        // readers, and only then delete the cached files.
+                        playback.stop().await;
+                    }
+                })
                 .await
                 .map_err(EngineError::from)
         })
