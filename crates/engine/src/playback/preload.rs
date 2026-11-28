@@ -108,7 +108,7 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 /// What a preload downloads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Fetch {
     /// N+1 is another file of the batch torrent the current stream plays.
     SameBatch {
@@ -120,43 +120,64 @@ pub(super) enum Fetch {
     Torrent {
         info_hash: InfoHash,
         file_index: usize,
+        /// The indexer's magnet and trackers, kept so playback can add the
+        /// torrent with peers when DHT is off (#217, #256).
+        magnet: Option<String>,
+        trackers: Vec<String>,
     },
 }
 
 impl Fetch {
-    pub(super) const fn info_hash(self) -> InfoHash {
+    pub(super) fn info_hash(&self) -> InfoHash {
         match self {
-            Self::SameBatch { info_hash, .. } | Self::Torrent { info_hash, .. } => info_hash,
+            Self::SameBatch { info_hash, .. } | Self::Torrent { info_hash, .. } => *info_hash,
         }
     }
 
-    const fn file_index(self) -> usize {
+    fn file_index(&self) -> usize {
         match self {
-            Self::SameBatch { next, .. } => next,
-            Self::Torrent { file_index, .. } => file_index,
+            Self::SameBatch { next, .. } => *next,
+            Self::Torrent { file_index, .. } => *file_index,
         }
     }
 
-    /// The stream auto-next consumes.
-    pub(super) const fn source(self) -> StreamSource {
-        StreamSource::torrent(self.info_hash(), self.file_index())
+    /// The stream auto-next consumes, carrying the selection's magnet.
+    pub(super) fn source(&self) -> StreamSource {
+        match self {
+            Self::SameBatch {
+                info_hash, next, ..
+            } => StreamSource::torrent(*info_hash, *next),
+            Self::Torrent {
+                info_hash,
+                file_index,
+                magnet,
+                trackers,
+            } => StreamSource::torrent_with_source(
+                *info_hash,
+                *file_index,
+                magnet.clone(),
+                trackers.clone(),
+            ),
+        }
     }
 
     /// Yields or resumes: a separate torrent is paused or resumed, a
     /// same-batch preload has N+1 removed from or added to the selected
     /// files (#208 Q6).
-    async fn transfer(self, session: &TorrentSession, transfer: Transfer) {
+    async fn transfer(&self, session: &TorrentSession, transfer: Transfer) {
         let files = match (self, transfer) {
             (Self::Torrent { info_hash, .. }, Transfer::Yielded) => {
-                log_transfer(session.pause(info_hash).await, transfer);
+                log_transfer(session.pause(*info_hash).await, transfer);
                 return;
             }
             (Self::Torrent { info_hash, .. }, Transfer::Running) => {
-                log_transfer(session.resume(info_hash).await, transfer);
+                log_transfer(session.resume(*info_hash).await, transfer);
                 return;
             }
-            (Self::SameBatch { current, .. }, Transfer::Yielded) => vec![current],
-            (Self::SameBatch { current, next, .. }, Transfer::Running) => vec![current, next],
+            (Self::SameBatch { current, .. }, Transfer::Yielded) => vec![*current],
+            (Self::SameBatch { current, next, .. }, Transfer::Running) => {
+                vec![*current, *next]
+            }
         };
         log_transfer(
             session.update_only_files(self.info_hash(), &files).await,
@@ -464,9 +485,9 @@ impl PlaybackManager {
                 TorrentOrigin::Preload,
                 next.map(|episode| TorrentLink::new(current.media, episode, anilist_id)),
             );
-            *outcome = Outcome::Ready(fetch);
+            *outcome = Outcome::Ready(fetch.clone());
         }
-        if let Err(error) = select_preload(&session, fetch).await {
+        if let Err(error) = select_preload(&session, &fetch).await {
             warn!(%error, "the preload could not start");
             return;
         }
@@ -483,6 +504,7 @@ impl PlaybackManager {
             },
             yield_while_buffering(buffering, resume_after, |transfer| {
                 let session = Arc::clone(&session);
+                let fetch = fetch.clone();
                 async move { fetch.transfer(&session, transfer).await }
             }),
         );
@@ -542,10 +564,13 @@ impl PlaybackManager {
             StreamSource::Torrent {
                 info_hash,
                 file_index,
-                ..
+                magnet,
+                trackers,
             } => Ok(Some(Fetch::Torrent {
                 info_hash,
                 file_index,
+                magnet,
+                trackers,
             })),
             _ => Ok(None),
         }
@@ -651,22 +676,34 @@ impl PlaybackManager {
 
 /// Adds N+1's file to the session: the batch selects it beside the current
 /// file, a separate torrent is added with only that file.
-async fn select_preload(session: &TorrentSession, fetch: Fetch) -> Result<(), torrent::Error> {
+async fn select_preload(session: &TorrentSession, fetch: &Fetch) -> Result<(), torrent::Error> {
     match fetch {
         Fetch::SameBatch {
             info_hash,
             current,
             next,
-        } => session.update_only_files(info_hash, &[current, next]).await,
+        } => {
+            session
+                .update_only_files(*info_hash, &[*current, *next])
+                .await
+        }
         Fetch::Torrent {
             info_hash,
             file_index,
+            ..
         } => {
-            let existing = session.stats(info_hash).is_ok();
-            let magnet = TorrentSource::Magnet(format!("magnet:?xt=urn:btih:{info_hash}"));
-            session.add(magnet, file_index).await?;
+            let existing = session.stats(*info_hash).is_ok();
+            let magnet = TorrentSource::Magnet(
+                fetch
+                    .source()
+                    .magnet_link()
+                    .unwrap_or_else(|| format!("magnet:?xt=urn:btih:{info_hash}")),
+            );
+            session.add(magnet, *file_index).await?;
             if existing {
-                session.update_only_files(info_hash, &[file_index]).await?;
+                session
+                    .update_only_files(*info_hash, &[*file_index])
+                    .await?;
             }
             Ok(())
         }
