@@ -297,10 +297,10 @@ fn in_library_pill(cx: &mut Context<'_, AppShell>) -> impl IntoElement {
 
 /// The `available` / `checking` / `waiting` pill (#182 Q3). `unknown` and
 /// `none` have no label and render nothing.
-fn availability_pill(
+pub(crate) fn availability_pill<W>(
     label: &'static str,
     availability: Availability,
-    cx: &Context<'_, AppShell>,
+    cx: &Context<'_, W>,
 ) -> impl IntoElement {
     let color = match availability {
         Availability::Available => hsla(142., 0.62, 0.45, 1.),
