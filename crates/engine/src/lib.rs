@@ -14,6 +14,8 @@ mod library;
 pub mod network;
 #[cfg(test)]
 mod phase2_exit;
+#[cfg(test)]
+mod phase3_exit;
 mod playback;
 mod settings_store;
 mod torrent_list;
