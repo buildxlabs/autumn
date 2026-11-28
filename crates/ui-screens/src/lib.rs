@@ -7,6 +7,7 @@ mod entry;
 mod entry_library;
 mod entry_torrent;
 mod home;
+mod incoming;
 mod library_explorer;
 mod lists;
 mod lists_source;

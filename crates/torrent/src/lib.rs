@@ -96,6 +96,62 @@ pub enum TorrentSource {
     File(Vec<u8>),
 }
 
+/// A parsed `.torrent` file's metadata, without touching the session or
+/// the network (BEP-3 metainfo, v1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TorrentMeta {
+    /// The v1 infohash: SHA-1 of the raw `info` dictionary.
+    pub info_hash: InfoHash,
+    /// The suggested name, when the metainfo has one.
+    pub name: Option<String>,
+    /// Tracker URLs from `announce` and `announce-list`, in order.
+    pub trackers: Vec<String>,
+    /// Every file, padding excluded; each keeps its `.torrent` index.
+    pub files: Vec<TorrentFile>,
+}
+
+/// Parses `.torrent` bytes into metadata without a session or network.
+///
+/// # Errors
+///
+/// [`Error::InvalidSource`] when the bytes are not a valid v1 `.torrent`.
+pub fn parse_torrent(bytes: &[u8]) -> Result<TorrentMeta, Error> {
+    let meta = torrent_from_bytes(bytes).map_err(|e| Error::InvalidSource(e.into()))?;
+    let name = meta
+        .info
+        .data
+        .name
+        .as_ref()
+        .map(|name| String::from_utf8_lossy(name.as_ref()).into_owned());
+    let trackers = meta
+        .iter_announce()
+        .map(|tracker| String::from_utf8_lossy(tracker.as_ref()).into_owned())
+        .collect();
+    let info_hash = InfoHash::from_bytes(meta.info_hash.0);
+    let meta = meta
+        .info
+        .data
+        .validate()
+        .map_err(|e| Error::InvalidSource(e.into()))?;
+    let files = meta
+        .iter_file_details()
+        .enumerate()
+        .filter(|(_, file)| !file.attrs().padding)
+        .map(|(index, file)| TorrentFile {
+            index,
+            path: file.filename.to_vec().join("/"),
+            len: file.len,
+        })
+        .collect();
+    Ok(TorrentMeta {
+        info_hash,
+        name,
+        trackers,
+        files,
+    })
+}
+
 /// One file of a torrent, as listed in its metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -448,6 +504,57 @@ impl TorrentSession {
     /// The address peers can connect to for this session's uploads.
     pub fn listen_addr(&self) -> Option<SocketAddr> {
         self.api.session().listen_addr()
+    }
+
+    /// Adds a torrent paused with no file selected, to fetch its metadata
+    /// first (#209 Q4 incoming torrents, #223). A magnet keeps its own
+    /// trackers; `output_folder` is the per-torrent cache directory. If the
+    /// torrent is already in the session it is left as it is.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidSource`] for an unparsable source, [`Error::Session`]
+    /// if librqbit rejects it.
+    pub async fn add_metadata(&self, source: TorrentSource) -> Result<InfoHash, Error> {
+        let (info_hash, add) = match source {
+            TorrentSource::Magnet(url) => {
+                let magnet = Magnet::parse(&url).map_err(|e| Error::InvalidSource(e.into()))?;
+                let id = magnet
+                    .as_id20()
+                    .ok_or_else(|| Error::InvalidSource("magnet link has no v1 infohash".into()))?;
+                (InfoHash::from_bytes(id.0), AddTorrent::from_url(url))
+            }
+            TorrentSource::File(bytes) => {
+                let meta =
+                    torrent_from_bytes(&bytes).map_err(|e| Error::InvalidSource(e.into()))?;
+                (
+                    InfoHash::from_bytes(meta.info_hash.0),
+                    AddTorrent::from_bytes(bytes),
+                )
+            }
+        };
+        let folder = self.dir(info_hash);
+        let output_folder = folder
+            .to_str()
+            .ok_or_else(|| Error::NonUtf8Path(folder.clone()))?
+            .to_owned();
+        let initial_peers = match &self.discovery {
+            PeerDiscovery::Public => None,
+            PeerDiscovery::Only(peers) => Some(peers.clone()),
+        };
+        let options = AddTorrentOptions {
+            paused: true,
+            only_files: None,
+            output_folder: Some(output_folder),
+            initial_peers,
+            ..AddTorrentOptions::default()
+        };
+        self.api
+            .session()
+            .add_torrent(add, Some(options))
+            .await
+            .map_err(session_err)?;
+        Ok(info_hash)
     }
 
     /// Adds a torrent with only `file_index` selected, and returns its infohash.

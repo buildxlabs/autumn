@@ -66,6 +66,18 @@ pub fn pick_file<'a>(
         .or_else(|| lone_unnumbered.filter(|_| videos == 1))
 }
 
+/// Whether `path`'s extension is a video a player can open as an episode
+/// (and not padding): `.mkv`, `.mp4`, `.m4v`, `.avi`, `.webm`, `.mov`, `.ts`,
+/// `.m2ts`, `.wmv`, `.flv`, `.ogm`. Used to reject a non-video `.torrent`.
+#[must_use]
+pub fn is_video_path(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    release_parser::parse(name)
+        .extension
+        .as_deref()
+        .is_some_and(|extension| VIDEO_EXTENSIONS.contains(&extension))
+}
+
 fn is_skipped(path: &str) -> bool {
     path.to_lowercase()
         .split(|c: char| !c.is_alphanumeric())

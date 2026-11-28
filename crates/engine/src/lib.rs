@@ -9,6 +9,7 @@
 
 mod auto_select;
 mod chapters;
+mod incoming;
 mod library;
 pub mod network;
 #[cfg(test)]
@@ -44,6 +45,13 @@ use settings::{AppPaths, LibrarySettings, Settings};
 use tokio::runtime::Runtime;
 use tracker::{Local, Platform, PlatformError};
 
+pub use incoming::{
+    IncomingAdded, IncomingError, IncomingFile, IncomingSource, MagnetLink, MatchCandidate,
+    MatchReview, MatchSuggestion, TorrentFileSource, add_incoming, cancel_incoming,
+    commit_incoming, episode_suggestion, match_review, match_titles, parse_magnet,
+    parse_torrent_file, pick_episode_file,
+};
+// `MatchReview`, `IncomingSource`, `IncomingAdded` are referenced unqualified above.
 pub use auto_select::{
     AniZipEpisodeIds, AutoSelectError, AutoSelectProgress, AutoSelectRequest, AutoSelection,
     AutoSelector, EpisodeIds, FILE_LIST_TIMEOUT, FileListError, FileLister, SessionFiles,
@@ -106,6 +114,9 @@ pub enum EngineError {
     /// A library scan failed.
     #[error("the library scan failed: {0}")]
     Library(#[from] ::library::LibraryError),
+    /// An incoming-torrent operation failed (#223).
+    #[error("incoming torrent failed: {0}")]
+    Incoming(String),
     /// A scan was refused because another one is running.
     #[error("{0}")]
     Scan(#[from] ScanError),
@@ -388,6 +399,60 @@ pub trait EngineServices: Send + Sync + 'static {
         Box::pin(async { Ok(()) })
     }
 
+    /// Match review (#223, #209 Q2-Q3, ADR-0009): parse `titles` through
+    /// `library::matcher` (0.5, strictly above) against active-platform
+    /// entries first, then AniList catalog results. Never auto-commits.
+    /// The default is `MatchReview::Failed` for fakes.
+    fn incoming_match(&self, _titles: Vec<String>) -> BoxFuture<Result<MatchReview, EngineError>> {
+        Box::pin(async { Ok(MatchReview::Failed) })
+    }
+
+    /// Manual media pick (#209 Q3 `failed`): active-platform entries first,
+    /// then AniList catalog results for `query`, as match candidates.
+    /// Default empty for fakes.
+    fn incoming_search_media(
+        &self,
+        _query: String,
+    ) -> BoxFuture<Result<Vec<MatchCandidate>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Adds an incoming torrent to the session for metadata first (#223,
+    /// #209 Q4), origin `TorrentOrigin::Incoming`. Default is a no-op error
+    /// for fakes.
+    fn incoming_add(
+        &self,
+        _source: IncomingSource,
+    ) -> BoxFuture<Result<IncomingAdded, EngineError>> {
+        Box::pin(async { Err(EngineError::Incoming("not available".to_owned())) })
+    }
+
+    /// Cancels an incoming torrent: drop + delete partials (#209 Q4, #180).
+    /// The default is a no-op for fakes.
+    fn incoming_cancel(&self, _info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Commits a confirmed match review: registers origin + (media, episode)
+    /// on the Torrent List. Never auto-committed. Default is a no-op.
+    fn incoming_commit(
+        &self,
+        _info_hash: InfoHash,
+        _link: Option<TorrentLink>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Selects the picked `file_index` for an incoming torrent and resumes
+    /// it (#181 file pick, #223). Default is a no-op for fakes.
+    fn incoming_select_file(
+        &self,
+        _info_hash: InfoHash,
+        _file_index: usize,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// Removes a torrent and its cached files, ending a streaming playback
     /// session first. The default is a no-op.
     fn torrent_remove(&self, _info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
@@ -403,6 +468,8 @@ pub struct Engine {
     client: Client,
     poster_cache: PosterCache,
     catalog: CatalogCache,
+    /// The AniList catalog, for match-review candidate search (#223).
+    anilist: AniList,
     platform: Local,
     settings: Settings,
     /// The Library tab's current values, shared with scans so saves take
@@ -470,7 +537,8 @@ impl Engine {
         };
         let client = builder.build()?;
         let poster_cache = PosterCache::new(paths.cache_dir())?;
-        let catalog = CatalogCache::new(AniList::new(client.clone()), poster_cache.clone());
+        let anilist = AniList::new(client.clone());
+        let catalog = CatalogCache::new(anilist.clone(), poster_cache.clone());
         let platform = Local::new(db.clone());
         let library = Library::new(db.clone());
         let entries: Arc<dyn AnimeList> = Arc::new(platform.clone());
@@ -546,6 +614,7 @@ impl Engine {
             client,
             poster_cache,
             catalog,
+            anilist,
             platform,
             settings,
             library_settings,
@@ -1237,6 +1306,74 @@ impl EngineServices for Engine {
         })
     }
 
+    fn incoming_match(&self, titles: Vec<String>) -> BoxFuture<Result<MatchReview, EngineError>> {
+        let engine = self.clone();
+        Box::pin(async move { engine.match_review_load(titles).await })
+    }
+
+    fn incoming_search_media(
+        &self,
+        query: String,
+    ) -> BoxFuture<Result<Vec<MatchCandidate>, EngineError>> {
+        let engine = self.clone();
+        Box::pin(async move { engine.search_media_candidates(query).await })
+    }
+
+    fn incoming_add(
+        &self,
+        source: IncomingSource,
+    ) -> BoxFuture<Result<IncomingAdded, EngineError>> {
+        let streams = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            add_incoming(&streams, &source)
+                .await
+                .map_err(|error| EngineError::Incoming(error.to_string()))
+        })
+    }
+
+    fn incoming_cancel(&self, info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
+        let streams = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            cancel_incoming(&streams, info_hash).await;
+            Ok(())
+        })
+    }
+
+    fn incoming_commit(
+        &self,
+        info_hash: InfoHash,
+        link: Option<TorrentLink>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        let streams = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            commit_incoming(&streams, info_hash, link);
+            Ok(())
+        })
+    }
+
+    fn incoming_select_file(
+        &self,
+        info_hash: InfoHash,
+        file_index: usize,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        let streams = Arc::clone(&self.torrent);
+        Box::pin(async move {
+            let session = streams
+                .session()
+                .await
+                .map_err(|error| EngineError::Incoming(error.to_string()))?;
+            session
+                .update_only_files(info_hash, &[file_index])
+                .await
+                .map_err(|error| EngineError::Incoming(error.to_string()))?;
+            session
+                .resume(info_hash)
+                .await
+                .map_err(|error| EngineError::Incoming(error.to_string()))?;
+            Ok(())
+        })
+    }
+
     fn torrent_remove(&self, info_hash: InfoHash) -> BoxFuture<Result<(), EngineError>> {
         let torrent = Arc::clone(&self.torrent);
         let playback = Arc::clone(&self.playback);
@@ -1349,6 +1486,161 @@ impl Engine {
             .collect();
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.updated_at));
         Ok(entries)
+    }
+
+    /// Match review candidate loading (#223): active-platform entries
+    /// first, then AniList catalog results; `match_review` scores them.
+    async fn match_review_load(&self, titles: Vec<String>) -> Result<MatchReview, EngineError> {
+        let mut candidates = self.incoming_candidates().await?;
+        // AniList catalog results after the active platform's entries.
+        if let Some(first) = titles.first() {
+            let filters = metadata::SearchFilters {
+                search: Some(first.clone()),
+                kind: Some(MediaKind::Anime),
+                ..metadata::SearchFilters::default()
+            };
+            if let Ok(page) = self
+                .anilist
+                .search(&filters, metadata::PageRequest::new(1, 10))
+                .await
+            {
+                let seen: HashSet<String> = candidates
+                    .iter()
+                    .flat_map(|c| std::iter::once(c.title.clone()).chain(c.aliases.iter().cloned()))
+                    .map(|t| t.to_lowercase())
+                    .collect();
+                for media in page.media {
+                    if media.anilist_id == 0 {
+                        continue;
+                    }
+                    let Some(title) = media
+                        .title
+                        .romaji
+                        .clone()
+                        .or_else(|| media.title.english.clone())
+                        .or_else(|| media.title.native.clone())
+                    else {
+                        continue;
+                    };
+                    if seen.contains(&title.to_lowercase()) {
+                        continue;
+                    }
+                    let mut aliases = Vec::new();
+                    for alias in [
+                        media.title.english.as_ref(),
+                        media.title.native.as_ref(),
+                        media.title.romaji.as_ref(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        if *alias != title {
+                            aliases.push(alias.clone());
+                        }
+                    }
+                    let mut external = vec![ExternalId::AniList(media.anilist_id)];
+                    if let Some(mal) = media.mal_id {
+                        external.push(ExternalId::Mal(mal));
+                    }
+                    candidates.push(MatchCandidate {
+                        media: None,
+                        title,
+                        aliases,
+                        external_ids: external,
+                    });
+                }
+            }
+        }
+        Ok(match_review(&titles, &candidates))
+    }
+
+    /// Titled candidates from the active platform's anime list entries,
+    /// with known media ids, ordered first.
+    async fn incoming_candidates(&self) -> Result<Vec<MatchCandidate>, EngineError> {
+        let mut out = Vec::new();
+        for entry in self.entries(MediaKind::Anime).await? {
+            let ids = self.db.media().external_ids(entry.media).await?;
+            let anilist = ids.iter().find_map(|id| match id {
+                ExternalId::AniList(id) => Some(*id),
+                _ => None,
+            });
+            let summary = match anilist {
+                Some(id) => self.catalog.cached_media(id).await.map(|c| c.value.summary),
+                None => None,
+            };
+            let Some(summary) = summary else {
+                continue;
+            };
+            let Some(title) = summary
+                .title
+                .romaji
+                .clone()
+                .or_else(|| summary.title.english.clone())
+                .or_else(|| summary.title.native.clone())
+            else {
+                continue;
+            };
+            let mut aliases = Vec::new();
+            for alias in [
+                summary.title.english.as_ref(),
+                summary.title.native.as_ref(),
+                summary.title.romaji.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if *alias != title {
+                    aliases.push(alias.clone());
+                }
+            }
+            out.push(MatchCandidate {
+                media: Some(entry.media),
+                title,
+                aliases,
+                external_ids: ids,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Manual media pick candidates: active platform first, then AniList.
+    async fn search_media_candidates(
+        &self,
+        query: String,
+    ) -> Result<Vec<MatchCandidate>, EngineError> {
+        let mut candidates = self.incoming_candidates().await?;
+        let filters = metadata::SearchFilters {
+            search: Some(query),
+            kind: Some(MediaKind::Anime),
+            ..metadata::SearchFilters::default()
+        };
+        if let Ok(page) = self
+            .anilist
+            .search(&filters, metadata::PageRequest::new(1, 10))
+            .await
+        {
+            for media in page.media {
+                if media.anilist_id == 0 {
+                    continue;
+                }
+                let Some(title) = media
+                    .title
+                    .romaji
+                    .clone()
+                    .or_else(|| media.title.english.clone())
+                    .or_else(|| media.title.native.clone())
+                else {
+                    continue;
+                };
+                candidates.push(MatchCandidate {
+                    media: None,
+                    title,
+                    aliases: Vec::new(),
+                    external_ids: vec![ExternalId::AniList(media.anilist_id)],
+                });
+            }
+        }
+        Ok(candidates)
     }
 
     /// The AniList id `media` is known by, if any.

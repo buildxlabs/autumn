@@ -268,6 +268,9 @@ pub struct AppShell {
     badges: Entity<RailBadges>,
     /// The Torrent List's rows, mirrored from 4 Hz engine snapshots.
     torrent_store: Entity<TorrentStore>,
+    /// Incoming-torrent match review (#223).
+    incoming: Entity<ui_state::IncomingStore>,
+    incoming_task: Option<Task<()>>,
     /// The virtualized mock media grid behind the debug fetch-status demo:
     /// built, and shown on Home, once a debug fetch reports on it.
     home_grid: Option<Entity<PosterGrid>>,
@@ -420,6 +423,14 @@ impl AppShell {
                 PaletteEvent::OpenExplorer => {
                     window.close_dialog(cx);
                     shell.open_explorer(&OpenLibraryExplorer, window, cx);
+                }
+                PaletteEvent::IncomingMagnet(text) => {
+                    window.close_dialog(cx);
+                    shell.open_incoming_magnet(text, cx);
+                }
+                PaletteEvent::DropTorrent => {
+                    window.close_dialog(cx);
+                    shell.drop_torrent(window, cx);
                 }
             },
         );
@@ -619,6 +630,8 @@ impl AppShell {
             rail_menus: 0,
             badges,
             torrent_store: cx.new(|_| TorrentStore::inert()),
+            incoming: cx.new(|_| ui_state::IncomingStore::inert()),
+            incoming_task: None,
             home_grid: None,
             lists: None,
             lists_events: None,
@@ -851,6 +864,175 @@ impl AppShell {
         .detach();
         self.torrent_store = store;
         cx.notify();
+    }
+
+    /// Supplies the incoming-torrent store from the composition root (#223).
+    pub fn set_incoming_store(
+        &mut self,
+        store: Entity<ui_state::IncomingStore>,
+        _cx: &mut Context<'_, Self>,
+    ) {
+        self.incoming = store;
+    }
+
+    /// The incoming-torrent match-review store.
+    #[must_use]
+    pub fn incoming_store(&self) -> &Entity<ui_state::IncomingStore> {
+        &self.incoming
+    }
+
+    /// Opens match review on a torrent already in the session (#222 Match &
+    /// play, #223): match through `library::matcher`, never auto-commit.
+    pub(crate) fn open_match_review(
+        &mut self,
+        info_hash: domain::InfoHash,
+        name: String,
+        files: Vec<ui_state::IncomingFile>,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let incoming = self.incoming.clone();
+        incoming.update(cx, |store, cx| {
+            store.review_existing(info_hash, Some(name), files, cx);
+        });
+        Self::open_incoming_dialog(cx);
+    }
+
+    /// Global paste interception (#209 Q1): opens the palette in `/magnet`
+    /// mode with the pasted link prefilled; nothing starts until confirmed.
+    pub(crate) fn open_palette_magnet(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let palette = self.palette.clone();
+        window.open_dialog(cx, move |dialog, _, _| {
+            dialog
+                .w(px(PALETTE_WIDTH))
+                .close_button(false)
+                .child(palette.clone())
+        });
+        let palette = self.palette.clone();
+        let query = format!("/magnet {}", text.trim());
+        palette.update(cx, |palette, cx| {
+            palette.open_mode_prefilled(Mode::Magnet, query, window, cx);
+        });
+    }
+
+    /// Validates + starts the incoming pipeline for a pasted magnet (#209).
+    pub(crate) fn open_incoming_magnet(&mut self, text: &str, cx: &mut Context<'_, Self>) {
+        let incoming = self.incoming.clone();
+        incoming.update(cx, |store, cx| store.open_magnet(text, cx));
+        Self::open_incoming_dialog(cx);
+    }
+
+    /// Validates + starts the incoming pipeline for `.torrent` bytes (#209).
+    pub(crate) fn open_incoming_torrent_file(&mut self, bytes: &[u8], cx: &mut Context<'_, Self>) {
+        let incoming = self.incoming.clone();
+        incoming.update(cx, |store, cx| store.open_torrent_file(bytes, cx));
+        Self::open_incoming_dialog(cx);
+    }
+
+    /// Opens a `.torrent`-filtered native file picker (`/droptorrent`, #209 Q1).
+    pub(crate) fn drop_torrent(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        let _ = window;
+        let prompt = cx.prompt_for_paths(gpui_kit::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Choose a .torrent".into()),
+        });
+        self.incoming_task = Some(cx.spawn(async move |shell, cx| {
+            let Ok(Ok(Some(paths))) = prompt.await else {
+                return;
+            };
+            let Some(path) = paths.first() else {
+                return;
+            };
+            // `.torrent`-filtered picker; reject anything else inline.
+            if path.extension().and_then(|e| e.to_str()) != Some("torrent") {
+                return;
+            }
+            let Ok(bytes) = std::fs::read(path) else {
+                return;
+            };
+            let _ = shell.update(cx, |shell, cx| shell.open_incoming_torrent_file(&bytes, cx));
+        }));
+    }
+
+    fn open_incoming_dialog(cx: &mut Context<'_, Self>) {
+        // The overlay reads `incoming`; notify re-renders it.
+        cx.notify();
+    }
+
+    /// Renders the match-review overlay when reviewing (#223).
+    fn render_match_review(&mut self, cx: &mut Context<'_, Self>) -> Option<impl IntoElement> {
+        let active = self.incoming.read(cx).state != ui_state::ReviewState::Idle;
+        if !active {
+            return None;
+        }
+        let incoming = self.incoming.clone();
+        let playback = self.playback_store.clone();
+        Some(
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(gpui_kit::rgba(0x0000_0080))
+                .child(
+                    div()
+                        .rounded_md()
+                        .p_4()
+                        .bg(cx.theme().colors.background)
+                        .child(crate::incoming::render_review(&incoming, &playback, cx)),
+                ),
+        )
+    }
+
+    /// Drag-and-drop a `.torrent` onto the window (#209 Q1); other drops are
+    /// ignored.
+    fn drop_torrent_paths(
+        &mut self,
+        paths: &gpui_kit::ExternalPaths,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        for path in paths.paths() {
+            if path.extension().and_then(|e| e.to_str()) == Some("torrent")
+                && let Ok(bytes) = std::fs::read(path)
+            {
+                self.open_incoming_torrent_file(&bytes, cx);
+                break;
+            }
+        }
+    }
+
+    /// Global magnet paste interception (#209 Q1, ARCHITECTURE §5): a pasted
+    /// `magnet:` link while no text input has focus opens match review.
+    fn intercept_magnet_paste(
+        &mut self,
+        action: &gpui_kit::component::input::Paste,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let _ = action;
+        // A focused text input keeps its own paste.
+        if window.focused_input(cx).is_some() {
+            return;
+        }
+        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text())
+            && text.trim_start().starts_with("magnet:?")
+        {
+            self.open_palette_magnet(&text, window, cx);
+            cx.stop_propagation();
+        }
     }
 
     /// Opens `route`, saving the current route's scroll offset.
@@ -1794,6 +1976,12 @@ impl Render for AppShell {
             .id("shell")
             .track_focus(&self.focus)
             .key_context(WORKSPACE)
+            .on_drop(
+                cx.listener(|shell, paths: &gpui_kit::ExternalPaths, window, cx| {
+                    shell.drop_torrent_paths(paths, window, cx);
+                }),
+            )
+            .capture_action(cx.listener(Self::intercept_magnet_paste))
             .on_action(cx.listener(Self::go_back))
             .on_action(cx.listener(Self::go_forward))
             .on_action(cx.listener(Self::open_command_palette))
@@ -1818,6 +2006,7 @@ impl Render for AppShell {
             .children(prompt.map(|prompt| account_banner(cx, prompt)))
             .children(transfer.map(|preview| transfer_banner(cx, preview.direction)))
             .child(body)
+            .children(self.render_match_review(cx))
             .children(self.render_playback_hud(window, cx));
         #[cfg(debug_assertions)]
         let shell = shell

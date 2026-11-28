@@ -74,6 +74,30 @@ pub fn matches(release: &Release, target: &EpisodeTarget) -> bool {
     }
 }
 
+/// Pull the matchable `release-parser` titles out of release names (#209
+/// Q2): parse each name, keep non-blank `Release::title`s, dedupe
+/// case-sensitively, preserve order.
+#[must_use]
+pub fn match_titles(names: &[String]) -> Vec<String> {
+    let mut titles = Vec::new();
+    for name in names {
+        if let Some(title) = parse(name).title {
+            let title = title.trim().to_owned();
+            if !title.is_empty() && !titles.contains(&title) {
+                titles.push(title);
+            }
+        }
+    }
+    titles
+}
+
+/// The first `Release::episode` number parsed from `names`, in order (#209
+/// Q3): the pre-selected episode for match review.
+#[must_use]
+pub fn episode_suggestion(names: &[String]) -> Option<u32> {
+    names.iter().find_map(|name| parse(name).episode)
+}
+
 /// Match one indexer result by parsing its release name (Q5–Q7).
 ///
 /// An indexer's batch flag counts as the batch marker when the name does not

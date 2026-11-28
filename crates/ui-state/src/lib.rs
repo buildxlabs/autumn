@@ -12,6 +12,7 @@ pub mod entry_torrent;
 pub mod events;
 pub mod fetch_status;
 pub mod home_store;
+mod incoming_store;
 pub mod library_explorer;
 pub mod library_store;
 pub mod lists;
@@ -38,6 +39,7 @@ pub use entry_store::{EntryDraft, EntryState, EntryStore};
 pub use entry_torrent::{
     EntryTorrentStore, IN_LIBRARY, TorrentEpisode, TorrentRowState, TorrentStage, WATCHED,
 };
+pub use incoming_store::{IncomingFile, IncomingReview, IncomingStore, ReviewState};
 pub use library_explorer::{ExplorerFilter, ExplorerRow, LibraryExplorerStore};
 pub use library_store::{LibraryStore, ScanOutcome, ScanState};
 pub use lists::{
