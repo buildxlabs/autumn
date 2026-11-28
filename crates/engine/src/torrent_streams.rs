@@ -7,7 +7,8 @@
 //! stream: the restart waits until the last stream ends.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    future::Future,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -15,12 +16,15 @@ use std::{
     },
 };
 
-use domain::InfoHash;
+use domain::{InfoHash, TorrentLink, TorrentListRow, TorrentOrigin};
 use relay::Relay;
 use torrent::{PeerDiscovery, RateLimits, TorrentSession, TorrentSessionOptions};
 use tracing::warn;
 
-use crate::network::{TorrentRestart, TorrentSettingsChange};
+use crate::{
+    network::{TorrentRestart, TorrentSettingsChange},
+    torrent_list::TorrentList,
+};
 
 /// How the next session is started.
 #[derive(Debug, Clone)]
@@ -52,6 +56,8 @@ pub struct TorrentStreams {
     /// batch torrent can be held by the current stream and the preload of
     /// its next episode at once.
     active: Mutex<HashMap<InfoHash, Vec<StreamOrigin>>>,
+    /// Why each torrent was added and, when known, its episode link.
+    list: TorrentList,
     /// A restart was asked for while a stream played.
     restart_pending: AtomicBool,
 }
@@ -70,6 +76,7 @@ impl TorrentStreams {
             session: tokio::sync::Mutex::new(None),
             relay: tokio::sync::OnceCell::new(),
             active: Mutex::new(HashMap::new()),
+            list: TorrentList::default(),
             restart_pending: AtomicBool::new(false),
         }
     }
@@ -125,6 +132,60 @@ impl TorrentStreams {
     #[must_use]
     pub fn is_streaming(&self) -> bool {
         !lock(&self.active).is_empty()
+    }
+
+    /// Whether `info_hash` is attached to the active playback session. With
+    /// one session at a time, this is the row that shows as `streaming`.
+    #[must_use]
+    pub fn is_streaming_torrent(&self, info_hash: InfoHash) -> bool {
+        self.origin(info_hash) == Some(StreamOrigin::Playback)
+    }
+
+    /// Remembers why a torrent was added and its episode link, when known.
+    /// A playback stream registers itself when it starts; the preload and
+    /// incoming paths call this with their own origin (#207 Q1, #208).
+    pub fn register(&self, info_hash: InfoHash, origin: TorrentOrigin, link: Option<TorrentLink>) {
+        self.list.register(info_hash, origin, link);
+    }
+
+    /// A fresh Torrent List snapshot, newest first. Sampling a session that
+    /// has not started does not start one.
+    ///
+    /// # Errors
+    ///
+    /// As [`TorrentSession::list`].
+    pub async fn rows(&self) -> Result<Vec<TorrentListRow>, torrent::Error> {
+        let Some(session) = self.session.lock().await.clone() else {
+            return Ok(Vec::new());
+        };
+        let streaming: HashSet<InfoHash> = lock(&self.active)
+            .iter()
+            .filter(|(_, origins)| origins.contains(&StreamOrigin::Playback))
+            .map(|(info_hash, _)| *info_hash)
+            .collect();
+        Ok(self.list.rows(session.list()?, &streaming))
+    }
+
+    /// Removes a torrent and its cached files, running `end_session` first
+    /// (#207 Q11). The caller ends the playback session if this torrent is
+    /// streaming, so its relay token is revoked and no reader keeps buffering
+    /// after the files are gone. A torrent that is merely seeding needs no
+    /// session end and is removed outright.
+    ///
+    /// # Errors
+    ///
+    /// As [`TorrentSession::delete`].
+    pub async fn remove(
+        &self,
+        info_hash: InfoHash,
+        end_session: impl Future<Output = ()>,
+    ) -> Result<(), torrent::Error> {
+        end_session.await;
+        self.list.unregister(info_hash);
+        let Some(session) = self.session.lock().await.clone() else {
+            return Ok(());
+        };
+        session.delete(info_hash).await
     }
 
     /// Applies a Network save (ADR-0010): rate limits change live, and a
@@ -257,4 +318,111 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        net::{Ipv4Addr, SocketAddr},
+        path::PathBuf,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use domain::TorrentOrigin;
+    use librqbit::{CreateTorrentOptions, ListenerOptions, Session, SessionOptions};
+    use tempfile::TempDir;
+    use torrent::{PeerDiscovery, TorrentSessionOptions, TorrentSource};
+
+    use super::{StreamOrigin, TorrentStreams};
+
+    /// A plain librqbit session seeding one small file over loopback, as in
+    /// `crates/torrent/tests/session.rs`: no live network in the test.
+    async fn seeder() -> (Arc<Session>, TempDir, Vec<u8>, SocketAddr) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ep.mkv");
+        std::fs::write(&path, vec![0x5A; 1024 * 1024]).unwrap();
+        let session = Session::new_with_opts(
+            dir.path().into(),
+            SessionOptions {
+                dht: None,
+                disable_local_service_discovery: true,
+                disable_trackers: true,
+                listen: Some(ListenerOptions {
+                    listen_addr: (Ipv4Addr::LOCALHOST, 0).into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let (created, handle) = session
+            .create_and_serve_torrent(
+                &path,
+                CreateTorrentOptions {
+                    piece_length: Some(256 * 1024),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        handle.wait_until_completed().await.unwrap();
+        let addr = session.listen_addr().unwrap();
+        let bytes = created.as_bytes().unwrap().to_vec();
+        (session, dir, bytes, addr)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn removing_a_streaming_torrent_ends_the_session_before_deleting_files() {
+        let (_seeder, _seed_dir, bytes, peer) = seeder().await;
+        let cache = tempfile::tempdir().unwrap();
+        let root: PathBuf = cache.path().to_path_buf();
+        let streams = TorrentStreams::new(
+            root,
+            PeerDiscovery::Only(vec![peer]),
+            TorrentSessionOptions::default(),
+        );
+        let session = streams.session().await.unwrap();
+        let info_hash = session.add(TorrentSource::File(bytes), 0).await.unwrap();
+        let dir = cache.path().join(info_hash.to_string());
+        tokio::time::timeout(Duration::from_secs(30), async {
+            while !session.stats(info_hash).is_ok_and(|stats| stats.finished) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        streams.register(info_hash, TorrentOrigin::Stream, None);
+        streams.track(info_hash, StreamOrigin::Playback);
+        assert!(dir.exists(), "the complete file is cached before removal");
+
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&order);
+        streams
+            .remove(info_hash, async {
+                seen.lock().unwrap().push("session-ended");
+                assert!(
+                    dir.exists(),
+                    "the relay token is revoked before any file is deleted"
+                );
+                streams.end_stream(info_hash, StreamOrigin::Playback).await;
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(*order.lock().unwrap(), ["session-ended"]);
+        assert!(
+            !dir.exists(),
+            "removal deleted the cache after the session ended"
+        );
+        assert!(
+            matches!(session.stats(info_hash), Err(torrent::Error::NotFound(_))),
+            "the torrent left the session"
+        );
+        assert!(
+            !streams.is_streaming_torrent(info_hash),
+            "no dangling stream"
+        );
+    }
 }

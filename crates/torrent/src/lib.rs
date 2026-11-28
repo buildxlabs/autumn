@@ -256,6 +256,21 @@ pub struct TorrentStats {
     pub uploaded_bytes: u64,
 }
 
+/// A point-in-time view of one torrent, for the Torrent List (#207).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TorrentEntry {
+    /// The torrent's v1 infohash.
+    pub info_hash: InfoHash,
+    /// The name from metadata, or the magnet's `dn`, or the infohash.
+    pub name: String,
+    /// A canonical magnet reconstructed from session state (#207 Q10).
+    pub magnet: String,
+    /// Progress and transfer stats.
+    pub stats: TorrentStats,
+    /// The torrent's files, with completion for per-file Play.
+    pub files: Vec<domain::TorrentFileRow>,
+}
+
 /// One file of a torrent in the cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -781,6 +796,91 @@ impl TorrentSession {
         Ok(out)
     }
 
+    /// A snapshot of every torrent in the session, for the Torrent List (#207).
+    ///
+    /// Nothing is started or fetched: a session that has not been used yet has
+    /// no rows. A torrent removed while this runs is skipped rather than
+    /// failing the whole list.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Session`] if librqbit cannot report the haves of a torrent.
+    pub fn list(&self) -> Result<Vec<TorrentEntry>, Error> {
+        let handles = self.api.session().with_torrents(|torrents| {
+            torrents
+                .map(|(_, handle)| Arc::clone(handle))
+                .collect::<Vec<_>>()
+        });
+        let mut rows = Vec::with_capacity(handles.len());
+        for handle in handles {
+            let info_hash = InfoHash::from_bytes(handle.info_hash().0);
+            let stats = match self.stats(info_hash) {
+                Ok(stats) => stats,
+                Err(Error::NotFound(_)) => continue,
+                Err(error) => return Err(error),
+            };
+            let name = handle.name().unwrap_or_else(|| info_hash.to_string());
+            let trackers = handle
+                .shared
+                .trackers
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
+            let files = self.files(&handle);
+            rows.push(TorrentEntry {
+                info_hash,
+                magnet: magnet_link(info_hash, &name, &trackers),
+                name,
+                stats,
+                files,
+            });
+        }
+        Ok(rows)
+    }
+
+    /// The files of `handle`, with a completion flag from the downloaded
+    /// pieces. Piece ranges are rounded out, so a file sharing a piece with a
+    /// neighbour can only be complete when that piece has arrived.
+    fn files(&self, handle: &Arc<ManagedTorrent>) -> Vec<domain::TorrentFileRow> {
+        let Ok((haves, _)) = self
+            .api
+            .api_dump_haves(TorrentIdOrHash::Hash(handle.info_hash()))
+        else {
+            return Vec::new();
+        };
+        handle
+            .with_metadata(|meta| {
+                let piece_len = meta.lengths().default_piece_length();
+                meta.file_infos
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, file)| !file.attrs.padding)
+                    .map(|(index, file)| {
+                        let mut range =
+                            gate::file_pieces(file.offset_in_torrent, file.len, piece_len)
+                                .unwrap_or(0..0);
+                        let complete = range.all(|piece| {
+                            usize::try_from(piece)
+                                .ok()
+                                .and_then(|piece| haves.get(piece))
+                                .is_some_and(|bit| *bit)
+                        });
+                        domain::TorrentFileRow::new(
+                            index,
+                            file.relative_filename
+                                .components()
+                                .map(|part| part.as_os_str().to_string_lossy())
+                                .collect::<Vec<_>>()
+                                .join("/"),
+                            file.len,
+                            complete,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Quit: drops every torrent, including seeding ones, stops the session
     /// and deletes every infohash directory under the cache root.
     ///
@@ -880,6 +980,47 @@ impl TorrentCache {
     }
 }
 
+/// A canonical magnet rebuilt from session state: a v1 btih, the display name
+/// and every known tracker (#207 Q10). Not the original pasted string.
+fn magnet_link(info_hash: InfoHash, name: &str, trackers: &[String]) -> String {
+    let mut magnet = format!("magnet:?xt=urn:btih:{info_hash}");
+    if !name.is_empty() {
+        magnet.push_str("&dn=");
+        magnet.push_str(&percent_encode(name));
+    }
+    for tracker in trackers {
+        if !tracker.is_empty() {
+            magnet.push_str("&tr=");
+            magnet.push_str(&percent_encode(tracker));
+        }
+    }
+    magnet
+}
+
+/// RFC 3986 unreserved characters are left alone; everything else, including
+/// `&` in a tracker URL and spaces or non-ASCII in a name, is escaped.
+fn percent_encode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(value.len());
+    for &byte in value.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(char::from(byte));
+            }
+            _ => {
+                out.push('%');
+                out.push(char::from(
+                    HEX.get(usize::from(byte >> 4)).copied().unwrap_or(b'0'),
+                ));
+                out.push(char::from(
+                    HEX.get(usize::from(byte & 0x0F)).copied().unwrap_or(b'0'),
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Lists the infohash directories directly under `root`.
 async fn infohash_dirs(root: &Path) -> Result<Vec<PathBuf>, Error> {
     let mut entries = tokio::fs::read_dir(root).await?;
@@ -948,4 +1089,33 @@ fn bind_failed(name: &str, chain: &str) -> bool {
         || lower.contains("no such device")
         || lower.contains("not found")
         || lower.contains(&name.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{magnet_link, percent_encode};
+    use domain::InfoHash;
+
+    #[test]
+    fn a_magnet_is_rebuilt_from_the_infohash_name_and_trackers() {
+        let hash = InfoHash::from_bytes([0xAB; 20]);
+        let trackers = vec![
+            "udp://tracker.example:1337/announce".to_owned(),
+            "https://example.org/a?x=1&y=2".to_owned(),
+        ];
+        assert_eq!(
+            magnet_link(hash, "Show & Episode", &trackers),
+            format!(
+                "magnet:?xt=urn:btih:{hash}&dn=Show%20%26%20Episode\
+                 &tr=udp%3A%2F%2Ftracker.example%3A1337%2Fannounce\
+                 &tr=https%3A%2F%2Fexample.org%2Fa%3Fx%3D1%26y%3D2"
+            )
+        );
+    }
+
+    #[test]
+    fn percent_encoding_keeps_unreserved_bytes() {
+        assert_eq!(percent_encode("AZaz09-_.~"), "AZaz09-_.~");
+        assert_eq!(percent_encode("a b/c"), "a%20b%2Fc");
+    }
 }

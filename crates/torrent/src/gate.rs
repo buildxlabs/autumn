@@ -22,6 +22,23 @@ pub(crate) fn tail_start(file_len: u64) -> Option<u64> {
     (file_len >= HEAD_WINDOW + TAIL_WINDOW).then(|| file_len - TAIL_WINDOW)
 }
 
+/// Pieces covering a whole file at `file_offset` (bytes from the start of the
+/// torrent), rounded out to whole pieces. Empty for a zero-length file.
+///
+/// Returns `None` if a piece index does not fit in `u32` or `piece_len` is 0.
+pub(crate) fn file_pieces(file_offset: u64, file_len: u64, piece_len: u32) -> Option<Range<u32>> {
+    let piece_len = u64::from(piece_len);
+    if piece_len == 0 {
+        return None;
+    }
+    if file_len == 0 {
+        return Some(0..0);
+    }
+    let first = u32::try_from(file_offset / piece_len).ok()?;
+    let last = u32::try_from((file_offset + file_len).div_ceil(piece_len)).ok()?;
+    Some(first..last)
+}
+
 /// Pieces covering the head and tail windows of a file at `file_offset`
 /// (bytes from the start of the torrent), rounded out to whole pieces.
 ///

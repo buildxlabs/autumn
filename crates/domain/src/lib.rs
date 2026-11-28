@@ -11,6 +11,7 @@ mod list_entry;
 mod media;
 mod playback;
 mod score;
+mod torrent;
 mod transfer;
 
 pub use account::{ANILIST_RELOGIN_WINDOW, AniListAccountState};
@@ -23,6 +24,10 @@ pub use playback::{
     PlaybackDetails, PlaybackState, PrepareStage, Preparing, StreamSource,
 };
 pub use score::{Score, ScoreError};
+pub use torrent::{
+    TorrentFileRow, TorrentLink, TorrentListRow, TorrentOrigin, TorrentState, active_torrent_count,
+    derive_torrent_state,
+};
 pub use transfer::{
     TransferChoice, TransferDirection, TransferItem, TransferPreview, TransferProgress,
     TransferState,
@@ -79,6 +84,9 @@ pub enum AppEvent {
     TransferPreview(Option<TransferPreview>),
     /// A background list transfer processed another entry.
     TransferProgress(TransferProgress),
+    /// The whole Torrent List, resampled by the engine at most 4 Hz (#207 Q5).
+    /// The store replaces its rows only when this snapshot changes.
+    TorrentList(Vec<TorrentListRow>),
     /// A torrent stream is preparing, or `None` once the player opens or
     /// the request ends.
     PlaybackPreparing(Option<Preparing>),

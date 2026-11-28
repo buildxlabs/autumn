@@ -43,7 +43,7 @@ async fn local_anime(db: Db, gateway: PlatformGateway) -> Vec<MediaSummary> {
 
 /// Routes the palette offers with no query, in order. Every route, unlike
 /// the rail, which shows only some.
-const ROUTES: [Route; 6] = [
+const ROUTES: [Route; 7] = [
     Route::Home,
     Route::Discover,
     Route::Search(ui_state::SearchFilters::EMPTY),
@@ -51,6 +51,7 @@ const ROUTES: [Route; 6] = [
         status: ListTab::Status(ListStatus::Current),
     },
     Route::Schedule,
+    Route::Torrents,
     Route::ScanSummaries,
 ];
 

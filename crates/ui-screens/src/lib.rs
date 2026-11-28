@@ -16,6 +16,7 @@ mod scan_summaries;
 mod search;
 mod search_catalog;
 mod shell;
+mod torrents;
 
 pub use discover::{
     DiscoverLoader, DiscoverStore, DiscoverUpdate, DiscoverView, RealDiscoverCatalog,
