@@ -9,10 +9,17 @@ mod actor;
 mod error;
 mod host;
 mod limits;
+mod manifest;
+mod package;
 mod provider;
 mod runtime;
 
 pub use actor::{ExtensionHost, ProviderInfo, ProviderSource};
 pub use error::ExtensionError;
 pub use host::{AUTUMN_D_LUAU, SUPPORTED_API_VERSIONS};
+pub use manifest::{
+    ExtensionKind, MAX_DESCRIPTOR_BYTES, MAX_PAYLOAD_BYTES, Manifest, ManifestError, Payload,
+    SelectOption, SettingField, SettingKind,
+};
+pub use package::{Package, PackageError, Packages};
 pub use provider::{EpisodeQuery, ProviderRequest, ProviderTorrent};

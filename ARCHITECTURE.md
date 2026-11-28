@@ -110,7 +110,7 @@ db            → domain
 torrent       → domain (the shared InfoHash, #217)
 relay         → domain (the shared InfoHash, #217)
 auth           → domain, net
-extensions     → domain (the shared ExtensionId, #296)
+extensions     → domain (the shared ExtensionId, #296), db (installed packages, #299), net (declared host patterns in manifests #299, guarded HTTP #305)
 engine         → domain, net, db, metadata, tracker, settings, library, player, mkv (library watcher #123, scan module + playback manager #127/#128, chapter skip #131)
 library        → domain, db
 metadata      → domain, net

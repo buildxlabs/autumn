@@ -2406,12 +2406,17 @@ name = "extensions"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "db",
  "domain",
  "mlua",
+ "net",
  "scraper",
+ "semver",
+ "serde",
  "serde_json",
  "sha1",
  "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.21",
  "time",
  "tokio",
