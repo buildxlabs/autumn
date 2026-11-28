@@ -69,6 +69,10 @@ _Avoid_: report, scan log
 A torrent identified by its infohash, whether found on an indexer or brought in by the user and tracked in Autumn's own session this run. An indexer result carries a **Release** name, links, size, seeders and an origin indexer; an in-session torrent adds a **Torrent state**, an origin and selected files.
 _Avoid_: magnet, link, download, hit
 
+**Indexer**:
+A source of torrent search results: Nyaa, AnimeTosho, or an enabled **Torrent provider**. Results name the indexer they came from.
+_Avoid_: provider (a provider supplies external ids), tracker, site
+
 **Release**:
 A fansub or scene name for one **Episode** or a **Batch**, carrying optional group, resolution, codec, audio, source, season, episode number and version; parsed by `release-parser` into a `Release`.
 _Avoid_: torrent name, filename, rip
@@ -149,7 +153,7 @@ A batch covering every episode of a finished media, offered on the Torrent tab.
 _Avoid_: season pack
 
 **Availability badge**:
-A pill on an episode saying whether a matching release exists on the indexers right now.
+A pill on an episode saying whether a matching release exists on the built-in indexers right now.
 _Avoid_: torrent status
 
 **Buffer overlay**:
@@ -172,9 +176,69 @@ _Avoid_: VPN, relay host
 
 ### Extensions
 
+**Extension**:
+An installable content-provider package, either a Luau script or a **Declarative source**, run under its **Extension manifest** and the **Host API**.
+_Avoid_: plugin (reserved for future UI-hook extensions), addon, scraper
+
+**Extension manifest**:
+The JSON descriptor defining an **Extension**'s identity (`id`), SemVer `version`, `api_version`, type, runtime, declared permissions and settings schema.
+_Avoid_: package.json, config
+
+**Torrent provider**:
+An **Extension** of type `torrent-provider`; once enabled and configured it searches as one more **Indexer**.
+_Avoid_: torrent extension, scraper, indexer extension
+
+**Provider contract**:
+What a **Torrent provider** implements: a `search(request)` function returning release rows (a name and a v1 infohash, plus optional size, seeders, date and file details). Luau scripts and **Declarative sources** both satisfy it, and it is versioned by the manifest's API version.
+_Avoid_: provider interface, provider API, SDK
+
 **Declarative source**:
-An extension made only of a manifest (URL templates and selectors) with no code.
+A code-free **Extension** defined in JSON inside its **Extension manifest** (one request template, HTML/XML/JSON row and field selectors, and a fixed filter set), executed natively by Autumn under the same **Provider contract** and network limits as Luau extensions.
 _Avoid_: config extension, scraper definition
+
+**Host API**:
+What Autumn lets a Luau extension call, under the `autumn` global: HTTP, HTML and JSON parsing, encoding, hashing, time, logging and the extension's own settings. It is versioned by the manifest's API version.
+_Avoid_: SDK, bindings, runtime API
+
+**Extension repository**:
+A user-added HTTPS JSON index listing installable **Extensions** and their metadata.
+_Avoid_: plugin store, source list, repo feed
+
+**Origin URL**:
+The **Extension repository** index URL, or direct manifest URL, an **Extension** was installed from; automatic update checks query only this origin.
+_Avoid_: source repo, upstream
+
+**Marketplace**:
+The Extensions tab that lists installable extensions from the shown extension repositories.
+_Avoid_: store, catalog (Catalog is the AniList media catalog)
+
+**Update review**:
+The sheet that shows an extension update's permission, settings and code changes before the user accepts or skips it.
+_Avoid_: update dialog, changelog
+
+**Extension health**:
+The runtime state of an installed extension: `healthy`, `failing` (recording the last non-cancelled error), or `auto-disabled` after repeated CPU or memory kills.
+_Avoid_: extension status, crash state
+
+**VM kill**:
+Aborting a running extension call through Luau's one-shot interrupt, a wall-clock timeout or an out-of-memory error, cancelling any in-flight host future and rebuilding the VM before the next call.
+_Avoid_: thread kill, panic, force stop
+
+**Outbound guard**:
+The network policy `net` enforces on extension HTTP traffic: it blocks non-globally-reachable addresses, `localhost`/`.local` names, DNS rebinding and undeclared hosts, on the first request and every redirect hop.
+_Avoid_: firewall, sandbox filter
+
+**Declared host**:
+A domain or subdomain pattern listed in an extension's manifest that the extension may contact; adding or widening one on update is a permission change.
+_Avoid_: allowed domain, whitelist
+
+**LAN host exception**:
+A user-approved private or `.local` host permitted for one extension in its settings, overriding the **Outbound guard** only for that extension and exact host.
+_Avoid_: SSRF bypass, local whitelist
+
+**Extension playground**:
+An in-app tab on the Extensions screen for editing and running a scratch copy of an **Extension** against the real **Host API**, limits and **Outbound guard** without affecting installed extensions.
+_Avoid_: extension IDE, sandbox tester
 
 ### Tracking
 
