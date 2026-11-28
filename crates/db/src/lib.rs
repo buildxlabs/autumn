@@ -5,6 +5,7 @@
 mod availability;
 mod continuity;
 mod error;
+mod extension;
 mod local_file;
 mod local_list;
 mod media;
@@ -22,6 +23,7 @@ use sqlx::{
 pub use availability::{AvailabilityIndexer, AvailabilityRecord, AvailabilityRepo};
 pub use continuity::{Continuity, ContinuityRepo, ResumePoint};
 pub use error::DbError;
+pub use extension::{ExtensionRepo, InstalledExtension, NewExtension};
 pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
 pub use local_list::LocalListRepo;
 pub use media::{LinkConflict, MediaRepo, Minted};
@@ -66,6 +68,11 @@ impl Db {
     /// Persisted availability badge results.
     pub fn availability(&self) -> AvailabilityRepo<'_> {
         AvailabilityRepo::new(&self.pool)
+    }
+
+    /// Installed extension packages.
+    pub fn extensions(&self) -> ExtensionRepo<'_> {
+        ExtensionRepo::new(&self.pool)
     }
 
     /// Media identity and cross-references.

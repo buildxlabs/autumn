@@ -1,4 +1,4 @@
-use domain::{ExternalId, ListStatus, MediaId, MediaKind};
+use domain::{ExtensionId, ExternalId, ListStatus, MediaId, MediaKind};
 
 /// Why a database operation failed.
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +34,12 @@ pub enum DbError {
     /// This build does not store that list status.
     #[error("unsupported list status {0:?}")]
     UnsupportedStatus(ListStatus),
+    /// An extension with this id is already installed.
+    #[error("an extension with id {0} is already installed")]
+    ExtensionExists(ExtensionId),
+    /// No installed extension has this id.
+    #[error("no installed extension has id {0}")]
+    UnknownExtension(ExtensionId),
     /// A stored row holds a value its type can't take, so the database was
     /// changed outside Autumn. Names the column, or the columns of a date.
     #[error("invalid value in column {0}")]
