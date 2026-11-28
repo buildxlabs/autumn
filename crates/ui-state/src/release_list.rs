@@ -15,7 +15,7 @@ use std::{
 use domain::{MediaId, PlaybackDetails, StreamSource, TorrentFileRow};
 use engine::EngineServices;
 use gpui_kit::{Context, Task};
-use search::{EpisodeTarget, Indexer, Torrent, rank_with_status};
+use search::{Availability, EpisodeTarget, Indexer, Torrent, rank_with_status};
 use settings::AutoSelectProfile;
 
 /// The `no peers` status of a release that failed to start this session.
@@ -477,6 +477,8 @@ pub struct ReleaseListContext {
     pub search: search::SearchRequest,
     /// The file-match target.
     pub target: EpisodeTarget,
+    /// The Torrent tab's badge for this episode (#251).
+    pub availability: Availability,
     /// The media title, for HUD labels.
     pub media_title: String,
     /// The media poster, for HUD labels.

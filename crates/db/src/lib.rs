@@ -2,6 +2,7 @@
 //!
 //! See ARCHITECTURE §2 and §6, and ADR 0001 for media identity.
 
+mod availability;
 mod continuity;
 mod error;
 mod local_file;
@@ -18,6 +19,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 };
 
+pub use availability::{AvailabilityIndexer, AvailabilityRecord, AvailabilityRepo};
 pub use continuity::{Continuity, ContinuityRepo, ResumePoint};
 pub use error::DbError;
 pub use local_file::{FileFlag, LocalFile, LocalFileRepo};
@@ -59,6 +61,11 @@ impl Db {
         let pool = SqlitePool::connect_with(options).await?;
         sqlx::migrate!().run(&pool).await?;
         Ok(Self { pool })
+    }
+
+    /// Persisted availability badge results.
+    pub fn availability(&self) -> AvailabilityRepo<'_> {
+        AvailabilityRepo::new(&self.pool)
     }
 
     /// Media identity and cross-references.

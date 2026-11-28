@@ -5,7 +5,9 @@
 //! a torrent's file list (ADR 0007). Only episodes aired within the last 24 h
 //! are checked; `waiting` rechecks every 5 min until that window closes and
 //! `available` stops. Every result is cached per (media, episode, indexer),
-//! with at most [`MAX_IN_FLIGHT`] checks running at once.
+//! with at most [`MAX_IN_FLIGHT`] checks running at once. The caller persists
+//! those results through [`AvailabilityTracker::cached`] and restores them
+//! with [`AvailabilityTracker::restore`] (#251).
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -218,6 +220,36 @@ impl<C: WallClock> AvailabilityTracker<C> {
             );
         }
         self.in_flight.remove(&key);
+    }
+
+    /// Restore results persisted by an earlier session (#251). A newer result
+    /// already in the tracker wins, so a live check is never overwritten by a
+    /// stale row.
+    pub fn restore(
+        &mut self,
+        media: i64,
+        episode: u32,
+        checks: impl IntoIterator<Item = (Indexer, bool, SystemTime)>,
+    ) {
+        for (indexer, found, at) in checks {
+            let key = (media, episode, indexer);
+            if self.results.get(&key).is_none_or(|checked| checked.at < at) {
+                self.results.insert(key, Checked { found, at });
+            }
+        }
+    }
+
+    /// The cached per-indexer answers for `episode`, for persistence.
+    #[must_use]
+    pub fn cached(&self, media: i64, episode: u32) -> Vec<(Indexer, bool, SystemTime)> {
+        [Indexer::Nyaa, Indexer::AnimeTosho]
+            .into_iter()
+            .filter_map(|indexer| {
+                self.results
+                    .get(&(media, episode, indexer))
+                    .map(|checked| (indexer, checked.found, checked.at))
+            })
+            .collect()
     }
 
     /// Record a failed check: the badge becomes `unknown` and stops.

@@ -1,6 +1,6 @@
 //! Scheduling, recheck and stop rules for availability badges (#226, #181 Q13).
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use search::{Availability, AvailabilityTracker, FakeWallClock, Indexer, parse_air_date};
 use time::macros::datetime;
@@ -96,6 +96,43 @@ fn at_most_four_checks_are_in_flight() {
     assert_eq!(tracker.pump(), vec![(7, 5)]);
     tracker.complete(7, 2, &[]);
     assert_eq!(tracker.pump(), vec![(7, 6)]);
+}
+
+#[test]
+fn restored_results_make_an_episode_available_without_a_new_check() {
+    let clock = FakeWallClock::new(datetime!(2026-11-28 12:00 UTC).into());
+    let checked_at: SystemTime = datetime!(2026-11-28 11:45 UTC).into();
+    let mut tracker = AvailabilityTracker::with_clock(clock);
+    tracker.track(7, 1, datetime!(2026-11-28 11:30 UTC).into());
+    tracker.restore(7, 1, [(Indexer::Nyaa, true, checked_at)]);
+
+    assert_eq!(tracker.state(7, 1), Availability::Available);
+    assert!(tracker.pump().is_empty(), "no restart recheck is scheduled");
+    assert_eq!(
+        tracker.cached(7, 1),
+        vec![(Indexer::Nyaa, true, checked_at)],
+        "the restored row is exported again"
+    );
+}
+
+#[test]
+fn a_live_check_refreshes_restored_rows() {
+    let clock = FakeWallClock::new(datetime!(2026-11-28 12:00 UTC).into());
+    let old: SystemTime = datetime!(2026-11-28 11:00 UTC).into();
+    let fresh: SystemTime = datetime!(2026-11-28 12:00 UTC).into();
+    let mut tracker = AvailabilityTracker::with_clock(clock);
+    tracker.track(7, 1, datetime!(2026-11-28 10:30 UTC).into());
+    tracker.restore(7, 1, [(Indexer::Nyaa, true, old)]);
+    tracker.complete(7, 1, &[Indexer::Nyaa]);
+
+    assert_eq!(
+        tracker.cached(7, 1),
+        vec![
+            (Indexer::Nyaa, true, fresh),
+            (Indexer::AnimeTosho, false, fresh)
+        ],
+        "both indexers are persisted with the newer check time"
+    );
 }
 
 #[test]

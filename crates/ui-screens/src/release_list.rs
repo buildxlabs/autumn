@@ -1,7 +1,7 @@
 //! The manual **release list** sheet (#221, #182 Q5–Q7, Q9).
 //!
 //! A right-side sheet for one episode: header (episode + title, availability
-//! pill placeholder until #226, auto-select failure reason), editable query,
+//! pill, auto-select failure reason), editable query,
 //! one-shot **Profile ▾**, **Refresh**, client-side chips, a sortable table
 //! (rank by default, ★ Best, failing rows dimmed), and inline batch file
 //! pick. All logic lives in `ui_state::release_list`; this view only renders.
@@ -19,10 +19,13 @@ use gpui_kit::{
     prelude::FluentBuilder as _,
     px,
 };
+use ui_state::Availability;
 use ui_state::release_list::{
     BatchFile, BatchState, KindFilter, ReleaseFilters, ReleaseListStore, ReleaseRow, ReleaseSort,
     SortColumn, SortDirection,
 };
+
+use crate::entry_torrent::availability_pill;
 
 /// The release-list sheet body.
 pub(crate) struct ReleaseListScreen {
@@ -87,6 +90,7 @@ impl Render for ReleaseListScreen {
                 _ => format!("Episode {}", c.episode),
             },
         );
+        let availability = context.map_or(Availability::None, |c| c.availability);
         let failure = context.and_then(|c| c.failure_reason.clone());
         let profiles = context.map_or_else(Vec::new, |c| c.profiles.clone());
         let saved_profile = context.map(|c| c.profile.name.clone());
@@ -130,12 +134,11 @@ impl Render for ReleaseListScreen {
             .gap_1()
             .child(div().text_base().child(header_title))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    // Availability pill placeholder until #226 lands.
-                    .child(pill("availability", muted)),
+                div().flex().items_center().gap_2().children(
+                    availability
+                        .label()
+                        .map(|label| availability_pill(label, availability, cx)),
+                ),
             )
             .children(failure.map(|reason| {
                 div()
@@ -185,18 +188,6 @@ enum BatchView {
     Loading,
     Failed,
     Loaded(Vec<BatchFile>),
-}
-
-fn pill(label: &str, color: gpui_kit::Hsla) -> impl IntoElement {
-    div()
-        .rounded_full()
-        .border_1()
-        .border_color(color)
-        .px_2()
-        .py_1()
-        .text_sm()
-        .text_color(color)
-        .child(label.to_owned())
 }
 
 fn profile_menu(

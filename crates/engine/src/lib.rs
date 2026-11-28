@@ -359,6 +359,24 @@ pub trait EngineServices: Send + Sync + 'static {
         })
     }
 
+    /// Stored availability badge results for `media` (#251). The default is
+    /// empty for fakes that do not exercise badges.
+    fn availability(
+        &self,
+        _media: i64,
+    ) -> BoxFuture<Result<Vec<db::AvailabilityRecord>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Persists availability badge results (#251). The default is a no-op for
+    /// fakes.
+    fn save_availability(
+        &self,
+        _records: Vec<db::AvailabilityRecord>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// One keyword-only release search on both indexers (#221 Q6); `refresh`
     /// bypasses the 60 s cache. The default is empty for fakes.
     #[expect(
@@ -1259,6 +1277,32 @@ impl EngineServices for Engine {
                     message: "torrent search is unavailable".to_owned(),
                 }),
             }
+        })
+    }
+
+    fn availability(
+        &self,
+        media: i64,
+    ) -> BoxFuture<Result<Vec<db::AvailabilityRecord>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            db.availability()
+                .for_media(media)
+                .await
+                .map_err(EngineError::from)
+        })
+    }
+
+    fn save_availability(
+        &self,
+        records: Vec<db::AvailabilityRecord>,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move {
+            db.availability()
+                .save(&records)
+                .await
+                .map_err(EngineError::from)
         })
     }
 
