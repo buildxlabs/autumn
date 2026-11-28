@@ -29,8 +29,8 @@ use gpui_kit::{
 };
 use metadata::ODBL_CREDIT;
 use settings::{
-    GeneralSettings, LibrarySettings, NetworkSettings, PlaybackKind, PlaybackSettings,
-    PlayerChoice, TorrentSettings, validate_torrent_folder,
+    AutoSelectSettings, GeneralSettings, LibrarySettings, NetworkSettings, PlaybackKind,
+    PlaybackSettings, PlayerChoice, TorrentSettings, validate_torrent_folder,
 };
 use ui_state::{
     LibraryStore, Route, ScanState, SettingsTab,
@@ -38,6 +38,8 @@ use ui_state::{
 };
 
 use super::{AppShell, RailMode};
+
+mod torrents;
 
 /// A player the Playback tab can offer, with its version in the label.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +85,7 @@ type SaveLibrary = Rc<dyn Fn(&LibrarySettings, &mut App) -> Task<()>>;
 type SaveTorrent = Rc<dyn Fn(&TorrentSettings, &mut App) -> Task<()>>;
 type TorrentCacheRequest = Rc<dyn Fn(TorrentCacheAction, &mut App) -> Task<gpui_kit::Result<u64>>>;
 type SaveNetwork = Rc<dyn Fn(&NetworkSettings, &mut App) -> Task<()>>;
+type SaveAutoSelect = Rc<dyn Fn(&AutoSelectSettings, &mut App) -> Task<()>>;
 type DetectPlayers = Rc<dyn Fn(&mut App) -> Task<Vec<PlayerOption>>>;
 type ValidatePlayer = Rc<dyn Fn(PathBuf, &mut App) -> Task<Result<PlayerOption, String>>>;
 type TestPlayer = Rc<dyn Fn(PlaybackSettings, &mut App) -> Task<Result<(), PlaybackTestError>>>;
@@ -250,6 +253,33 @@ impl std::fmt::Debug for NetworkServices {
 impl NetworkServices {
     /// Creates the save callback the Network tab needs.
     pub fn new(save: impl Fn(&NetworkSettings, &mut App) -> Task<()> + 'static) -> Self {
+        Self {
+            save: Rc::new(save),
+        }
+    }
+
+    /// Inert callbacks for embedding the shell without a settings backend.
+    #[must_use]
+    pub fn inert() -> Self {
+        Self::new(|_, _| Task::ready(()))
+    }
+}
+
+/// The composition-root callback that persists the Torrents tab.
+#[derive(Clone)]
+pub struct AutoSelectServices {
+    save: SaveAutoSelect,
+}
+
+impl std::fmt::Debug for AutoSelectServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AutoSelectServices").finish_non_exhaustive()
+    }
+}
+
+impl AutoSelectServices {
+    /// Creates the save callback the Torrents tab needs.
+    pub fn new(save: impl Fn(&AutoSelectSettings, &mut App) -> Task<()> + 'static) -> Self {
         Self {
             save: Rc::new(save),
         }
@@ -729,7 +759,7 @@ impl AppShell {
         tab: SettingsTab,
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
-        const TABS: [SettingsTab; 8] = [
+        const TABS: [SettingsTab; 9] = [
             SettingsTab::General,
             SettingsTab::Appearance,
             SettingsTab::Account,
@@ -738,6 +768,7 @@ impl AppShell {
             SettingsTab::Storage,
             SettingsTab::Network,
             SettingsTab::About,
+            SettingsTab::Torrents,
         ];
         let selected = match tab {
             SettingsTab::General => 0,
@@ -748,6 +779,7 @@ impl AppShell {
             SettingsTab::Storage => 5,
             SettingsTab::Network => 6,
             SettingsTab::About => 7,
+            SettingsTab::Torrents => 8,
         };
         let tabs = TabBar::new("settings-tabs")
             .underline()
@@ -760,6 +792,7 @@ impl AppShell {
             .child(settings_tab("settings-storage", "Storage"))
             .child(settings_tab("settings-network", "Network"))
             .child(settings_tab("settings-about", "About"))
+            .child(settings_tab("settings-torrents", "Torrents"))
             .on_click(cx.listener(|shell, index: &usize, _, cx| {
                 if let Some(&tab) = TABS.get(*index) {
                     shell.navigate(Route::Settings { tab }, cx);
@@ -1499,6 +1532,7 @@ impl AppShell {
                 ];
                 ("Library", items)
             }
+            SettingsTab::Torrents => torrents::render(&cx.entity(), self),
             SettingsTab::About => (
                 "About",
                 vec![SettingItem::render(move |_, _, _| {
