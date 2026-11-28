@@ -9,10 +9,11 @@
 use std::sync::Arc;
 
 use domain::ExtensionId;
-use mlua::{Function, Lua, Table, Value, Variadic, VmState};
+use mlua::{Function, Lua, Table, Value, VmState};
 
 use crate::{
     error::ExtensionError,
+    host::{self, CallLog},
     limits::{Kill, KillSwitch},
     provider::{ProviderRequest, ProviderTorrent},
 };
@@ -79,7 +80,7 @@ end
 const REMOVED_GLOBALS: [&str; 4] = ["require", "getfenv", "setfenv", "loadstring"];
 
 /// Installs extra globals before `sandbox(true)`; tests use it for host
-/// functions the host API (#301) doesn't offer yet.
+/// functions the host API doesn't offer.
 pub(crate) type Prepare = fn(&Lua) -> mlua::Result<()>;
 
 /// A loaded torrent provider and the VM it lives in.
@@ -90,6 +91,7 @@ pub(crate) struct Vm {
     protected_call: Function,
     search: Function,
     switch: Arc<KillSwitch>,
+    log: CallLog,
 }
 
 impl Vm {
@@ -114,7 +116,8 @@ impl Vm {
         for name in REMOVED_GLOBALS {
             globals.raw_set(name, Value::Nil)?;
         }
-        globals.raw_set("print", print_to_log(&lua, &id)?)?;
+        let log = CallLog::new(id.clone());
+        host::install(&lua, &log)?;
         lua.load(KILL_GUARDS)
             .set_name("=autumn")
             .call::<()>(is_killed(&lua, &switch)?)?;
@@ -145,7 +148,9 @@ impl Vm {
             }
             Err(error) => return Err(error.into()),
         };
+        let call = log.begin_call();
         let provider = protected(&protected_call, chunk, Value::Nil).await?;
+        drop(call);
         let search = provider_search(provider)?;
         Ok(Self {
             id,
@@ -153,6 +158,7 @@ impl Vm {
             protected_call,
             search,
             switch,
+            log,
         })
     }
 
@@ -173,6 +179,7 @@ impl Vm {
         request: &ProviderRequest,
     ) -> Result<Vec<ProviderTorrent>, ExtensionError> {
         let request = encode_request(&self.lua, request)?;
+        let _call = self.log.begin_call();
         let results = protected(
             &self.protected_call,
             self.search.clone(),
@@ -181,20 +188,6 @@ impl Vm {
         .await?;
         decode_results(&self.id, results)
     }
-}
-
-/// `print(...)` that writes one `info` line to `tracing` instead of stdout.
-fn print_to_log(lua: &Lua, id: &ExtensionId) -> mlua::Result<Function> {
-    let id = id.clone();
-    lua.create_function(move |_, args: Variadic<Value>| {
-        let parts = args
-            .iter()
-            .map(Value::to_string)
-            .collect::<mlua::Result<Vec<_>>>()?;
-        let line = parts.join("\t");
-        tracing::info!(target: "extension", extension = %id, "{line}");
-        Ok(())
-    })
 }
 
 /// The guards' `is_killed(err)`: whether the host killed the call, counting

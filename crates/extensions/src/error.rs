@@ -78,7 +78,7 @@ impl From<mlua::Error> for ExtensionError {
 }
 
 /// Cuts `text` to at most `max` bytes on a character boundary.
-fn truncate(text: &mut String, max: usize) {
+pub(crate) fn truncate(text: &mut String, max: usize) {
     let end = text.floor_char_boundary(max);
     text.truncate(end);
 }
