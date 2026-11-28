@@ -9,6 +9,7 @@
 
 mod auto_select;
 mod chapters;
+mod extension_lanes;
 mod incoming;
 mod library;
 pub mod network;
@@ -36,9 +37,10 @@ use std::{
 use ::library::{AutoScan, Library, ScanSummary};
 use db::{Continuity, Db, FileFlag, LocalFile, ResumePoint};
 use domain::{
-    AppEvent, ExternalId, InfoHash, ListEntry, ListStatus, MediaId, MediaKind, PlaybackControl,
-    StreamSource, TorrentFileRow, TorrentLink, TorrentListRow, TorrentOrigin,
+    AppEvent, ExtensionId, ExternalId, InfoHash, ListEntry, ListStatus, MediaId, MediaKind,
+    PlaybackControl, StreamSource, TorrentFileRow, TorrentLink, TorrentListRow, TorrentOrigin,
 };
+use extension_lanes::{Change, ExtensionLanes};
 use flume::Sender;
 use metadata::{
     Aging, AiringEpisode, AniList, AniZip, CatalogCache, HomeLoad, Load, Media as EpisodeMetadata,
@@ -61,6 +63,7 @@ pub use auto_select::{
     AutoSelector, EpisodeIds, FILE_LIST_TIMEOUT, FileListError, FileLister, SessionFiles,
     TorrentSearch, VERIFY_CANDIDATES,
 };
+pub use extension_lanes::ExtensionSummary;
 pub use library::{
     AnimeList, FillerPolicy, LibraryMediaInfo, LibraryScanner, PlatformCandidates, ScanError,
 };
@@ -142,6 +145,10 @@ pub enum EngineError {
     /// The embedded torrent session failed an operation.
     #[error("the torrent session failed: {0}")]
     Torrent(#[from] torrent::Error),
+    /// An extension could not be listed, enabled, disabled or uninstalled,
+    /// for example because no installed extension has the id.
+    #[error("the extension change failed: {0}")]
+    Extension(#[from] extensions::PackageError),
 }
 
 /// The engine's services: what the Anime Entry and Home screens call through
@@ -390,6 +397,32 @@ pub trait EngineServices: Send + Sync + 'static {
         Box::pin(async { Ok(search::SearchOutcome::default()) })
     }
 
+    /// Every installed extension, enabled or not, by id (#304). The default
+    /// is empty for fakes.
+    fn installed_extensions(&self) -> BoxFuture<Result<Vec<ExtensionSummary>, EngineError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Turns an installed extension on: its provider joins the next search.
+    /// The default is a no-op for fakes.
+    fn enable_extension(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Turns an installed extension off, keeping its row: a call in flight
+    /// is killed and its cached search rows are dropped, so the next search
+    /// shows none of them. The default is a no-op for fakes.
+    fn disable_extension(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// Deletes an installed extension's row, stopping it and dropping its
+    /// cached search rows as [`Self::disable_extension`] does. The default is
+    /// a no-op for fakes.
+    fn uninstall_extension(&self, _id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// A torrent's file list, on demand for batch file pick (#221 Q7). The
     /// default is empty for fakes.
     fn torrent_files(
@@ -528,19 +561,24 @@ pub struct Engine {
     /// Auto-select over the indexers and the torrent session (#218); rebuilt
     /// when the Network tab changes an indexer base URL.
     auto_select: Arc<RwLock<AutoSelector>>,
+    /// The installed torrent providers' search lanes (#304).
+    extensions: Arc<ExtensionLanes>,
 }
 
-/// Auto-select over both indexers (with `network`'s base URLs), the
-/// session's file lists and `AniZip` eids.
+/// Auto-select over both indexers (with `network`'s base URLs) and the
+/// extension lanes, the session's file lists and `AniZip` eids.
 fn auto_selector(
     client: &Client,
     poster_cache: &PosterCache,
     network: &settings::NetworkSettings,
     torrent: &Arc<TorrentStreams>,
+    extensions: &Arc<ExtensionLanes>,
 ) -> AutoSelector {
     let transport = search::NetTransport::new(client.clone(), network::search_config(network));
+    let lanes: Arc<dyn search::ProviderSet> = Arc::<ExtensionLanes>::clone(extensions);
+    let searcher = search::Searcher::new(transport).with_providers(lanes);
     AutoSelector::new(
-        Arc::new(Arc::new(search::Searcher::new(transport))),
+        Arc::new(Arc::new(searcher)),
         Arc::new(SessionFiles::new(Arc::clone(torrent))),
         Arc::new(AniZipEpisodeIds::new(AniZip::new(
             client.clone(),
@@ -562,6 +600,10 @@ impl Engine {
     /// - [`EngineError::Db`] when the database can't be opened.
     /// - [`EngineError::Settings`] when the settings can't be loaded or a row is invalid.
     /// - [`EngineError::Client`] when the client can't be built.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the composition root builds every service in dependency order"
+    )]
     pub fn new(
         runtime: &Runtime,
         paths: &AppPaths,
@@ -609,11 +651,15 @@ impl Engine {
             torrent::PeerDiscovery::Public,
             torrent_options,
         ));
+        // Enabled Luau providers from `autumn.db` become search lanes; with
+        // none installed, search runs the built-in indexers only.
+        let extensions = Arc::new(runtime.block_on(ExtensionLanes::load(&db)));
         let auto_select = Arc::new(RwLock::new(auto_selector(
             &client,
             &poster_cache,
             &settings.network,
             &torrent,
+            &extensions,
         )));
         let playback = Arc::new(
             PlaybackManager::new(
@@ -668,6 +714,7 @@ impl Engine {
             playback,
             torrent,
             auto_select,
+            extensions,
         })
     }
 
@@ -747,7 +794,13 @@ impl Engine {
         new: &settings::NetworkSettings,
     ) -> Result<network::TorrentSettingsChange, EngineError> {
         let change = self.apply_network_settings(old, new, self.torrent.is_streaming())?;
-        let selector = auto_selector(&self.client, &self.poster_cache, new, &self.torrent);
+        let selector = auto_selector(
+            &self.client,
+            &self.poster_cache,
+            new,
+            &self.torrent,
+            &self.extensions,
+        );
         if let Ok(mut current) = self.auto_select.write() {
             *current = selector;
         }
@@ -761,6 +814,26 @@ impl Engine {
     #[must_use]
     pub fn torrent_streams(&self) -> &Arc<TorrentStreams> {
         &self.torrent
+    }
+
+    /// Applies a lifecycle `change` to extension `id`, then drops its cached
+    /// search rows (ADR 0011) once the new lanes no longer run its old actor.
+    fn change_extension(
+        &self,
+        id: ExtensionId,
+        change: Change,
+    ) -> BoxFuture<Result<(), EngineError>> {
+        let db = self.db.clone();
+        let extensions = Arc::clone(&self.extensions);
+        let auto_select = Arc::clone(&self.auto_select);
+        Box::pin(async move {
+            extensions.apply(&db, &id, change).await?;
+            let selector = auto_select.read().ok().map(|selector| selector.clone());
+            if let Some(selector) = selector {
+                selector.purge_provider(&id);
+            }
+            Ok(())
+        })
     }
 
     /// The auto-select pipeline with the current Network settings.
@@ -1315,6 +1388,23 @@ impl EngineServices for Engine {
                 None => Err(search::Error::AllLanesFailed),
             }
         })
+    }
+
+    fn installed_extensions(&self) -> BoxFuture<Result<Vec<ExtensionSummary>, EngineError>> {
+        let db = self.db.clone();
+        Box::pin(async move { Ok(extension_lanes::installed(&db).await?) })
+    }
+
+    fn enable_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        self.change_extension(id, Change::Enable)
+    }
+
+    fn disable_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        self.change_extension(id, Change::Disable)
+    }
+
+    fn uninstall_extension(&self, id: ExtensionId) -> BoxFuture<Result<(), EngineError>> {
+        self.change_extension(id, Change::Uninstall)
     }
 
     fn torrent_files(

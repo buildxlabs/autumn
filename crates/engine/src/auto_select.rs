@@ -13,7 +13,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use domain::{InfoHash, StreamSource};
+use domain::{ExtensionId, InfoHash, StreamSource};
 use metadata::{Aging, AniZip};
 use search::{
     EpisodeTarget, LaneFilter, SearchOutcome, SearchRequest, Searcher, Torrent, Transport,
@@ -52,6 +52,10 @@ pub trait TorrentSearch: Send + Sync {
     ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
         Box::pin(async { Ok(SearchOutcome::default()) })
     }
+
+    /// Drops every cached result of extension `id`, after it is disabled,
+    /// uninstalled or updated. The default does nothing, for fakes.
+    fn purge_provider(&self, _id: &ExtensionId) {}
 }
 
 /// Lists a torrent's files without downloading it.
@@ -285,6 +289,11 @@ impl AutoSelector {
             .await
     }
 
+    /// Drops every cached search result of extension `id` (ADR 0011).
+    pub fn purge_provider(&self, id: &ExtensionId) {
+        self.search.purge_provider(id);
+    }
+
     /// A torrent's file list, for the release list's on-demand batch pick.
     ///
     /// # Errors
@@ -361,6 +370,10 @@ impl<T: Transport + 'static> TorrentSearch for Arc<Searcher<T>> {
     ) -> BoxFuture<Result<SearchOutcome, search::Error>> {
         let searcher = Arc::clone(self);
         Box::pin(async move { Searcher::search_keyword(&searcher, &keyword, refresh).await })
+    }
+
+    fn purge_provider(&self, id: &ExtensionId) {
+        Searcher::purge_provider(self, id);
     }
 }
 
