@@ -4,15 +4,56 @@
 //! [`Vm::search`]. Both run the script under a host `xpcall` wrapper, so an
 //! uncaught error comes back with its message and `debug.traceback` instead
 //! of mlua's own formatting. Callers serialise access through the actor in
-//! [`crate::actor`] (ADR 0014).
+//! [`crate::actor`] (ADR 0014), which also enforces [`crate::limits`].
+
+use std::sync::Arc;
 
 use domain::ExtensionId;
-use mlua::{Function, Lua, Table, Value, Variadic};
+use mlua::{Function, Lua, Table, Value, Variadic, VmState};
 
 use crate::{
     error::ExtensionError,
+    limits::{Kill, KillSwitch},
     provider::{ProviderRequest, ProviderTorrent},
 };
+
+/// Luau's error value for a failed allocation.
+const OUT_OF_MEMORY: &str = "not enough memory";
+
+/// Prepended to the extension's source on its first line, so line numbers
+/// don't move. Luau compiles a call through the *global* `pcall` or `xpcall`
+/// to a fast path that runs the VM's builtin and skips [`KILL_GUARDS`];
+/// through a local it makes an ordinary call to the guarded function.
+const GUARD_PRELUDE: &str = "local pcall, xpcall = pcall, xpcall; ";
+
+/// Wraps `pcall`, `xpcall` and `coroutine.resume` so a kill the host decided
+/// on is raised again instead of caught, and a caught out-of-memory error
+/// still counts as a memory kill (#267 §3). Runs with `is_killed` as its
+/// argument, before `sandbox(true)` freezes the builtins.
+const KILL_GUARDS: &str = r"
+local is_killed = ...
+local error, raw_pcall, raw_xpcall, raw_resume = error, pcall, xpcall, coroutine.resume
+local function pass(ok, ...)
+    if not ok and is_killed((...)) then
+        error((...), 0)
+    end
+    return ok, ...
+end
+pcall = function(...)
+    return pass(raw_pcall(...))
+end
+xpcall = function(fn, handler, ...)
+    return pass(raw_xpcall(fn, function(err)
+        if is_killed(err) then
+            return err
+        end
+        return handler(err)
+    end, ...))
+end
+coroutine.resume = function(...)
+    return pass(raw_resume(...))
+end
+";
 
 /// Runs `fn(arg)` under `xpcall` and returns `true, result` or
 /// `false, { message, traceback }`. Builtins are captured as upvalues while
@@ -37,6 +78,10 @@ end
 /// isolation or compile code at run time.
 const REMOVED_GLOBALS: [&str; 4] = ["require", "getfenv", "setfenv", "loadstring"];
 
+/// Installs extra globals before `sandbox(true)`; tests use it for host
+/// functions the host API (#301) doesn't offer yet.
+pub(crate) type Prepare = fn(&Lua) -> mlua::Result<()>;
+
 /// A loaded torrent provider and the VM it lives in.
 #[derive(Debug)]
 pub(crate) struct Vm {
@@ -44,10 +89,12 @@ pub(crate) struct Vm {
     lua: Lua,
     protected_call: Function,
     search: Function,
+    switch: Arc<KillSwitch>,
 }
 
 impl Vm {
-    /// Builds a sandboxed VM and runs the provider chunk in it.
+    /// Builds a sandboxed VM capped at `memory` bytes, wires its interrupt to
+    /// `switch`, and runs the provider chunk in it.
     ///
     /// # Errors
     ///
@@ -55,17 +102,43 @@ impl Vm {
     /// - [`ExtensionError::InvalidProvider`] when it doesn't return a table
     ///   with a function `search`.
     /// - [`ExtensionError::Vm`] when preparing the VM fails.
-    pub(crate) async fn load(id: ExtensionId, source: &str) -> Result<Self, ExtensionError> {
+    pub(crate) async fn load(
+        id: ExtensionId,
+        source: &str,
+        memory: usize,
+        switch: Arc<KillSwitch>,
+        prepare: Prepare,
+    ) -> Result<Self, ExtensionError> {
         let lua = Lua::new();
         let globals = lua.globals();
         for name in REMOVED_GLOBALS {
             globals.raw_set(name, Value::Nil)?;
         }
         globals.raw_set("print", print_to_log(&lua, &id)?)?;
+        lua.load(KILL_GUARDS)
+            .set_name("=autumn")
+            .call::<()>(is_killed(&lua, &switch)?)?;
         let protected_call: Function = lua.load(PROTECTED_CALL).set_name("=autumn").eval()?;
+        prepare(&lua)?;
         lua.sandbox(true)?;
+        let interrupt_switch = Arc::clone(&switch);
+        switch.attach(lua.set_interrupt_oneshot(move |_| {
+            match interrupt_switch.reason() {
+                Some(kill) => {
+                    // Raise again at the next safepoint until the call unwinds.
+                    interrupt_switch.rearm();
+                    Err(mlua::Error::runtime(kill.message()))
+                }
+                None => Ok(VmState::Continue),
+            }
+        }));
+        lua.set_memory_limit(memory)?;
 
-        let chunk = match lua.load(source).set_name(format!("={id}")).into_function() {
+        let chunk = lua
+            .load(format!("{GUARD_PRELUDE}{source}"))
+            .set_name(format!("={id}"))
+            .into_function();
+        let chunk = match chunk {
             Ok(chunk) => chunk,
             Err(mlua::Error::SyntaxError { message, .. }) => {
                 return Err(ExtensionError::runtime(message, String::new()));
@@ -79,7 +152,13 @@ impl Vm {
             lua,
             protected_call,
             search,
+            switch,
         })
+    }
+
+    /// The switch that kills this VM's calls.
+    pub(crate) fn switch(&self) -> Arc<KillSwitch> {
+        Arc::clone(&self.switch)
     }
 
     /// Calls the provider's `search(request)` and decodes its rows.
@@ -115,6 +194,23 @@ fn print_to_log(lua: &Lua, id: &ExtensionId) -> mlua::Result<Function> {
         let line = parts.join("\t");
         tracing::info!(target: "extension", extension = %id, "{line}");
         Ok(())
+    })
+}
+
+/// The guards' `is_killed(err)`: whether the host killed the call, counting
+/// an out-of-memory error as a memory kill.
+fn is_killed(lua: &Lua, switch: &Arc<KillSwitch>) -> mlua::Result<Function> {
+    let switch = Arc::clone(switch);
+    lua.create_function(move |_, err: Value| {
+        let out_of_memory = match &err {
+            Value::String(err) => err.as_bytes().as_ref() == OUT_OF_MEMORY.as_bytes(),
+            Value::Error(err) => matches!(**err, mlua::Error::MemoryError(_)),
+            _ => false,
+        };
+        if out_of_memory {
+            switch.kill(Kill::Memory);
+        }
+        Ok(switch.reason().is_some())
     })
 }
 

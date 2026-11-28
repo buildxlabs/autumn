@@ -7,6 +7,7 @@
 
 mod actor;
 mod error;
+mod limits;
 mod provider;
 mod runtime;
 
