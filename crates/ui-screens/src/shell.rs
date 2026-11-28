@@ -168,6 +168,8 @@ pub struct AppShell {
     _entry_events: Subscription,
     /// The Entry's Library tab: local files as episode cards (#132).
     entry_library: Entity<EntryLibraryStore>,
+    /// The Entry Torrents tab's store (#220).
+    entry_torrents: Entity<ui_state::EntryTorrentStore>,
     /// The AniList search behind the Library tab's Re-match (#133), built
     /// once startup has an AniList client.
     entry_rematch: Option<Entity<MediaSearchDialog>>,
@@ -493,6 +495,19 @@ impl AppShell {
         // The HUD is drawn from the playback store; engine events notify it
         // at most four times a second.
         cx.observe(&playback_store, |_, _, cx| cx.notify()).detach();
+        // The Torrents tab's `Starting stream` rows clear when a stream stops.
+        let entry_torrent_services = entry_store.read(cx).services();
+        let playback_for_torrents = playback_store.clone();
+        let entry_torrents = cx.new(|_| {
+            ui_state::EntryTorrentStore::new(entry_torrent_services, playback_for_torrents)
+        });
+        {
+            let entry_torrents = entry_torrents.clone();
+            cx.observe(&playback_store, move |_, _, cx| {
+                entry_torrents.update(cx, ui_state::EntryTorrentStore::reset_started);
+            })
+            .detach();
+        }
         // Home is the first route: load it now, as `show` does on return.
         home_store.update(cx, HomeStore::open);
         let user = account.read(cx).name().map(str::to_owned);
@@ -533,6 +548,7 @@ impl AppShell {
             entry_editor,
             _entry_events: entry_events,
             entry_library,
+            entry_torrents,
             entry_rematch: None,
             home_store,
             playback_store,
@@ -1060,6 +1076,9 @@ impl AppShell {
                 self.entry_store.update(cx, |store, cx| store.open(id, cx));
                 self.entry_library
                     .update(cx, |store, cx| store.open(id, cx));
+                let today = crate::entry::iso_today();
+                self.entry_torrents
+                    .update(cx, |store, cx| store.open(id, &today, cx));
             }
             Route::Home => {
                 self.home_store.update(cx, HomeStore::open);
@@ -1643,6 +1662,7 @@ impl AppShell {
                         editor: &self.entry_editor,
                         library: &self.entry_library,
                         playback: &self.playback_store,
+                        torrents: &self.entry_torrents,
                         cache: &self.banner_cache,
                     },
                     *id,

@@ -20,7 +20,8 @@ pub use error::Error;
 pub use file_pick::pick_file;
 pub use matching::{EpisodeTarget, matches, matches_torrent};
 pub use query::{
-    MAX_REQUESTS_PER_INDEXER, MAX_TITLES, Query, QueryPlan, SearchRequest, clean_title, plan,
+    MAX_REQUESTS_PER_INDEXER, MAX_TITLES, Query, QueryPlan, SearchRequest, clean_title,
+    episode_season, plan,
 };
 pub use rank::rank;
 pub use result::{Indexer, Torrent};

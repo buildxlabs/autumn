@@ -262,6 +262,7 @@ fn bulk_bar(
             screen.playback.clone(),
             screen.cache.clone(),
         );
+        let torrents = screen.torrents.clone();
         Button::new("entry-bulk-watched")
             .small()
             .label(format!("Mark watched up to {episode}"))
@@ -272,6 +273,7 @@ fn bulk_bar(
                     library: &library,
                     playback: &playback,
                     cache: &cache,
+                    torrents: &torrents,
                 };
                 mark_watched_up_to(&screen, episode, cx);
             })
@@ -367,6 +369,7 @@ fn episode_actions(
             screen.playback.clone(),
             screen.cache.clone(),
         );
+        let torrents = screen.torrents.clone();
         let number = episode.number;
         actions = actions.on_mark_watched(move |_, cx| {
             let screen = EntryScreen {
@@ -375,6 +378,7 @@ fn episode_actions(
                 library: &library,
                 playback: &playback,
                 cache: &cache,
+                torrents: &torrents,
             };
             mark_watched_up_to(&screen, number, cx);
         });

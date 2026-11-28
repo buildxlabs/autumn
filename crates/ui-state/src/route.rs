@@ -43,6 +43,47 @@ pub enum EntryTab {
     Overview,
     /// The local files as episode cards (#132).
     Library,
+    /// The episode list with torrent streaming and one-click auto-select
+    /// (#220, #182 Q1).
+    Torrents,
+}
+
+impl EntryTab {
+    /// The tabs shown, in order (#182 Q1). `Library` only with local files;
+    /// `Torrents` whenever torrent streaming is enabled. The tab bar always
+    /// renders once `torrents_enabled`.
+    #[must_use]
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "two independent tab-bar conditions"
+    )]
+    pub fn visible(has_files: bool, torrents_enabled: bool) -> Vec<Self> {
+        let mut tabs = vec![Self::Overview];
+        if has_files {
+            tabs.push(Self::Library);
+        }
+        if torrents_enabled {
+            tabs.push(Self::Torrents);
+        }
+        tabs
+    }
+
+    /// The tab actually shown (#182 Q1). The default is unchanged: `Library`
+    /// with files, else `Overview`. `Torrents` needs torrent streaming
+    /// enabled; `Library` needs files. An unknown combination falls back to
+    /// `Overview`.
+    #[must_use]
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "two independent tab conditions"
+    )]
+    pub fn resolve(tab: Option<Self>, has_files: bool, torrents_enabled: bool) -> Self {
+        match tab {
+            Some(Self::Torrents) if torrents_enabled => Self::Torrents,
+            Some(Self::Library) | None if has_files => Self::Library,
+            _ => Self::Overview,
+        }
+    }
 }
 
 /// One screen the route view can show.
@@ -158,7 +199,7 @@ impl Route {
 mod tests {
     use crate::lists::ListTab;
 
-    use super::Route;
+    use super::{EntryTab, Route};
 
     #[test]
     fn every_route_round_trips_through_its_key() {
@@ -171,6 +212,57 @@ mod tests {
         }
         assert_eq!(Route::from_key("retired"), None, "unknown keys are ignored");
         assert_eq!(Route::from_key("manga"), None, "a retired key is ignored");
+    }
+
+    #[test]
+    fn torrents_tab_is_a_deep_linkable_entry_tab() {
+        let route = Route::Entry {
+            id: 100,
+            tab: Some(EntryTab::Torrents),
+        };
+        assert_eq!(route.key(), "entry");
+        // A fresh visit never picks Torrents by default; an explicit pick holds.
+        assert_eq!(
+            EntryTab::resolve(Some(EntryTab::Torrents), false, true),
+            EntryTab::Torrents
+        );
+        assert_eq!(
+            EntryTab::resolve(Some(EntryTab::Torrents), true, true),
+            EntryTab::Torrents
+        );
+    }
+
+    #[test]
+    fn tab_bar_shows_torrents_and_library_only_when_allowed() {
+        // Overview · Library (only with files) · Torrents (#182 Q1).
+        assert_eq!(
+            EntryTab::visible(false, true),
+            vec![EntryTab::Overview, EntryTab::Torrents]
+        );
+        assert_eq!(
+            EntryTab::visible(true, true),
+            vec![EntryTab::Overview, EntryTab::Library, EntryTab::Torrents]
+        );
+        assert_eq!(
+            EntryTab::visible(true, false),
+            vec![EntryTab::Overview, EntryTab::Library]
+        );
+        assert_eq!(EntryTab::visible(false, false), vec![EntryTab::Overview]);
+    }
+
+    #[test]
+    fn the_default_tab_is_unchanged() {
+        assert_eq!(EntryTab::resolve(None, true, true), EntryTab::Library);
+        assert_eq!(EntryTab::resolve(None, false, true), EntryTab::Overview);
+        // An explicit Torrents pick needs torrent streaming; Library needs files.
+        assert_eq!(
+            EntryTab::resolve(Some(EntryTab::Torrents), true, false),
+            EntryTab::Overview
+        );
+        assert_eq!(
+            EntryTab::resolve(Some(EntryTab::Library), false, true),
+            EntryTab::Overview
+        );
     }
 
     #[test]

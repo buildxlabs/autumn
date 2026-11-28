@@ -180,6 +180,21 @@ pub struct QueryPlan {
     pub fallback: Vec<Query>,
 }
 
+/// This media's season `M` (#181 Q7): `anizip_season` when it is a real
+/// season, else a season parsed from any known title, else 1.
+#[must_use]
+pub fn episode_season(titles: &[String], anizip_season: Option<u32>) -> u32 {
+    anizip_season
+        .filter(|&season| season > 0)
+        .or_else(|| {
+            titles
+                .iter()
+                .find_map(|title| release_parser::parse(title).season)
+                .filter(|&season| season > 0)
+        })
+        .unwrap_or(1)
+}
+
 /// Clean a known title for keyword search: punctuation and season markers go,
 /// case is folded, and whitespace is collapsed. `None` when nothing remains.
 #[must_use]

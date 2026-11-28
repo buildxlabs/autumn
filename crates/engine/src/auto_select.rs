@@ -110,6 +110,22 @@ pub struct AutoSelection {
     pub file_path: String,
 }
 
+/// Progress of an auto-select run, for the row's inline stage display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AutoSelectProgress {
+    /// The indexer search is running.
+    Searching,
+    /// Verifying a candidate's file list; `checking` of `total`, both 1-based
+    /// `checking` up to [`VERIFY_CANDIDATES`].
+    Verifying {
+        /// The candidate being checked, 1-based.
+        checking: u32,
+        /// How many candidates will be checked, up to [`VERIFY_CANDIDATES`].
+        total: u32,
+    },
+}
+
 /// Runs the auto-select pipeline.
 #[derive(Clone)]
 pub struct AutoSelector {
@@ -148,6 +164,24 @@ impl AutoSelector {
         request: AutoSelectRequest,
         profile: &AutoSelectProfile,
     ) -> Result<AutoSelection, AutoSelectError> {
+        self.select_with_progress(request, profile, |_| {}).await
+    }
+
+    /// Like [`Self::select`], reporting [`AutoSelectProgress`] as it runs.
+    ///
+    /// `progress` is called with [`AutoSelectProgress::Searching`] before the
+    /// indexer search and [`AutoSelectProgress::Verifying`] before each
+    /// candidate's file-level check, up to [`VERIFY_CANDIDATES`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::select`].
+    pub async fn select_with_progress(
+        &self,
+        request: AutoSelectRequest,
+        profile: &AutoSelectProfile,
+        mut progress: impl FnMut(AutoSelectProgress) + Send,
+    ) -> Result<AutoSelection, AutoSelectError> {
         let mut search = request.search;
         if search.anidb_eid.is_none()
             && let Some(anilist_id) = request.anilist_id
@@ -161,6 +195,7 @@ impl AutoSelector {
         if let Some(absolute) = search.absolute_episode {
             target = target.with_absolute_episode(absolute);
         }
+        progress(AutoSelectProgress::Searching);
         let results = self
             .search
             .search(search)
@@ -170,7 +205,12 @@ impl AutoSelector {
         if candidates.is_empty() {
             return Err(AutoSelectError::NoTorrentsMatch { results });
         }
-        for candidate in candidates.iter().take(VERIFY_CANDIDATES) {
+        let total = u32::try_from(candidates.len().min(VERIFY_CANDIDATES)).unwrap_or(u32::MAX);
+        for (index, candidate) in candidates.iter().take(VERIFY_CANDIDATES).enumerate() {
+            progress(AutoSelectProgress::Verifying {
+                checking: u32::try_from(index).unwrap_or(u32::MAX) + 1,
+                total,
+            });
             if let Some(selection) = self.verify(candidate, &target).await {
                 return Ok(selection);
             }
@@ -510,6 +550,49 @@ mod tests {
         assert!(
             matches!(&error, AutoSelectError::NoTorrentsMatch { results } if results.is_empty()),
             "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn progress_reports_searching_then_verifying_each_candidate() {
+        let names = [
+            "[A] Sousou no Frieren - 05 [1080p]",
+            "[B] Sousou no Frieren - 05 [1080p]",
+            "[C] Sousou no Frieren - 05 [1080p]",
+            "[D] Sousou no Frieren - 05 [1080p]",
+        ];
+        let found: Vec<Torrent> = names
+            .iter()
+            .zip(['a', 'b', 'c', 'd'])
+            .zip([40, 30, 20, 10])
+            .map(|((name, hash), seeders)| result(hash, name, seeders))
+            .collect();
+        let rig = rig(Ok(found), Vec::new()); // no file lists -> every candidate fails
+
+        let mut seen = Vec::new();
+        let _ = rig
+            .selector
+            .select_with_progress(episode_5(), &AutoSelectProfile::default(), |p| seen.push(p))
+            .await;
+
+        assert_eq!(
+            seen,
+            vec![
+                AutoSelectProgress::Searching,
+                AutoSelectProgress::Verifying {
+                    checking: 1,
+                    total: 3
+                },
+                AutoSelectProgress::Verifying {
+                    checking: 2,
+                    total: 3
+                },
+                AutoSelectProgress::Verifying {
+                    checking: 3,
+                    total: 3
+                },
+            ],
+            "Searching then Verifying n/3 for the top 3"
         );
     }
 
