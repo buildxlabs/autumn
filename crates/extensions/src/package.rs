@@ -162,6 +162,7 @@ impl<'db> Packages<'db> {
                     name,
                     version,
                     payload,
+                    hosts,
                     ..
                 } = package.manifest;
                 match payload {
@@ -170,6 +171,7 @@ impl<'db> Packages<'db> {
                         name,
                         version: version.to_string(),
                         source,
+                        hosts,
                     }),
                     Payload::Declarative(_) => None,
                 }

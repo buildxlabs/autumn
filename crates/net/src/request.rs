@@ -165,6 +165,21 @@ impl Response {
             .and_then(|value| value.to_str().ok())
     }
 
+    /// The URL that answered, after any redirects.
+    #[must_use]
+    pub fn final_url(&self) -> &str {
+        self.inner.url().as_str()
+    }
+
+    /// Every header as `(lowercase name, value)`, repeated names once per
+    /// value, in order. Values that aren't visible ASCII are skipped.
+    pub fn headers(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.inner
+            .headers()
+            .iter()
+            .filter_map(|(name, value)| Some((name.as_str(), value.to_str().ok()?)))
+    }
+
     /// Every value of a repeated header, such as `Set-Cookie`, in order.
     #[must_use]
     pub fn header_values(&self, name: &str) -> Vec<&str> {

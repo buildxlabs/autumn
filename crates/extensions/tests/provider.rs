@@ -25,12 +25,16 @@ fn source(id: &str, lua: &str) -> ProviderSource {
         name: format!("{id} name"),
         version: "1.0.0".to_owned(),
         source: lua.to_owned(),
+        hosts: Vec::new(),
     }
 }
 
 /// Runs `search` once on a host holding just this provider.
 async fn run(lua: &str, request: ProviderRequest) -> Result<Vec<ProviderTorrent>, ExtensionError> {
-    let host = ExtensionHost::start(vec![source("my-ext", lua)]);
+    let host = ExtensionHost::start(
+        vec![source("my-ext", lua)],
+        &net::GuardedClient::new().unwrap(),
+    );
     host.search(&ExtensionId::new("my-ext"), request).await
 }
 
@@ -89,11 +93,14 @@ async fn a_fixed_magnet_row_round_trips() {
 
 #[tokio::test]
 async fn the_host_lists_its_providers() {
-    let host = ExtensionHost::start(vec![
-        source("a", "return {}"),
-        source("b", "return {}"),
-        source("a", "return {}"),
-    ]);
+    let host = ExtensionHost::start(
+        vec![
+            source("a", "return {}"),
+            source("b", "return {}"),
+            source("a", "return {}"),
+        ],
+        &net::GuardedClient::new().unwrap(),
+    );
     let ids: Vec<_> = host
         .providers()
         .map(|info| (info.id.as_str(), info.name.as_str(), info.version.as_str()))
@@ -350,7 +357,10 @@ async fn a_looping_extension_is_killed_without_delaying_another() {
             return { { name = tostring(calls) } }
         end }
     "#;
-    let host = ExtensionHost::start(vec![source("loop", looping), source("fast", &spinner(0.0))]);
+    let host = ExtensionHost::start(
+        vec![source("loop", looping), source("fast", &spinner(0.0))],
+        &net::GuardedClient::new().unwrap(),
+    );
     let started = Instant::now();
     let looped = tokio::spawn({
         let host = host.clone();
@@ -416,7 +426,10 @@ async fn single_name_on(host: &ExtensionHost, id: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_dropped_queued_call_never_reaches_the_vm() {
-    let host = ExtensionHost::start(vec![source("my-ext", &spinner(0.5))]);
+    let host = ExtensionHost::start(
+        vec![source("my-ext", &spinner(0.5))],
+        &net::GuardedClient::new().unwrap(),
+    );
     let id = ExtensionId::new("my-ext");
     let first = tokio::spawn({
         let host = host.clone();

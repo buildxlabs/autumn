@@ -154,3 +154,25 @@ pub enum Error {
         source: HttpError,
     },
 }
+
+impl Error {
+    /// Whether the request or its body timed out (connect or overall
+    /// timeout), as opposed to failing another way.
+    #[must_use]
+    pub fn is_timeout(&self) -> bool {
+        let (Self::Transport { source, .. } | Self::Body { source }) = self else {
+            return false;
+        };
+        let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(source.source.as_ref());
+        while let Some(error) = cause {
+            if error
+                .downcast_ref::<reqwest::Error>()
+                .is_some_and(reqwest::Error::is_timeout)
+            {
+                return true;
+            }
+            cause = error.source();
+        }
+        false
+    }
+}

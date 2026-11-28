@@ -55,8 +55,7 @@ pub(crate) enum Kill {
     Cpu,
     Wall,
     Memory,
-    /// Raised by `autumn.http.fetch` on the request after the cap (#305).
-    #[expect(dead_code, reason = "the fetch ticket raises it")]
+    /// Raised by `autumn.http.fetch` on the request after the cap.
     Requests,
     Cancelled,
 }

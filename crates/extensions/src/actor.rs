@@ -13,6 +13,7 @@ use std::sync::{
 };
 
 use domain::ExtensionId;
+use net::{DeclaredHost, ExtensionHosts, GuardedClient};
 use tokio::{
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
@@ -20,6 +21,7 @@ use tokio::{
 
 use crate::{
     error::ExtensionError,
+    host::Network,
     limits::{KillSwitch, Limits, Metered, Watch},
     provider::{ProviderRequest, ProviderTorrent},
     runtime::{Prepare, Vm},
@@ -39,6 +41,8 @@ pub struct ProviderSource {
     pub version: String,
     /// The Luau payload.
     pub source: String,
+    /// The hosts its requests may reach (`permissions.hosts`).
+    pub hosts: Vec<DeclaredHost>,
 }
 
 /// A provider the host can run.
@@ -91,16 +95,20 @@ impl ExtensionHost {
     /// Starts one actor per provider. The first source with a given id wins;
     /// later duplicates are skipped with a warning.
     ///
+    /// Every request goes through `http`, held to the source's declared
+    /// hosts and rate-limited per extension id.
+    ///
     /// Must be called inside a Tokio runtime. Each VM is built on its first
     /// call, and rebuilt on the next call after a failure.
     #[must_use]
-    pub fn start(sources: Vec<ProviderSource>) -> Self {
-        Self::start_with(sources, Limits::PHASE_4, |_| Ok(()))
+    pub fn start(sources: Vec<ProviderSource>, http: &GuardedClient) -> Self {
+        Self::start_with(sources, http, Limits::PHASE_4, |_| Ok(()))
     }
 
     /// [`Self::start`] under other caps and with extra globals, for tests.
     pub(crate) fn start_with(
         sources: Vec<ProviderSource>,
+        http: &GuardedClient,
         limits: Limits,
         prepare: Prepare,
     ) -> Self {
@@ -115,9 +123,14 @@ impl ExtensionHost {
             }
             let (calls, queue) = mpsc::channel(QUEUE_DEPTH);
             let (stop, stopping) = watch::channel(false);
+            let network = Network {
+                client: http.clone(),
+                hosts: ExtensionHosts::new(source.id.as_str(), source.hosts),
+            };
             let actor = Actor {
                 id: source.id.clone(),
                 source: source.source,
+                network,
                 limits,
                 prepare,
                 stopping,
@@ -217,6 +230,7 @@ impl ExtensionHost {
 struct Actor {
     id: ExtensionId,
     source: String,
+    network: Network,
     limits: Limits,
     prepare: Prepare,
     stopping: watch::Receiver<bool>,
@@ -288,6 +302,7 @@ impl Actor {
                         &self.source,
                         self.limits.memory,
                         Arc::clone(&switch),
+                        self.network.clone(),
                         self.prepare,
                     )
                     .await?,
@@ -345,17 +360,22 @@ mod tests {
         lua.globals().raw_set("hang", hang)
     }
 
+    fn client() -> GuardedClient {
+        GuardedClient::new().unwrap()
+    }
+
     fn source(lua: &str) -> ProviderSource {
         ProviderSource {
             id: ExtensionId::new("t"),
             name: "T".to_owned(),
             version: "1.0.0".to_owned(),
             source: lua.to_owned(),
+            hosts: Vec::new(),
         }
     }
 
     fn host(lua: &str) -> ExtensionHost {
-        ExtensionHost::start_with(vec![source(lua)], TEST_LIMITS, install_hang)
+        ExtensionHost::start_with(vec![source(lua)], &client(), TEST_LIMITS, install_hang)
     }
 
     /// Calls `search` with `keyword`.
@@ -463,6 +483,7 @@ mod tests {
     async fn dropping_the_caller_mid_loop_kills_and_rebuilds() {
         let host = ExtensionHost::start_with(
             vec![source(&on_work("while true do end"))],
+            &client(),
             Limits {
                 cpu: Duration::from_secs(30),
                 wall: Duration::from_secs(30),
@@ -486,6 +507,7 @@ mod tests {
     async fn stop_kills_the_running_call_and_cancels_the_queue() {
         let host = ExtensionHost::start_with(
             vec![source(&on_work("while true do end"))],
+            &client(),
             Limits {
                 cpu: Duration::from_secs(30),
                 wall: Duration::from_secs(30),

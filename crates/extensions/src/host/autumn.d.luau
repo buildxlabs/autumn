@@ -128,30 +128,39 @@ export type Provider = {
 
 -- The argument of `autumn.http.fetch`.
 export type HttpRequest = {
-	-- The absolute http(s) URL. Its host must be a declared host of the
+	-- An absolute http(s) URL. Its host must be one of the manifest's
+	-- `permissions.hosts`, or a LAN host the user approved for this
 	-- extension.
 	url: string,
-	-- The HTTP method; "GET" when absent.
+	-- "GET", "POST", "PUT", "PATCH" or "DELETE", in any case; "GET" when
+	-- absent.
 	method: string?,
-	-- Request headers by name.
+	-- Request headers by name. Hop-by-hop headers (`Connection`,
+	-- `Keep-Alive`, `Transfer-Encoding` and the like) are removed, and
+	-- `User-Agent` defaults to Autumn's when not set.
 	headers: { [string]: string }?,
-	-- The request body, at most 1 MiB.
+	-- The request body as a byte string, at most 1 MiB.
 	body: string?,
-	-- Query parameters appended to `url`, keys sorted.
+	-- Query parameters appended to `url` with keys sorted and form-encoded
+	-- (a space becomes `+`), as `autumn.url.build` does. Values must be
+	-- strings, numbers or booleans.
 	query: { [string]: string | number | boolean }?,
 }
 
 -- What `autumn.http.fetch` returns.
 export type HttpResponse = {
-	-- The HTTP status. A non-2xx status is returned, not raised.
+	-- The HTTP status. Any status, including 404 or 500, is returned, not
+	-- raised; only 429 raises `rate_limited`.
 	status: number,
-	-- The final URL after redirects.
+	-- The URL that answered, after redirects (at most 10, each held to the
+	-- same host rules).
 	url: string,
-	-- Response headers with lowercased names; repeated headers are joined
-	-- with ", ".
+	-- Response headers by lowercased name; a repeated header's values are
+	-- joined with ", " in order. Values that aren't visible ASCII are left
+	-- out.
 	headers: { [string]: string },
-	-- The raw `Set-Cookie` values, in order. Nothing is stored between
-	-- requests.
+	-- Every raw `Set-Cookie` value, in order. Autumn keeps no cookies
+	-- between requests; send them back yourself in `headers.Cookie`.
 	set_cookies: { string },
 	-- The response body as a byte string, at most 4 MiB.
 	body: string,
@@ -185,16 +194,38 @@ export type HtmlField = string | {
 declare autumn: {
 	http: {
 		-- Sends one HTTP request through Autumn's outbound guard and returns
-		-- the response. Waits without using CPU time.
+		-- the response. The script waits without using CPU time; the call's
+		-- 30 s wall clock still runs, and cancelling the call cancels the
+		-- request.
 		--
-		-- Limits: 8 requests per call (the 9th aborts the call, uncatchably),
-		-- a per-extension rate limit, 1 MiB request and 4 MiB response
-		-- bodies, and the host's own timeouts. Only the extension's declared
-		-- hosts, and LAN hosts the user approved, are reachable.
+		-- Limits: 8 requests per call. The 9th aborts the whole call with a
+		-- request-limit kill, which `pcall` cannot catch; the extension's VM
+		-- is rebuilt for the next call. Each extension may also send 30
+		-- requests a minute, in bursts of 10; requests over that rate wait.
+		-- Bodies are capped at 1 MiB sent and 4 MiB received. No redirects
+		-- past 10, and nothing is retried.
 		--
-		-- Raises (catchable): invalid_argument (bad `req` fields), blocked
-		-- (undeclared or private host), network, timeout, too_large,
-		-- rate_limited.
+		-- Raises (all catchable with `pcall`):
+		--   invalid_argument  a bad request field: "url: missing",
+		--                     "url: expected string, got <type>",
+		--                     "url: <parse error>", "method: \"X\" is not GET,
+		--                     POST, PUT, PATCH or DELETE",
+		--                     "query.<key>: expected string, number or boolean,
+		--                     got <type>", "headers.<name>: <reason>",
+		--                     "body: expected string, got <type>"
+		--   blocked           the host isn't declared, or is localhost, a
+		--                     `.local` name or a private, loopback or reserved
+		--                     address (also when a redirect leads there), as
+		--                     "autumn.http.fetch: blocked: <host> <reason>". Left uncaught, the
+		--                     call fails as a network block in the extension's
+		--                     health.
+		--   too_large         the body sent is over 1 MiB, or the response is
+		--                     over 4 MiB
+		--   rate_limited      the site answered 429, or the extension is
+		--                     paused after one; the detail gives the wait
+		--   timeout           the connection or response timed out
+		--   network           any other transport failure (DNS, TLS,
+		--                     connection reset)
 		fetch: (req: HttpRequest) -> HttpResponse,
 	},
 	html: {

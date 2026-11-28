@@ -62,7 +62,7 @@ async fn an_installed_row_runs_as_a_luau_provider() {
 
     let sources = packages.runnable().await.unwrap();
     assert_eq!(sources.len(), 1);
-    let host = ExtensionHost::start(sources);
+    let host = ExtensionHost::start(sources, &net::GuardedClient::new().unwrap());
     let info: Vec<_> = host
         .providers()
         .map(|info| (info.id.as_str(), info.name.as_str(), info.version.as_str()))
